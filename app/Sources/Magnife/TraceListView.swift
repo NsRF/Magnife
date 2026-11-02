@@ -67,7 +67,7 @@ struct TraceListView: View {
             ContentUnavailableView("Can't Read the Database", systemImage: "exclamationmark.triangle",
                                    description: Text(error.message))
         case .ready, .waiting, .opening:
-            if model.traces.isEmpty && !model.isLoadingScope {
+            if model.knowsStoredTraces && model.traces.isEmpty && !model.isLoadingScope {
                 if let service = model.sidebar?.serviceName {
                     ContentUnavailableView("No Traces from \(service)", systemImage: "line.3.horizontal.decrease",
                                            description: Text("Traces with a span from \(service) appear here."))

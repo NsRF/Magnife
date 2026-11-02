@@ -68,7 +68,7 @@ stdin takes `retention <seconds>`, `prune` and `retry`; anything else (including
 - **Batching**: handlers decode and convert on their own goroutine, then hand the rows to one writer goroutine through a bounded queue (the backpressure). The writer commits every 50 ms or 2,000 records, whichever comes first, in one transaction, then recomputes the `traces` row of every touched trace from its spans.
 - **Ports**: before binding, the helper asks `lsof` for any other listener on the port (any address) and also tries to connect on `127.0.0.1` and `::1`, which catches listeners of other users. This matters because Go listeners set `SO_REUSEADDR`, and with it `127.0.0.1:P` binds fine while another process holds `*:P`, which would split traffic silently (see `internal/ports`).
 - **Pruning** runs at startup, every 60 s and on command, 500 traces per transaction, between batches.
-- **SQLite**: WAL, `synchronous=NORMAL`, a 16 MiB page cache (as fast as 64 MiB in `BenchmarkCommit`, and the helper stays near 55 MB physical footprint at 5,000 spans/s instead of 160 MB), one connection.
+- **SQLite**: WAL, `synchronous=NORMAL`, a 16 MiB page cache (as fast as 64 MiB in `BenchmarkCommit`, and the helper stays near 55 MB physical footprint at 5,000 spans/s instead of 160 MB), one connection, and persistent WAL (`SQLITE_FCNTL_PERSIST_WAL`): the checkpointed `-wal` and `-shm` files stay after a clean exit, so the app's read-only connection can open the database at launch, before the helper is up (S-008).
 
 ## Checks with real SDKs
 

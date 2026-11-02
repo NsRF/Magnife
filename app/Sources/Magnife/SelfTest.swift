@@ -33,6 +33,8 @@ enum SelfTest {
             let only = ProcessInfo.processInfo.environment["APP_SELFTEST_ONLY"]
             if only == "waterfall" {
                 await checkWaterfall(model)
+            } else if only == "lifecycle" {
+                await checkLifecycle()
             } else if only == "span-detail" {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
@@ -46,6 +48,8 @@ enum SelfTest {
                 await checkReceiver()
                 checkApp()
                 await checkWindowClose()
+                // Last: it starts a second Magnife, which takes the focus.
+                await checkLifecycle()
             }
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
             finish(code: failures == 0 ? 0 : 1)

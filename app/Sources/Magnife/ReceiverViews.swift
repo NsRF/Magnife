@@ -38,10 +38,11 @@ struct Banners: View {
                 }
             }
             if model.receiverRestarted {
-                Banner(text: "The receiver stopped and was restarted. Spans sent in the last few seconds may be missing.",
-                       symbol: "arrow.clockwise.circle.fill") {
+                Banner(text: ReceiverStatus.restartedBanner, symbol: "exclamationmark.triangle.fill") {
                     CloseButton { model.receiverRestarted = false }
                 }
+                // VoiceOver hears it once, when it appears; it closes itself on the next trace.
+                .onAppear { AccessibilityNotification.Announcement(ReceiverStatus.restartedBanner).post() }
             }
             if let problem = model.helperProblem {
                 Banner(text: problem, symbol: "exclamationmark.triangle.fill") {

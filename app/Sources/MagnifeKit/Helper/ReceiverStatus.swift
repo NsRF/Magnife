@@ -79,6 +79,9 @@ public enum ReceiverStatus: Sendable, Equatable {
         return "Magnife accepts OTLP over gRPC on \(grpc) and HTTP on \(http)"
     }
 
+    /// The S-008 banner after the helper crashed and was restarted.
+    public static let restartedBanner = "The receiver stopped and was restarted. Spans sent in the last few seconds may be missing."
+
     /// The banner for the helper's "error" line (docs/ux.md, App-wide states).
     public static func problem(_ message: String) -> String {
         "The receiver reported a problem: \(message)"

@@ -524,3 +524,32 @@ func TestWriterCloseWithinDropsWhatIsLate(t *testing.T) {
 	}
 	t.Logf("stored %d, dropped %d", stored, dropped)
 }
+
+// S-008: after Close the -wal file stays, so a read-only connection (the
+// app's) opens the database while no helper runs and sees every commit.
+func TestCloseKeepsWALForReadOnlyReaders(t *testing.T) {
+	path := filepath.Join(tmpDir(t), "m.sqlite")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit(t, s, &Batch{Spans: []Span{span("t1", "a", "", "root", 1, 2, 0)}})
+	commit(t, s, &Batch{Spans: []Span{span("t2", "a", "", "root", 3, 4, 0)}})
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(path + suffix); err != nil {
+			t.Fatalf("%s after Close: %v", suffix, err)
+		}
+	}
+	ro, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ro.Close()
+	var traces int
+	if err := ro.QueryRow("SELECT count(*) FROM traces").Scan(&traces); err != nil || traces != 2 {
+		t.Fatalf("read-only count = %d, %v", traces, err)
+	}
+}

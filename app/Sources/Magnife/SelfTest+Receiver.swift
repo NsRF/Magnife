@@ -28,7 +28,7 @@ extension SelfTest {
         let ports = (grpc: freePort(), http: freePort())
         let launched = Date()
         model.startReceiver(executable: helper, ports: ports)
-        let listening = await waitUntil(3) { model.receiver.isReceiving }
+        let listening = await waitUntil(3) { model.receiver.isReceiving && model.storeState == .ready }
         let emptyBefore = model.showsEmptyState
         let traces = await post(port: ports.http, path: "/v1/traces", body: ReceiverPayload.trace)
         let logs = await post(port: ports.http, path: "/v1/logs", body: ReceiverPayload.log)
@@ -151,12 +151,13 @@ extension SelfTest {
 
     // MARK: Tools
 
-    /// Polls `condition` every 20 ms for up to `seconds`.
-    static func waitUntil(_ seconds: TimeInterval, _ condition: () -> Bool) async -> Bool {
+    /// Polls `condition` every 20 ms (or `every`) for up to `seconds`.
+    static func waitUntil(_ seconds: TimeInterval, every interval: Duration = .milliseconds(20),
+                          _ condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(seconds)
         while !condition() {
             if Date() > deadline { return false }
-            try? await Task.sleep(for: .milliseconds(20))
+            try? await Task.sleep(for: interval)
         }
         return true
     }
@@ -220,7 +221,7 @@ extension SelfTest {
 }
 
 /// Minimal OTLP/JSON bodies for the receiver checks.
-private enum ReceiverPayload {
+enum ReceiverPayload {
     static let service = "selftest"
     static let route = "GET /selftest"
 

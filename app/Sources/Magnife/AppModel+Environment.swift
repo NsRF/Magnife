@@ -20,10 +20,18 @@ extension AppModel {
 
     /// The trace list's S-003 empty state: no traces in All Services.
     var showsEmptyState: Bool {
-        guard case .failed = storeState else {
-            return traces.isEmpty && !isLoadingScope && sidebar?.serviceName == nil
+        knowsStoredTraces && traces.isEmpty && !isLoadingScope && sidebar?.serviceName == nil
+    }
+
+    /// False until the list knows whether the database holds traces: while it
+    /// opens, or while the helper has not opened an existing file. The list
+    /// stays blank then, with no spinner and no empty state (S-008).
+    var knowsStoredTraces: Bool {
+        switch storeState {
+        case .ready: true
+        case .waiting(let error): !error.mayHoldTraces
+        case .opening, .failed: false
         }
-        return false
     }
 
     /// "Waiting for the first trace…" shows under the button after a copy.

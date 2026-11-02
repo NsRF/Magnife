@@ -8,11 +8,10 @@
 #   seed_stop                         stops every helper seed_store started
 #   $seed_grpc, $seed_http            the last seeded helper's addresses
 #
-# Each helper keeps running until seed_stop (an EXIT trap): the app reads
-# read-only, and a read-only reader needs the -wal file, which exists only
-# while the helper has the database open (PROGRESS decision 14). Helpers use
-# port 0, so they never collide with 4317/4318 or with each other; the ports
-# line says which ports they got.
+# Each helper keeps running until seed_stop (an EXIT trap), so the self-test can
+# send it more (S-004); the -wal stays after it exits (persistent WAL, S-008).
+# Helpers use port 0, so they never collide with 4317/4318 or with each
+# other; the ports line says which ports they got.
 
 typeset -ga seed_pids
 seed_sender=$root/ingest/bin/send-sample-traces

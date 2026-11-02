@@ -209,8 +209,9 @@ final class AppModel {
     private func tryOpen() async {
         do {
             reader = try await TelemetryReader.open(at: storeURL)
-            storeState = .ready
+            // Ready after the first read, so a relaunch never shows an empty list first (S-008).
             await reload()
+            storeState = .ready
         } catch {
             storeState = error.isTransient ? .waiting(error) : .failed(error)
             // One retry timer at a time, however many events also retry.

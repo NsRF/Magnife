@@ -147,7 +147,7 @@ UX:
 - States: loading shows cached rows from the database at once, so no spinner; error banner "The receiver stopped and was restarted. Spans sent in the last few seconds may be missing." with a close button; it closes itself after the next trace arrives
 - Words: "Quit Magnife", the banner text above
 - Access: banner is announced by VoiceOver once; its close button reads "Close"
-Status: todo
+Status: done
 
 ## M2 Navigate and logs
 

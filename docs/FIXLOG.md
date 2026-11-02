@@ -51,3 +51,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: the divider was placed once on the first layout, then AppKit's default resize of an NSSplitView with equal holding priorities shared every later height change evenly between the panes.
 - Fix: `DetailSplitCoordinator` implements `splitView(_:resizeSubviewsWithOldSize:)` and lays both panes out from the stored fraction on every resize.
 - Rule: an NSSplitView that must keep proportions lays its subviews out itself in `resizeSubviewsWithOldSize`; holding priorities alone do not keep a ratio.
+
+## A relaunch showed "No Traces Yet" before the stored traces (S-008)
+
+- Symptom: on a relaunch with stored traces, the list read "No Traces Yet" until the helper had started (about half a second), then the traces appeared.
+- Cause: the helper's SQLite deleted the `-wal` on a clean exit, so the read-only app could not open the file until the helper had; meanwhile `.opening` / `.waiting` counted as "no traces", and `storeState` turned `.ready` before the first read.
+- Fix: the helper keeps its `-wal` and `-shm` (persistent WAL); the app shows the empty state only once it knows (`knowsStoredTraces`: after the first read, or when no file exists) and sets `.ready` after the first read.
+- Rule: an empty state means "there is nothing", never "not read yet"; until the first read the list stays blank.

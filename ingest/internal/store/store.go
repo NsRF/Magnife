@@ -12,9 +12,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"modernc.org/sqlite"
 )
 
 // SchemaSQL is a byte-for-byte copy of docs/schema.sql (checked by a test).
@@ -24,6 +25,33 @@ var SchemaSQL string
 
 // SchemaVersion is the PRAGMA user_version this helper writes.
 const SchemaVersion = 1
+
+// driverName is modernc's driver with persistent WAL on every connection.
+// SQLite deletes the -wal file when the last connection closes, and the app's
+// read-only connection cannot open a WAL database without it, so after a quit
+// the app would wait for the helper before it could show stored traces. With
+// SQLITE_FCNTL_PERSIST_WAL the checkpointed -wal (and -shm) stay, and the app
+// reads the database at launch, before the helper is up (S-008).
+const driverName = "magnife-sqlite"
+
+var registerDriver sync.Once
+
+func register() {
+	registerDriver.Do(func() {
+		d := &sqlite.Driver{}
+		d.RegisterConnectionHook(func(c sqlite.ExecQuerierContext, _ string) error {
+			fc, ok := c.(sqlite.FileControl)
+			if !ok {
+				return errors.New("sqlite connection has no file control")
+			}
+			if _, err := fc.FileControlPersistWAL("main", 1); err != nil {
+				return fmt.Errorf("persist WAL: %w", err)
+			}
+			return nil
+		})
+		sql.Register(driverName, d)
+	})
+}
 
 // Store is the single writer of the database. It is not safe for concurrent
 // use; the Writer goroutine owns it.
@@ -51,7 +79,8 @@ func Open(path string) (*Store, error) {
 		q.Add("_pragma", p)
 	}
 	q.Set("_txlock", "immediate")
-	db, err := sql.Open("sqlite", "file:"+path+"?"+q.Encode())
+	register()
+	db, err := sql.Open(driverName, "file:"+path+"?"+q.Encode())
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +150,8 @@ func (s *Store) SetMeta(key, value string) error {
 	return err
 }
 
-// Close closes the database, which checkpoints the WAL.
+// Close closes the database, which checkpoints the WAL. The -wal and -shm
+// files stay (persistent WAL), so a read-only reader can open it afterwards.
 func (s *Store) Close() error {
 	s.stmts.close()
 	return s.db.Close()

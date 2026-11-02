@@ -69,6 +69,7 @@ enum SnapshotPage: String, CaseIterable {
 ///   APP_STORE=/tmp/Magnife-test.sqlite APP_HELPER=none APP_SNAPSHOT=/tmp/Magnife-shots ~/Applications/Magnife.app/Contents/MacOS/Magnife
 /// writes <page>-light.png and <page>-dark.png for every SnapshotPage,
 /// 02-trace-list-busy and 02-trace-list-not-receiving (the busy-port banners),
+/// 02-trace-list-restarted (the S-008 banner),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab, then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
 /// APP_SNAPSHOT_PAGES=02-trace-list,09-settings limits the pages.
@@ -137,7 +138,8 @@ enum Snapshot {
     }
 
     /// The S-001 / S-002 banners: 02-trace-list-busy (one port held by
-    /// otelcol-contrib) and 02-trace-list-not-receiving (both ports held).
+    /// otelcol-contrib) and 02-trace-list-not-receiving (both ports held), and
+    /// the S-008 banner: 02-trace-list-restarted.
     /// APP_HELPER=none has no helper, so these replay its "ports" lines.
     private static func captureReceiverStates(_ model: AppModel, dir: String, mode: String) async {
         let page = SnapshotPage.traceList.rawValue
@@ -156,6 +158,11 @@ enum Snapshot {
             capture(to: "\(dir)/\(page)-\(name)-\(mode).png")
         }
         model.showReceiverListening()
+        // 02-trace-list-restarted: the S-008 banner, as after a helper crash and restart.
+        model.handle(.started(pid: 0, restart: true))
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-restarted-\(mode).png")
+        model.receiverRestarted = false
     }
 
     /// 01-empty-state-copied: the button reads "Copied" and "Waiting for the

@@ -19,6 +19,11 @@ public enum StoreError: Error, Sendable, Equatable {
         }
     }
 
+    /// True when the file may already hold traces the reader cannot see yet:
+    /// it exists, but the helper has not opened it. The list then stays blank
+    /// rather than saying "No Traces Yet" (S-008); a missing file holds none.
+    public var mayHoldTraces: Bool { self == .notReady }
+
     /// The sentence the window shows.
     public var message: String {
         switch self {

@@ -15,9 +15,13 @@ this app starts the helper and reads its database. No server, no accounts.
   Every read runs off the main actor (`@concurrent` methods on GRDB's queues).
 - A read-only connection cannot open a WAL database whose `-wal` file is
   missing (`SQLITE_CANTOPEN`), which is the state after a stock SQLite writer
-  closes cleanly. The reader reports that as `StoreError.notReady`, and
-  `AppModel` retries on the helper's next event and every 2 seconds.
-  `Tests/MagnifeKitTests/WALReadonlyTests.swift` pins this behavior.
+  closes cleanly. The helper therefore keeps its `-wal` and `-shm` after it
+  exits (persistent WAL, S-008), so a relaunch reads the stored traces at
+  once, before the helper is up. A file without them (an older helper) reads
+  as `StoreError.notReady`, and `AppModel` retries on the helper's next event
+  and every 2 seconds; the list stays blank meanwhile (`knowsStoredTraces`),
+  never "No Traces Yet". `storeState` turns `.ready` after the first read.
+  `Tests/MagnifeKitTests/WALReadonlyTests.swift` and `LifecycleTests.swift` pin this.
 - `Tests/MagnifeKitTests/ContractTests.swift` builds a database from
   `../docs/schema.sql` with the Go helper's own INSERTs and JSON encoding and
   checks every reader method; `HelperProtocolTests` decodes the protocol's
@@ -25,7 +29,9 @@ this app starts the helper and reads its database. No server, no accounts.
 - `HelperSupervisor` (MagnifeKit, Foundation only) runs
   `Contents/Helpers/magnife-ingest`, keeps its stdin open (EOF stops it),
   turns stdout lines into `SupervisorEvent`s, passes stderr through, and
-  restarts it after a crash (0.5 s doubling to 30 s, reset after 60 s up).
+  restarts it after a crash (0.5 s doubling to 30 s, reset after 60 s up);
+  the S-008 banner (`ReceiverStatus.restartedBanner`) shows until the next
+  trace. Quit waits for the helper in `applicationWillTerminate`.
 - `AppModel` refreshes on `batch` events: at most one read in flight, 150 ms
   after the first batch. The trace list (`AppModel+TraceList.swift`) reads
   200-row pages; scrolled away from the top it holds still (rows update in
@@ -91,6 +97,10 @@ this app starts the helper and reads its database. No server, no accounts.
   `FakeHelper`, and the receiver checks with the real bundled helper on free
   ports, in `SelfTest+Receiver.swift`; the gRPC check runs the sample sender
   named by `APP_SAMPLE_SENDER`, which `selftest.sh` sets): `tools/selftest.sh`.
+  The S-008 checks (`SelfTest+Lifecycle.swift`, last: relaunch, helper
+  crashes, and a second Magnife process that is quit and killed with
+  `kill -9`) print their timings as INFO lines; `APP_SELFTEST_ONLY=lifecycle`
+  runs them alone.
   `APP_SELFTEST_ONLY=waterfall tools/selftest.sh` runs only the reader, model
   and waterfall checks (`APP_SELFTEST_ONLY=span-detail`: the span detail and
   exception checks); the waterfall checks time 1,000/5,000/30,000-span
@@ -100,7 +110,8 @@ this app starts the helper and reads its database. No server, no accounts.
   `SnapshotPage` (the pages in `docs/STORIES.md`), and
   `09-settings-<tab>-light.png` / `-dark.png`, then quits. `02-trace-list-busy`
   and `02-trace-list-not-receiving` show the busy-port banners (replayed
-  "ports" lines, since APP_HELPER=none). `01-empty-state-copied` shows the
+  "ports" lines, since APP_HELPER=none), `02-trace-list-restarted` the S-008
+  banner. `01-empty-state-copied` shows the
   S-003 copy feedback and `02-trace-list-environment` the toolbar popover
   (cropped from the window capture), `02-trace-list-new-traces` the S-004
   button over a held list. `04-span-detail` shows the HTTP 500 trace's
