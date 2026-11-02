@@ -36,8 +36,9 @@ enum SnapshotPage: String, CaseIterable {
         case .emptyState, .traceList, .logs, .commandK, .menuBar, .settings:
             break
         case .traceDetail, .spanDetail:
-            // The newest trace with an Error span (the seed set's exception).
-            model.selectedTraceID = model.traces.first { $0.status == .error }?.traceID
+            // The HTTP 500 trace: three services nested two levels, an Error span.
+            model.selectedTraceID = (model.traces.first { $0.route == "POST /checkout/pay" }
+                ?? model.traces.first { $0.status == .error })?.traceID
         case .filterBar:
             model.sidebar = .service("checkout-api")
         }
@@ -198,7 +199,7 @@ enum Snapshot {
     /// permission for the app that started this one (your terminal, or Claude).
     /// Without it, falls back to drawing the view hierarchy, which leaves
     /// sidebars and glass blank.
-    private static func capture(to path: String, window: NSWindow? = nil) {
+    static func capture(to path: String, window: NSWindow? = nil) {
         // Another app can hide this one while snapshots run (computer use hides
         // apps it does not control). Hidden windows cannot be captured.
         if NSApp.isHidden { NSApp.unhideWithoutActivation() }

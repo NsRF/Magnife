@@ -1,3 +1,4 @@
+import AppKit
 import MagnifeKit
 import SwiftUI
 
@@ -8,7 +9,15 @@ import SwiftUI
 enum ServicePalette {
     static let colors: [Color] = [.blue, .green, .purple, .teal, .pink, .indigo, .brown, .mint, .cyan, .yellow]
 
+    /// The same ten as AppKit colors, for the waterfall's bars (S-005).
+    static let nsColors: [NSColor] = [.systemBlue, .systemGreen, .systemPurple, .systemTeal, .systemPink,
+                                      .systemIndigo, .systemBrown, .systemMint, .systemCyan, .systemYellow]
+
     static func color(slot: Int) -> Color {
         colors[slot % colors.count]
+    }
+
+    static func nsColor(slot: Int) -> NSColor {
+        nsColors[slot % nsColors.count]
     }
 }

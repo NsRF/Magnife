@@ -45,6 +45,13 @@ struct MagnifeApp: App {
             CommandMenu("Trace") {
                 Button("Show Newest Traces") { delegate.model.showNewestTraces() }
                     .disabled(menu.newTraceCount == 0)
+                Divider()
+                Button("Expand All Spans") { delegate.model.expandAllSpans() }
+                    .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                    .disabled(!menu.hasWaterfall)
+                Button("Collapse All Spans") { delegate.model.collapseAllSpans() }
+                    .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                    .disabled(!menu.hasWaterfall)
             }
             // No help book in v0.1 (docs/ux.md, Help menu).
             CommandGroup(replacing: .help) {

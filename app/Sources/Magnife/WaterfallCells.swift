@@ -1,0 +1,211 @@
+import AppKit
+import MagnifeKit
+
+/// The waterfall's Span column: service dot, the octagon for an Error span,
+/// the name (truncated, full name in the tooltip), the service where it
+/// differs from the parent's, and the duration at the trailing edge, where a
+/// bar can never cover it. A collapsed span's "N spans" sits by its bar,
+/// where the timeline has room (a narrow Span column clipped it here).
+final class SpanNameCell: NSTableCellView {
+    private let dot = NSImageView()
+    private let octagon = NSImageView()
+    private let name = NSTextField(labelWithString: "")
+    private let service = NSTextField(labelWithString: "")
+    private let duration = NSTextField(labelWithString: "")
+    /// Narrower than this, a service name would show one or two letters.
+    private static let serviceMinimum: CGFloat = 40
+    private let spacer = NSView()
+
+    init() {
+        super.init(frame: .zero)
+        let small = NSImage.SymbolConfiguration(pointSize: 7, weight: .regular)
+        dot.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?.withSymbolConfiguration(small)
+        octagon.image = NSImage(systemSymbolName: "exclamationmark.octagon.fill", accessibilityDescription: "Error")
+        octagon.contentTintColor = .systemRed
+        for label in [name, service] {
+            // One line that ends in "…", never a clipped word.
+            label.maximumNumberOfLines = 1
+            label.cell?.wraps = false
+            label.lineBreakMode = .byTruncatingTail
+        }
+        service.textColor = .secondaryLabelColor
+        duration.textColor = .secondaryLabelColor
+        duration.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        duration.alignment = .right
+        for view in [dot, octagon, name, service, duration] { view.setContentHuggingPriority(.required, for: .horizontal) }
+        duration.setContentCompressionResistancePriority(.required, for: .horizontal)
+        // When space runs out the service gives way first, then the name
+        // truncates; a service with no room for a few letters is not drawn
+        // (layout), and the tooltip names it.
+        spacer.setContentCompressionResistancePriority(.init(1), for: .horizontal)
+        service.setContentCompressionResistancePriority(.init(249), for: .horizontal)
+        name.setContentCompressionResistancePriority(.init(251), for: .horizontal)
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let stack = NSStackView(views: [dot, octagon, name, service, spacer, duration])
+        stack.spacing = Space.xs
+        stack.alignment = .centerY
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        textField = name
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Space.xs),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Space.sm),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+        // VoiceOver reads the row as one sentence (S-005 Access).
+        setAccessibilityElement(true)
+        setAccessibilityRole(.cell)
+        for view in [dot, octagon, name, service, duration] { view.setAccessibilityElement(false) }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func layout() {
+        super.layout()
+        let needed = min(Self.serviceMinimum, service.intrinsicContentSize.width)
+        service.alphaValue = service.frame.width + 0.5 >= needed ? 1 : 0
+    }
+
+    /// The octagon shows (self-test).
+    var showsError: Bool { !octagon.isHidden }
+
+    func configure(name text: String, service shown: String?, duration time: String, color: NSColor, isError: Bool,
+                   hiddenCount: Int, isOrphan: Bool, label: String) {
+        duration.stringValue = time
+        dot.contentTintColor = color
+        octagon.isHidden = !isError
+        name.stringValue = text
+        service.stringValue = shown ?? ""
+        service.isHidden = shown == nil
+        // A span whose parent never arrived says so (S-005 States).
+        let named = shown.map { "\(text) · \($0)" } ?? text
+        let help = isOrphan ? Waterfall.orphanHelp
+            : hiddenCount == 0 ? named : "\(named) (\(TraceList.spansText(hiddenCount)))"
+        toolTip = help
+        name.toolTip = help
+        setAccessibilityLabel(hiddenCount == 0 ? label : "\(label), \(TraceList.spansText(hiddenCount))")
+    }
+}
+
+/// The waterfall's bar column: the span's bar placed and sized by its start
+/// and duration within the trace, over quarter lines that match the header's
+/// scale, with "N spans" beside it while the span is collapsed.
+final class SpanBarCell: NSTableCellView {
+    private let bar = SpanBarView()
+
+    init() {
+        super.init(frame: .zero)
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(bar)
+        NSLayoutConstraint.activate([
+            bar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bar.topAnchor.constraint(equalTo: topAnchor),
+            bar.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        setAccessibilityElement(false)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// The bar's start and width as fractions of the trace (self-test).
+    var fractions: (start: Double, width: Double) { (bar.start, bar.width) }
+    /// The collapsed span count shown by the bar (self-test).
+    var hiddenCountText: String? { bar.note }
+
+    func configure(start: Double, width: Double, color: NSColor, note: String?) {
+        bar.start = start
+        bar.width = width
+        bar.color = color
+        bar.note = note
+        bar.needsDisplay = true
+    }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet {
+            bar.isEmphasized = backgroundStyle == .emphasized
+            bar.needsDisplay = true
+        }
+    }
+}
+
+/// Where the timeline sits inside the bar column: the bar cells and the
+/// header scale share it.
+enum Timeline {
+    static let inset = Space.sm
+    static let barHeight: CGFloat = 12
+    static let quarters: [Double] = [0.25, 0.5, 0.75]
+
+    static func track(in rect: NSRect) -> NSRect {
+        rect.insetBy(dx: inset, dy: 0)
+    }
+}
+
+final class SpanBarView: NSView {
+    var start = 0.0
+    var width = 0.0
+    var color = NSColor.systemBlue
+    var note: String?
+    var isEmphasized = false
+
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let track = Timeline.track(in: bounds)
+        NSColor.separatorColor.setFill()
+        for quarter in Timeline.quarters {
+            NSRect(x: (track.minX + quarter * track.width).rounded(), y: 0, width: 1, height: bounds.height).fill()
+        }
+        let x = track.minX + start * track.width
+        let barWidth = max(2, width * track.width)
+        let rect = NSRect(x: x, y: (bounds.height - Timeline.barHeight) / 2, width: barWidth, height: Timeline.barHeight)
+        color.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: Radius.bar, yRadius: Radius.bar).fill()
+        guard let note else { return }
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular),
+            .foregroundColor: isEmphasized ? NSColor.alternateSelectedControlTextColor : NSColor.secondaryLabelColor,
+        ]
+        let text = note as NSString
+        let size = text.size(withAttributes: attributes)
+        // Right of the bar, else left of it; with room on neither side the
+        // row's tooltip and VoiceOver label still carry it.
+        var textX = rect.maxX + Space.xs
+        if textX + size.width > track.maxX { textX = rect.minX - Space.xs - size.width }
+        guard textX >= track.minX else { return }
+        text.draw(at: NSPoint(x: textX, y: (bounds.height - size.height) / 2), withAttributes: attributes)
+    }
+}
+
+/// The bar column's header: the trace's time scale at each quarter line.
+final class TimelineHeaderCell: NSTableHeaderCell {
+    var durationNs: Int64 = 0
+
+    init() {
+        super.init(textCell: "")
+    }
+
+    required init(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
+        guard durationNs > 0 else { return }
+        let track = Timeline.track(in: cellFrame)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ]
+        // From the trace's end leftward; a label that would touch the one
+        // to its right is left out, so narrow columns show fewer labels.
+        var limit = track.maxX + Space.xs
+        for fraction in ([1] + Timeline.quarters.reversed()) {
+            let text = DurationFormat.string(nanoseconds: Int64((Double(durationNs) * fraction).rounded())) as NSString
+            let size = text.size(withAttributes: attributes)
+            // Each label ends at its line, the last one at the trace's end.
+            let lineX = track.minX + fraction * track.width
+            let x = fraction == 1 ? track.maxX - size.width : lineX - size.width - Space.xs
+            guard x >= track.minX, x + size.width + Space.xs <= limit else { continue }
+            text.draw(at: NSPoint(x: x, y: cellFrame.midY - size.height / 2), withAttributes: attributes)
+            limit = x
+        }
+    }
+}

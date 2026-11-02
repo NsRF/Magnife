@@ -124,6 +124,18 @@ public final class TelemetryReader: Sendable {
         try await pool.read { try SpanRecord.fetchAll($0, sql: TelemetrySQL.spansOfTrace, arguments: [traceID]) }
     }
 
+    /// The waterfall's columns of every span of a trace, by start time (S-005).
+    @concurrent
+    public func waterfallSpans(traceID: String) async throws -> [WaterfallSpan] {
+        try await pool.read { try WaterfallSpan.fetchAll($0, sql: TelemetrySQL.waterfallSpansOfTrace, arguments: [traceID]) }
+    }
+
+    /// One span with its attributes, events and links: the span detail.
+    @concurrent
+    public func span(traceID: String, spanID: String) async throws -> SpanRecord? {
+        try await pool.read { try SpanRecord.fetchOne($0, sql: TelemetrySQL.spanByID, arguments: [traceID, spanID]) }
+    }
+
     @concurrent
     public func resource(id: Int64) async throws -> ResourceRecord? {
         try await pool.read { try ResourceRecord.fetchOne($0, sql: TelemetrySQL.resourceByID, arguments: [id]) }

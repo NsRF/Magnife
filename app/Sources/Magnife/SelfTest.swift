@@ -29,12 +29,18 @@ enum SelfTest {
             await model.openStore()
             await checkReader(model)
             await checkModel(model)
-            await checkEnvironment(model)
-            await checkTraceList(model)
-            await checkSupervisor()
-            await checkReceiver()
-            checkApp()
-            await checkWindowClose()
+            // APP_SELFTEST_ONLY=waterfall runs one story's checks, for quick rounds.
+            if ProcessInfo.processInfo.environment["APP_SELFTEST_ONLY"] == "waterfall" {
+                await checkWaterfall(model)
+            } else {
+                await checkEnvironment(model)
+                await checkTraceList(model)
+                await checkWaterfall(model)
+                await checkSupervisor()
+                await checkReceiver()
+                checkApp()
+                await checkWindowClose()
+            }
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
             finish(code: failures == 0 ? 0 : 1)
         }

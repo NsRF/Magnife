@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import MagnifeKit
 
 /// The sidebar's selection.
@@ -69,7 +69,23 @@ final class AppModel {
         scroller.onChange = { [weak self] away in self?.listScrolled(awayFromTop: away) }
         return scroller
     }()
-    private(set) var selectedSpans: [SpanRecord] = []
+    /// The open trace's waterfall (S-005), built off the main actor; a new
+    /// generation each time it is rebuilt, so the outline reloads only then.
+    var waterfall = Waterfall()
+    var waterfallGeneration = 0
+    /// The open trace's row, read with its spans (it may not be in the list).
+    var openTrace: TraceSummary?
+    /// Spans whose subtree is closed in the waterfall, by span id.
+    var collapsedSpans: Set<String> = []
+    /// The selected waterfall row (the span detail reads it, S-006).
+    var selectedSpanID: String?
+    @ObservationIgnored var waterfallTask: Task<Void, Never>?
+    /// The generation the outline shows, and when a trace was selected (self-test timing).
+    @ObservationIgnored var shownWaterfallGeneration = 0
+    @ObservationIgnored var waterfallRequestedAt: ContinuousClock.Instant?
+    @ObservationIgnored var lastWaterfallOpen: Duration?
+    /// The waterfall's outline, for the self-test.
+    @ObservationIgnored weak var waterfallOutline: NSOutlineView?
     /// The Time column counts from this; it ticks every 15 seconds.
     private(set) var now = Date()
 
@@ -90,7 +106,7 @@ final class AppModel {
     /// True between a scope change and its first read, so the empty state waits.
     var isLoadingScope = false
     var selectedTraceID: TraceSummary.ID? {
-        didSet { if selectedTraceID != oldValue { loadSelectedSpans() } }
+        didSet { if selectedTraceID != oldValue { openSelectedTrace() } }
     }
     /// Settings reopens on the last tab. Test and snapshot runs leave it alone.
     var settingsTab: SettingsTab = SettingsTab(rawValue: UserDefaults.standard.string(forKey: "settings.tab") ?? "") ?? .general {
@@ -227,24 +243,10 @@ final class AppModel {
         do {
             try await reloadList(reader)
             now = Date()
-            if let id = selectedTraceID {
-                let spans = try await reader.spans(traceID: id)
-                if selectedTraceID == id, spans != selectedSpans { selectedSpans = spans }
-            }
+            try await refreshOpenTrace(reader)
         } catch {
             isLoadingScope = false
             FileHandle.standardError.write(Data("magnife: read failed: \(error)\n".utf8))
-        }
-    }
-
-    private func loadSelectedSpans() {
-        guard let id = selectedTraceID, let reader else {
-            selectedSpans = []
-            return
-        }
-        Task {
-            let spans = (try? await reader.spans(traceID: id)) ?? []
-            if selectedTraceID == id { selectedSpans = spans }
         }
     }
 }

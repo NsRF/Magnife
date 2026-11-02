@@ -84,47 +84,48 @@ struct ServiceRow: View {
 
 // MARK: Detail
 
-/// The waterfall comes with S-005; for now the selected trace's header and spans.
+/// The detail column: the selected trace's waterfall (S-005).
 struct TraceDetail: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        if let trace = model.selectedTrace {
+        if let trace = model.openTrace ?? model.selectedTrace {
             VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    Text(trace.route)
-                        .font(.headline)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .gridProbe("route", area: "trace-header")
-                    Text("\(trace.rootService) · \(DurationFormat.string(nanoseconds: trace.durationNs)) · \(trace.spanCount) spans")
-                        .foregroundStyle(.secondary)
-                        .gridProbe("summary", area: "trace-header")
-                }
-                .padding(Space.lg)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .gridArea("trace-header", inset: Space.lg)
+                WaterfallHeader(trace: trace)
                 Divider()
-                List(model.selectedSpans) { span in
-                    HStack(spacing: Space.sm) {
-                        ServiceDot(name: span.serviceName)
-                            .help(span.serviceName)
-                        Text(span.name)
-                            .lineLimit(1)
-                        Text(span.serviceName)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Spacer(minLength: Space.sm)
-                        if span.status == .error { StatusLabel(status: .error) }
-                        Text(DurationFormat.string(nanoseconds: span.durationNs))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                WaterfallOutline(model: model, generation: model.waterfallGeneration, waterfall: model.waterfall,
+                                 collapsed: model.collapsedSpans, selected: model.selectedSpanID,
+                                 colors: model.serviceColors)
             }
         } else {
             ContentUnavailableView("No Trace Selected", systemImage: "chart.bar.doc.horizontal",
                                    description: Text("Select a trace to see its waterfall."))
         }
+    }
+}
+
+/// "POST /orders · checkout-api · 240 ms · 18 spans": the route truncates
+/// in the middle, the rest always shows.
+struct WaterfallHeader: View {
+    let trace: TraceSummary
+
+    var body: some View {
+        HStack(spacing: Space.xs) {
+            Text(trace.route)
+                .font(.headline)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(trace.route)
+                .gridProbe("route", area: "trace-header")
+            Text("· \(trace.waterfallSubtitle)")
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .padding(Space.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .gridArea("trace-header", inset: Space.lg)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }

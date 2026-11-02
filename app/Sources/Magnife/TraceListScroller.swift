@@ -119,7 +119,14 @@ final class MenuState: ObservableObject {
     /// Trace > Show Newest Traces is enabled while this is above zero.
     @Published private(set) var newTraceCount = 0
 
+    /// Expand All Spans and Collapse All Spans are enabled while a waterfall shows.
+    @Published private(set) var hasWaterfall = false
+
     func update(newTraceCount: Int) {
         if self.newTraceCount != newTraceCount { self.newTraceCount = newTraceCount }
+    }
+
+    func update(hasWaterfall: Bool) {
+        if self.hasWaterfall != hasWaterfall { self.hasWaterfall = hasWaterfall }
     }
 }

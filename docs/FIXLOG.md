@@ -23,3 +23,17 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Fix: `ServiceColors` (MagnifeKit) ranks services by first seen, then name, into docs/ux.md's ten system colors; `ServiceDot` reads it from AppModel in the sidebar, list and detail. Unit test `TraceListTests.colors`, self-test "each seed service has its own color".
 - Rule: assign identity colors from a stable order of the data, never from a hash, when they must stay distinct.
 
+## The self-test hung after collapsing a waterfall row (S-005, before checkpoint)
+
+- Symptom: the self-test stopped printing after "clicking a row selects its span" and never quit; the main thread sat idle in the event loop.
+- Cause: after `collapseItem`, `outline.parent(forItem:)` of the now hidden row returned nil, `row(forItem:)` gave -1, and `view(atColumn: 0, row: -1, makeIfNecessary: true)` never returns.
+- Fix: the check finds the parent's row by walking the outline's items and asks for a view only when the row is 0 or more.
+- Rule: never pass a row from `row(forItem:)` to an NSTableView view or rect call without checking it is not -1.
+
+## The waterfall's bar column ran past the window edge (S-005, before checkpoint)
+
+- Symptom: in the first snapshot the bars and the header's time labels were cut off at the right edge of the detail column.
+- Cause: the columns' initial and minimum widths plus the inset style's padding were wider than the 420 pt detail column, and NSOutlineView's `autoresizesOutlineColumn` widened the Span column on every expand.
+- Fix: narrow initial widths with `lastColumnOnlyAutoresizingStyle`, so the bar column fills what is left; `autoresizesOutlineColumn = false`; `sizeThatFits` returns the proposed size so SwiftUI never sizes the column from the table.
+- Rule: give an AppKit table inside a SwiftUI column a minimum width below the column's minimum, and check the right edge in the snapshot.
+

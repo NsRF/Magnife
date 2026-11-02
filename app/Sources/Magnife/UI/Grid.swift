@@ -19,6 +19,8 @@ enum Space {
 enum Radius {
     static let small: CGFloat = 8
     static let card: CGFloat = 12
+    /// A waterfall bar.
+    static let bar: CGFloat = 3
 }
 
 extension View {

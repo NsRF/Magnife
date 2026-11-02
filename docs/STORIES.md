@@ -98,7 +98,7 @@ UX:
 - States: no selection "No Trace Selected. Select a trace to see its waterfall."; too much: span names truncate with a tooltip, collapsed subtrees show their span count, a 1,000-span trace scrolls smoothly; missing parent: span sits at the root with "Parent span not received" as its tooltip
 - Words: header shows route, then service, duration and span count ("POST /orders · checkout-api · 240 ms · 18 spans"); each row shows span name and its service when it differs from the parent's
 - Access: each bar is a row VoiceOver reads as "span name, service, starts at 12 ms, lasts 80 ms, Error"; Error spans carry the octagon icon as well as color
-Status: todo
+Status: done
 
 ### S-006 Inspect a span's attributes, events and resource
 As the user, I click a span and read its attributes, events and the resource it came from.

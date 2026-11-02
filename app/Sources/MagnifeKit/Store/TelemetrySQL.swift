@@ -52,6 +52,14 @@ enum TelemetrySQL {
 
     static let spansOfTrace = "SELECT \(spanColumns) FROM spans WHERE trace_id = ? ORDER BY start_ns, id"
 
+    /// The waterfall's columns only (no JSON), by start; spans_by_trace covers the order.
+    static let waterfallSpansOfTrace = """
+        SELECT id, span_id, parent_span_id, name, kind, start_ns, duration_ns, status_code, service_name
+        FROM spans WHERE trace_id = ? ORDER BY start_ns, id
+        """
+
+    static let spanByID = "SELECT \(spanColumns) FROM spans WHERE trace_id = ? AND span_id = ?"
+
     static let resourceByID = "SELECT id, service_name, attributes FROM resources WHERE id = ?"
 
     static let logColumns = """

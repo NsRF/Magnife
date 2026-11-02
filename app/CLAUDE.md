@@ -33,6 +33,13 @@ this app starts the helper and reads its database. No server, no accounts.
   `TraceListScroller`, which watches the table's NSScrollView. A sidebar scope change empties the list before the
   new read: diffing one scope's rows into another's trips AppKit's
   "reentrant operation in its NSTableView delegate" warning.
+- The waterfall (S-005): `TelemetryReader.waterfallSpans` reads only the
+  columns it draws; `Waterfall` (MagnifeKit) builds the tree off the main
+  actor, without recursion; `AppModel+Waterfall.swift` re-reads the open trace
+  only when its `updated_seq` changes and keeps `collapsedSpans` and
+  `selectedSpanID` across rebuilds. The rows are an NSOutlineView
+  (`WaterfallOutline.swift`, cells in `WaterfallCells.swift`). Never pass a
+  row of -1 to its view calls: `view(atColumn:row:makeIfNecessary:)` hangs.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -76,7 +83,10 @@ this app starts the helper and reads its database. No server, no accounts.
 - Self-test (the app's real functions on the seeded store, the supervisor on
   `FakeHelper`, and the receiver checks with the real bundled helper on free
   ports, in `SelfTest+Receiver.swift`; the gRPC check runs the sample sender
-  named by `APP_SAMPLE_SENDER`, which `selftest.sh` sets): `tools/selftest.sh`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
+  named by `APP_SAMPLE_SENDER`, which `selftest.sh` sets): `tools/selftest.sh`.
+  `APP_SELFTEST_ONLY=waterfall tools/selftest.sh` runs only the reader, model
+  and waterfall checks; the waterfall checks time 1,000/5,000/30,000-span
+  traces (INFO lines) and write `/tmp/Magnife-shots/03-trace-detail-30000-*.png`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots and look at them: `tools/snap.sh`.
   It writes `/tmp/Magnife-shots/<page>-light.png` and `-dark.png` for every
   `SnapshotPage` (the pages in `docs/STORIES.md`), and

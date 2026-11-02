@@ -60,6 +60,11 @@ public enum TraceList {
     public static func newTracesTitle(_ count: Int) -> String {
         count == 1 ? "1 new trace" : "\(count.formatted()) new traces"
     }
+
+    /// A span count: "18 spans", "1 span", "30,000 spans".
+    public static func spansText(_ count: Int) -> String {
+        count == 1 ? "1 span" : "\(count.formatted()) spans"
+    }
 }
 
 extension TraceSummary {
@@ -72,7 +77,7 @@ extension TraceSummary {
     /// The Duration cell for VoiceOver: "240 milliseconds".
     public var spokenDuration: String { DurationFormat.spoken(nanoseconds: durationNs) }
     /// The Spans cell for VoiceOver: "18 spans", "1 span".
-    public var spokenSpanCount: String { spanCount == 1 ? "1 span" : "\(spanCount.formatted()) spans" }
+    public var spokenSpanCount: String { TraceList.spansText(spanCount) }
 
     public var accessibilityLabel: String { spokenParts.joined(separator: ", ") }
 }

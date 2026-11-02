@@ -156,6 +156,16 @@ struct ContractTests {
         let resource = try #require(try await reader.resource(id: child.resourceID))
         #expect(resource.serviceName == "orders")
         Self.expectAllTypes(resource.attributes)
+
+        // The waterfall's columns and one span by id (S-005).
+        let bars = try await reader.waterfallSpans(traceID: Self.traceA)
+        #expect(bars.map(\.spanID) == [Self.root, Self.child])
+        #expect(bars[1].parentSpanID == Self.root && bars[1].kind == .client && bars[1].status == .error)
+        #expect(bars[1].durationNs == 7_000_000 && bars[1].serviceName == "orders")
+        #expect(bars[0].parentSpanID == nil && bars[0].startNs == root.startNs)
+        let one = try await reader.span(traceID: Self.traceA, spanID: Self.child)
+        #expect(one == child)
+        #expect(try await reader.span(traceID: Self.traceA, spanID: "missing") == nil)
     }
 
     @Test("logs: by trace, by span, latest, levels, JSON bodies")
