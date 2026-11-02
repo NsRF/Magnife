@@ -50,17 +50,24 @@ public final class TelemetryReader: Sendable {
     // MARK: Traces
 
     /// A page of traces, newest first by start. Pass the last row's cursor
-    /// for the next page. `service` keeps traces with any span from it.
-    @concurrent
+    /// for the next page. `service` keeps traces with any span from it;
     /// `upTo` keeps traces created by batches up to that seq (a paused list, S-010).
+    @concurrent
     public func latestTraces(limit: Int = 200, after cursor: TraceCursor? = nil,
                              service: String? = nil, upTo: Int64? = nil) async throws -> [TraceSummary] {
+        try await latestTraces(limit: limit, after: cursor, filter: TraceFilter(service: service), upTo: upTo)
+    }
+
+    /// A page of the traces `filter` keeps, newest first (S-017 to S-020).
+    @concurrent
+    public func latestTraces(limit: Int = 200, after cursor: TraceCursor? = nil, filter: TraceFilter,
+                             upTo: Int64? = nil) async throws -> [TraceSummary] {
+        let conditions = TraceFilterSQL(filter)
         var arguments: StatementArguments = []
         if let cursor { arguments += [cursor.startNs, cursor.startNs, cursor.traceID] }
         if let upTo { arguments += [upTo] }
-        if let service { arguments += [service] }
-        arguments += [limit]
-        let sql = TelemetrySQL.latestTraces(cursor: cursor != nil, service: service != nil, upTo: upTo != nil)
+        arguments += conditions.arguments + [limit]
+        let sql = TelemetrySQL.traceList(cursor: cursor != nil, upTo: upTo != nil, filter: conditions)
         return try await pool.read { [arguments] in try TraceSummary.fetchAll($0, sql: sql, arguments: arguments) }
     }
 
@@ -71,22 +78,35 @@ public final class TelemetryReader: Sendable {
     @concurrent
     public func tracePage(limit: Int = TraceList.pageSize, service: String? = nil,
                           upTo: Int64? = nil) async throws -> TracePage {
-        var scope: StatementArguments = []
-        if let upTo { scope += [upTo] }
-        if let service { scope += [service] }
-        let arguments = scope + [limit]
-        let scoped = service != nil
-        let sql = TelemetrySQL.latestTraces(cursor: false, service: scoped, upTo: upTo != nil)
-        let countSQL = TelemetrySQL.scopeTraceCount(service: scoped, upTo: upTo != nil)
-        let newArguments: StatementArguments = upTo.map { [$0] + (service.map { [$0] } ?? []) } ?? []
-        return try await pool.read { [scope] db in
-            TracePage(traces: try TraceSummary.fetchAll(db, sql: sql, arguments: arguments),
-                      services: try ServiceSummary.fetchAll(db, sql: TelemetrySQL.servicesWithErrors),
-                      lastSeq: try Self.lastSeq(db),
-                      traceCount: try Int.fetchOne(db, sql: countSQL, arguments: scope) ?? 0,
-                      upTo: upTo,
-                      newCount: upTo == nil ? 0 : try Int.fetchOne(db, sql: TelemetrySQL.tracesCreatedAfter(service: scoped),
-                                                                   arguments: newArguments) ?? 0)
+        try await tracePage(limit: limit, filter: TraceFilter(service: service), upTo: upTo)
+    }
+
+    /// The first page of the traces `filter` keeps. While the filter bar
+    /// narrows the scope, the page carries both counts: the traces it keeps
+    /// and the service scope's ("312 of 1,204 traces"), and the first is
+    /// read with the page, so a filter that scans spans scans them once.
+    @concurrent
+    public func tracePage(limit: Int = TraceList.pageSize, filter: TraceFilter,
+                          upTo: Int64? = nil) async throws -> TracePage {
+        let conditions = TraceFilterSQL(filter)
+        let scope = TraceFilterSQL(TraceFilter(service: filter.service))
+        let narrows = filter.narrowsScope
+        let pause: StatementArguments = upTo.map { [$0] } ?? []
+        let pageSQL = TelemetrySQL.traceList(cursor: false, upTo: upTo != nil, filter: conditions, counted: narrows)
+        let pageArguments = pause + conditions.arguments + [limit]
+        let scopeSQL = TelemetrySQL.traceCount(upTo: upTo != nil, filter: scope)
+        let scopeArguments = pause + scope.arguments
+        let created = TraceFilterSQL(filter, spans: .perTrace)
+        let newSQL = TelemetrySQL.tracesCreated(after: created)
+        return try await pool.read { db in
+            let rows = try Row.fetchAll(db, sql: pageSQL, arguments: pageArguments)
+            let traces = try rows.map { try TraceSummary(row: $0) }
+            let scopeCount = try Int.fetchOne(db, sql: scopeSQL, arguments: scopeArguments) ?? 0
+            let count: Int = narrows ? (rows.first?["total"] ?? 0) : scopeCount
+            return TracePage(traces: traces,
+                             services: try ServiceSummary.fetchAll(db, sql: TelemetrySQL.servicesWithErrors),
+                             lastSeq: try Self.lastSeq(db), traceCount: count, scopeCount: scopeCount, upTo: upTo,
+                             newCount: try upTo.map { try Int.fetchOne(db, sql: newSQL, arguments: [$0] + created.arguments) ?? 0 } ?? 0)
         }
     }
 
@@ -94,22 +114,86 @@ public final class TelemetryReader: Sendable {
     /// after seq `applied`, and how many traces in the scope are newer than `base`.
     @concurrent
     public func heldTraces(base: Int64, applied: Int64, shown: [String], service: String? = nil) async throws -> HeldTraces {
+        try await heldTraces(base: base, applied: applied, shown: shown, filter: TraceFilter(service: service))
+    }
+
+    /// The same, counting only the new traces `filter` keeps; their own spans are read, not every span.
+    @concurrent
+    public func heldTraces(base: Int64, applied: Int64, shown: [String], filter: TraceFilter) async throws -> HeldTraces {
         let ids = String(decoding: try JSONEncoder().encode(shown), as: UTF8.self)
         let updateArguments: StatementArguments = [ids, applied]
         let goneArguments: StatementArguments = [ids]
-        var countArguments: StatementArguments = [base]
-        if let service { countArguments += [service] }
-        let scoped = service != nil
+        let created = TraceFilterSQL(filter, spans: .perTrace)
+        let countSQL = TelemetrySQL.tracesCreated(after: created)
+        let countArguments: StatementArguments = [base] + created.arguments
         return try await pool.read { [updateArguments, goneArguments, countArguments] db in
             HeldTraces(updated: try TraceSummary.fetchAll(db, sql: TelemetrySQL.heldTraceUpdates,
                                                           arguments: updateArguments),
                        removed: shown.isEmpty ? [] : try String.fetchAll(db, sql: TelemetrySQL.heldTracesGone,
                                                                          arguments: goneArguments),
-                       newCount: try Int.fetchOne(db, sql: TelemetrySQL.tracesCreatedAfter(service: scoped),
-                                                  arguments: countArguments) ?? 0,
+                       newCount: try Int.fetchOne(db, sql: countSQL, arguments: countArguments) ?? 0,
                        services: try ServiceSummary.fetchAll(db, sql: TelemetrySQL.servicesWithErrors),
                        lastSeq: try Self.lastSeq(db))
         }
+    }
+
+    /// Search (S-017): the newest traces the query keeps, up to `limit`. An
+    /// empty query lists the newest traces. Search reads every stored trace:
+    /// the sidebar, the filter bar and Pause do not narrow it.
+    ///
+    /// A query that looks into spans first walks the newest `window` traces,
+    /// newest first, reading each one's own spans (spans_by_trace), and stops
+    /// at `limit` matches: a common word answers in a millisecond whatever the
+    /// store's size, and its `total` is nil (`searchCount` reads it). With
+    /// fewer matches there, the whole store is read in one pass, page and
+    /// total together. A word that looks like a trace ID puts the trace whose
+    /// ID starts with it first, so it always reads the whole store.
+    @concurrent
+    public func searchTraces(_ query: TraceQuery, limit: Int = TraceSearch.resultLimit,
+                             window: Int = TraceSearch.quickWindow) async throws -> TraceSearchResult {
+        let filter = query.filter
+        guard filter.isActive else {
+            let newest = try await latestTraces(limit: TraceSearch.newestLimit, filter: TraceFilter())
+            return TraceSearchResult(text: query.text, traces: newest, total: newest.count, isNewest: true)
+        }
+        let prefix = query.traceIDPrefixes.first
+        let readsSpans = filter.activeConditions.contains { $0.field != .route }
+        if readsSpans, prefix == nil {
+            let walk = TraceFilterSQL(filter, spans: .perTrace)
+            let walkSQL = TelemetrySQL.traceSearchWalk(filter: walk)
+            let rows = try await pool.read { db -> (traces: [TraceSummary], complete: Bool) in
+                // The start of the window's oldest trace; nil when the store holds fewer.
+                let floor = try Int64.fetchOne(db, sql: TelemetrySQL.traceStartAtOffset, arguments: [window - 1])
+                let traces = try TraceSummary.fetchAll(db, sql: walkSQL,
+                                                       arguments: [floor ?? Int64.min] + walk.arguments + [limit])
+                return (traces, floor == nil)
+            }
+            if rows.traces.count >= limit {
+                return TraceSearchResult(text: query.text, traces: rows.traces, total: nil, isNewest: false)
+            }
+            // The window was the whole store: nothing more to read.
+            if rows.complete {
+                return TraceSearchResult(text: query.text, traces: rows.traces, total: rows.traces.count, isNewest: false)
+            }
+        }
+        let conditions = TraceFilterSQL(filter)
+        let sql = TelemetrySQL.traceSearch(filter: conditions, prefixFirst: prefix != nil)
+        var arguments = conditions.arguments
+        if let prefix { arguments += [String(TraceFilterSQL.containsPattern(prefix).dropFirst())] }
+        arguments += [limit]
+        let rows = try await pool.read { [arguments] db in
+            try Row.fetchAll(db, sql: sql, arguments: arguments).map { (try TraceSummary(row: $0), $0["total"] as Int? ?? 0) }
+        }
+        return TraceSearchResult(text: query.text, traces: rows.map(\.0), total: rows.first?.1 ?? 0, isNewest: false)
+    }
+
+    /// How many stored traces the query keeps, for a search whose page came
+    /// back without its total ("50 of 312"). Cancel the task to stop it.
+    @concurrent
+    public func searchCount(_ query: TraceQuery) async throws -> Int {
+        let conditions = TraceFilterSQL(query.filter)
+        let sql = TelemetrySQL.traceCount(upTo: false, filter: conditions)
+        return try await pool.read { try Int.fetchOne($0, sql: sql, arguments: conditions.arguments) ?? 0 }
     }
 
     @concurrent

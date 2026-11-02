@@ -37,6 +37,50 @@ enum TelemetrySQL {
         return "SELECT COUNT(*) FROM traces" + (conditions.isEmpty ? "" : " WHERE " + conditions.joined(separator: " AND "))
     }
 
+    /// The trace list under a filter (S-017 to S-020), newest first. Optional
+    /// cursor (start_ns, trace_id) and pause point, then the filter's
+    /// conditions, then the limit, in that order. `counted` adds the number
+    /// of traces the filter keeps to every row (`total`), so a filter that
+    /// scans spans does it once for the page and its count.
+    static func traceList(cursor: Bool, upTo: Bool, filter: TraceFilterSQL, counted: Bool = false) -> String {
+        var conditions: [String] = []
+        if cursor { conditions.append("(start_ns < ? OR (start_ns = ? AND trace_id < ?))") }
+        if upTo { conditions.append("first_seq <= ?") }
+        conditions += filter.conditions
+        return "SELECT \(traceColumns)\(counted ? ", COUNT(*) OVER () AS total" : "") FROM traces "
+            + whereClause(conditions) + " ORDER BY start_ns DESC, trace_id DESC LIMIT ?"
+    }
+
+    /// How many traces the filter keeps, up to a pause point (pause point first).
+    static func traceCount(upTo: Bool, filter: TraceFilterSQL) -> String {
+        "SELECT COUNT(*) FROM traces " + whereClause((upTo ? ["first_seq <= ?"] : []) + filter.conditions)
+    }
+
+    /// Traces created after seq `base` that the filter keeps: "12 new traces".
+    /// Pass a `.perTrace` filter: only the new traces' own spans are read.
+    static func tracesCreated(after filter: TraceFilterSQL) -> String {
+        "SELECT COUNT(*) FROM traces WHERE first_seq > ?" + filter.andClause
+    }
+
+    /// Search (S-017): the newest traces the query keeps and their number.
+    /// With `prefixFirst`, a trace whose id starts with the bound pattern comes first.
+    static func traceSearch(filter: TraceFilterSQL, prefixFirst: Bool) -> String {
+        "SELECT \(traceColumns), COUNT(*) OVER () AS total FROM traces " + whereClause(filter.conditions)
+            + " ORDER BY " + (prefixFirst ? #"(trace_id LIKE ? ESCAPE '\') DESC, "# : "")
+            + "start_ns DESC, trace_id DESC LIMIT ?"
+    }
+
+    /// Search's first look (S-017): traces that start at or after a bound
+    /// (the newest few thousand), newest first, each checked on its own
+    /// spans (a `.perTrace` filter), up to a limit. traces_by_start orders it.
+    static func traceSearchWalk(filter: TraceFilterSQL) -> String {
+        "SELECT \(traceColumns) FROM traces " + whereClause(["start_ns >= ?"] + filter.conditions)
+            + " ORDER BY start_ns DESC, trace_id DESC LIMIT ?"
+    }
+
+    /// The start of the trace at an offset from the newest: the bound of Search's first look.
+    static let traceStartAtOffset = "SELECT start_ns FROM traces ORDER BY start_ns DESC LIMIT 1 OFFSET ?"
+
     /// The shown rows (a JSON array of trace ids) that changed after seq
     /// `applied`, for a list that holds still (S-004). Primary-key lookups,
     /// so every shown row is read however many changed, and no service scan.

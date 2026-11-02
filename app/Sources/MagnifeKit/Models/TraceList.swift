@@ -10,19 +10,22 @@ public struct TracePage: Sendable, Equatable {
     public var traces: [TraceSummary]
     public var services: [ServiceSummary]
     public var lastSeq: Int64
-    /// Every trace in the scope, for the window's subtitle (S-009).
+    /// Every trace the filter keeps, for the window's subtitle (S-009).
     public var traceCount: Int
+    /// Every trace of the service scope, the filter bar aside: "312 of 1,204 traces".
+    public var scopeCount: Int
     /// Read while paused (S-010): only traces created up to this seq, and
     /// `newCount` the ones created after it.
     public var upTo: Int64?
     public var newCount: Int
 
     public init(traces: [TraceSummary], services: [ServiceSummary], lastSeq: Int64, traceCount: Int? = nil,
-                upTo: Int64? = nil, newCount: Int = 0) {
+                scopeCount: Int? = nil, upTo: Int64? = nil, newCount: Int = 0) {
         self.traces = traces
         self.services = services
         self.lastSeq = lastSeq
         self.traceCount = traceCount ?? traces.count
+        self.scopeCount = scopeCount ?? traceCount ?? traces.count
         self.upTo = upTo
         self.newCount = newCount
     }
@@ -84,6 +87,12 @@ public enum TraceList {
         (isPaused ? "Paused · " : "") + (traceCount == 1 ? "1 trace" : "\(traceCount.formatted()) traces")
     }
 
+    /// The subtitle while filters hide some traces: "312 of 1,204 traces",
+    /// "1 of 1 trace", prefixed "Paused · " while paused.
+    public static func subtitle(shown: Int, of total: Int, isPaused: Bool = false) -> String {
+        (isPaused ? "Paused · " : "") + "\(shown.formatted()) of \(total.formatted()) \(total == 1 ? "trace" : "traces")"
+    }
+
     /// The bar at the top of a paused list (S-010): "Paused. 12 new traces.
     /// Magnife is still receiving.", without the count while none arrived.
     public static func pausedText(newCount: Int) -> String {
@@ -133,8 +142,9 @@ extension TraceSummary {
 /// traces are counted; a read for another scope, or older than what is shown,
 /// is dropped, so overlapping reads never put older rows back.
 public struct TraceListState: Sendable, Equatable {
-    /// The sidebar's service, nil for all services.
-    public var scope: String?
+    /// The sidebar's service and the filter bar's filters: a read made for
+    /// another filter is dropped.
+    public var scope: TraceFilter
     public var traces: [TraceSummary]
     /// The seq the shown rows were read at, and the last seq applied to them.
     public var baseSeq: Int64
@@ -145,15 +155,17 @@ public struct TraceListState: Sendable, Equatable {
     public var newCount: Int
     /// A full page came back, so there may be older rows to read.
     public var hasMore: Bool
-    /// Every trace in the scope when the rows were read (the subtitle).
+    /// Every trace the filter keeps when the rows were read (the subtitle),
+    /// and every trace of the service scope ("312 of 1,204 traces").
     public var traceCount: Int
+    public var scopeCount: Int
     /// While paused (S-010), the seq the list paused at: rows never change,
     /// traces created after it are counted, and a scope change reads up to it.
     public var pausedSeq: Int64?
 
-    public init(scope: String? = nil, traces: [TraceSummary] = [], baseSeq: Int64 = 0, appliedSeq: Int64 = 0,
-                isHeld: Bool = false, newCount: Int = 0, hasMore: Bool = false, traceCount: Int = 0,
-                pausedSeq: Int64? = nil) {
+    public init(scope: TraceFilter = TraceFilter(), traces: [TraceSummary] = [], baseSeq: Int64 = 0,
+                appliedSeq: Int64 = 0, isHeld: Bool = false, newCount: Int = 0, hasMore: Bool = false,
+                traceCount: Int = 0, scopeCount: Int? = nil, pausedSeq: Int64? = nil) {
         self.scope = scope
         self.traces = traces
         self.baseSeq = baseSeq
@@ -162,6 +174,7 @@ public struct TraceListState: Sendable, Equatable {
         self.newCount = newCount
         self.hasMore = hasMore
         self.traceCount = traceCount
+        self.scopeCount = scopeCount ?? traceCount
         self.pausedSeq = pausedSeq
     }
 
@@ -195,6 +208,7 @@ public struct TraceListState: Sendable, Equatable {
             next.appliedSeq = page.lastSeq
             next.newCount = page.newCount
             next.traceCount = page.traceCount
+            next.scopeCount = page.scopeCount
         case .held(let held, _, let base):
             // Back at the top, or a newer page arrived while reading: that read decides.
             guard isHeld || isPaused, base == baseSeq else { return nil }
@@ -206,7 +220,9 @@ public struct TraceListState: Sendable, Equatable {
                 if !held.removed.isEmpty {
                     let gone = Set(held.removed)
                     next.traces.removeAll { gone.contains($0.id) }
-                    next.traceCount = max(0, traceCount - (traces.count - next.traces.count))
+                    let removed = traces.count - next.traces.count
+                    next.traceCount = max(0, traceCount - removed)
+                    next.scopeCount = max(0, scopeCount - removed)
                 }
             }
             next.appliedSeq = held.lastSeq
@@ -219,11 +235,11 @@ public struct TraceListState: Sendable, Equatable {
 /// A read of the live list, with the scope it was made for.
 public enum TraceListRead: Sendable {
     /// The first page, read at the top.
-    case page(TracePage, scope: String?)
+    case page(TracePage, scope: TraceFilter)
     /// Changes to the shown rows read while the list held still at `base`.
-    case held(HeldTraces, scope: String?, base: Int64)
+    case held(HeldTraces, scope: TraceFilter, base: Int64)
 
-    public var scope: String? {
+    public var scope: TraceFilter {
         switch self {
         case .page(_, let scope), .held(_, let scope, _): scope
         }

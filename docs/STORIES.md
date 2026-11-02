@@ -238,7 +238,7 @@ Acceptance:
 - [unit] Text matches service, route, trace id and attribute values.
 - [unit] Typed tokens `service:`, `status:`, `route:` and `>200ms` parse into the same filters as the filter bar (design decision 2).
 - [self] Results appear while typing, within 100 ms on 100,000 spans.
-Status: todo
+Status: done
 
 ### S-018 Filter traces by status
 As the user, I show only failed traces.

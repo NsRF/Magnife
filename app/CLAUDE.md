@@ -116,6 +116,20 @@ this app starts the helper and reads its database. No server, no accounts.
   `DatabaseSize.bytes` (database plus WAL), `AppModel.databaseSize`.
   `APP_SELFTEST_ONLY=retention` runs the end-to-end checks with the real
   helper (S-015 at a 3 s retention, then S-016's change flow).
+- Filters and Search (S-017+): one query language, `TraceQuery` (MagnifeKit,
+  parse and format, round trip unit-tested) <-> `TraceFilter` (service,
+  statuses, slower than, `TraceCondition` rows); `TraceFilterSQL` turns a
+  filter into WHERE conditions with bound arguments only (`.set` scans spans
+  once, `.perTrace` reads each candidate's spans for "new since" counts).
+  `TraceListState.scope` is the whole `TraceFilter`; `AppModel.traceFilter`
+  joins the sidebar's service with `traceStatuses`, `traceSlowerThanNs`,
+  `traceConditions` (`AppModel+TraceFilter.swift`; any change resets the
+  list like a scope change). Search (`AppModel+Search.swift`,
+  `SearchPanel.swift`, AppKit field `SearchField.swift`) is an overlay on
+  the window: `TelemetryReader.searchTraces` walks the newest 2,000 traces
+  first, else reads the store in one pass; `searchCount` fills a missing
+  total; each keystroke cancels the read before it. `APP_SELFTEST_ONLY=search`
+  runs its checks, timed on `APP_SEARCH_STORE` (100,000 spans, selftest.sh).
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -188,7 +202,8 @@ this app starts the helper and reads its database. No server, no accounts.
   `03-trace-detail-no-longer-stored` the S-015 state (set, not pruned),
   `05-logs` the Logs view with the payment log's detail, `05-logs-no-trace`
   a log without a trace id, `05-logs-new-logs`, `05-logs-paused`, `05-logs-empty`,
-  `05-logs-filtered` (ERROR and WARN on), `05-logs-filter-hidden`, `05-logs-no-matches`.
+  `05-logs-filtered` (ERROR and WARN on), `05-logs-filter-hidden`, `05-logs-no-matches`,
+  `06-command-k` (Search for "checkout") with `-empty`, `-suggestions`, `-tokens`, `-no-match`.
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Both scripts pass an empty "NSSplitView Subview Frames …" default, so the

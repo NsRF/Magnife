@@ -45,21 +45,21 @@ struct PauseTests {
         var changed = trace(1)
         changed.spanCount = 9
         let held = HeldTraces(updated: [changed], newCount: 4, services: [], lastSeq: 8)
-        let next = try #require(state.applying(.held(held, scope: nil, base: 5)))
+        let next = try #require(state.applying(.held(held, scope: TraceFilter(), base: 5)))
         #expect(next.traces == state.traces)
         #expect(next.newCount == 4 && next.appliedSeq == 8 && next.baseSeq == 5 && next.pausedSeq == 5)
         // A first page read before the pause would insert rows: dropped.
-        #expect(state.applying(.page(TracePage(traces: [trace(3)], services: [], lastSeq: 8), scope: nil)) == nil)
+        #expect(state.applying(.page(TracePage(traces: [trace(3)], services: [], lastSeq: 8), scope: TraceFilter())) == nil)
     }
 
     @Test("paused with no rows (a scope change), a page read up to the pause point fills the list")
     func scopeWhilePaused() throws {
-        let state = TraceListState(scope: "web", baseSeq: 5, appliedSeq: 7, pausedSeq: 5)
+        let state = TraceListState(scope: TraceFilter(service: "web"), baseSeq: 5, appliedSeq: 7, pausedSeq: 5)
         #expect(!state.readsHeld)
         // A page read without the pause point is dropped.
-        #expect(state.applying(.page(TracePage(traces: [trace(7)], services: [], lastSeq: 8), scope: "web")) == nil)
+        #expect(state.applying(.page(TracePage(traces: [trace(7)], services: [], lastSeq: 8), scope: TraceFilter(service: "web"))) == nil)
         let page = TracePage(traces: [trace(5), trace(2)], services: [], lastSeq: 8, traceCount: 2, upTo: 5, newCount: 1)
-        let next = try #require(state.applying(.page(page, scope: "web")))
+        let next = try #require(state.applying(.page(page, scope: TraceFilter(service: "web"))))
         #expect(next.traces.map(\.traceID) == [traceID(5), traceID(2)])
         #expect(next.baseSeq == 5 && next.appliedSeq == 8 && next.newCount == 1 && next.traceCount == 2)
         #expect(next.pausedSeq == 5 && next.readsHeld)
@@ -70,7 +70,7 @@ struct PauseTests {
         var state = TraceListState(traces: [trace(2), trace(1)], baseSeq: 5, appliedSeq: 8, newCount: 3).paused()
         state.pausedSeq = nil
         let rows = (1...(TraceList.pageSize + 3)).reversed().map { trace($0) }
-        let next = try #require(state.applying(.page(TracePage(traces: rows, services: [], lastSeq: 9), scope: nil)))
+        let next = try #require(state.applying(.page(TracePage(traces: rows, services: [], lastSeq: 9), scope: TraceFilter())))
         #expect(next.traces.count == TraceList.pageSize + 3 && next.hasMore)
         #expect(next.baseSeq == 9 && next.newCount == 0 && !next.isPaused)
     }

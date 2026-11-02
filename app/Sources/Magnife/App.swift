@@ -49,6 +49,10 @@ struct MagnifeApp: App {
                     .disabled(!menu.hasSelectedLog)
                 Button("Copy Environment Variables") { delegate.model.copyEnvironmentVariables() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
+                Divider()
+                // Search (S-017): from anywhere in the window, text fields included.
+                Button("Search…") { delegate.model.showSearch() }
+                    .keyboardShortcut("k", modifiers: .command)
             }
             CommandGroup(before: .sidebar) {
                 // Traces | Logs (docs/ux.md, View menu; PROGRESS decision 16).
@@ -63,7 +67,7 @@ struct MagnifeApp: App {
                 }
                 .keyboardShortcut("f", modifiers: .command)
                 .disabled(menu.filterBar == .unavailable)
-                Button("Clear Filters") { delegate.model.clearLogFilters(undoManager: NSApp.mainWindow?.undoManager) }
+                Button("Clear Filters") { delegate.model.clearFilters(undoManager: NSApp.mainWindow?.undoManager) }
                     .disabled(!menu.hasFilters)
                 Divider()
                 // The span detail belongs to the Traces view.

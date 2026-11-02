@@ -135,3 +135,17 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: the list kept its width in `@State` from `onGeometryChange`. While the window first lays out, the content column briefly reports 310 pt (the sidebar's 210 pt as a leading safe-area inset), and the change back to 520 pt was not always reported, so the setup stayed sized for 310 pt. Moving the toolbar items to the content column (S-013) changed the layout passes enough to show it on every run.
 - Fix: the empty state reads the width from a `GeometryReader` in the overlay, on every layout, and the overlay is there only while the list is empty.
 - Rule: a size that lays out other views is read where it is used, on every layout, not cached in `@State` from a geometry callback.
+
+## The VoiceOver row check read no rows (S-004 check, found in S-017's runs)
+
+- Symptom: "VoiceOver reads the HTTP 500 row once, as that sentence" failed with no rows in every self-test run, on the last checkpoint's build as well as the new one.
+- Cause: with the screen locked during an unattended run, the Accessibility API answers the app's `AXWindows` with the application element itself, so the walk from the application only ever reached the menu bar (thousands of menu items) and never a table row.
+- Fix: the check first asks whether the API lists a real window (`accessibilityShowsWindows`) and skips with an INFO line when it does not, as it already did without the permission.
+- Rule: a self-test check that reads through a system service checks that the service can answer before it judges the app.
+
+## Search's keys reached the wrong place in the self-test (S-017)
+
+- Symptom: Return and ⌘Return in Search did nothing in the self-test, and a field focused right after it opened lost its first keystroke's text.
+- Cause: three things. The field asked for focus before it was in a window (`field.window` was nil); the test sent keys through `NSApp.sendEvent`, which drops them when another app is frontmost (no key window); and ⌘Return never reaches the field editor's `doCommandBy`.
+- Fix: the field takes focus in `viewDidMoveToWindow`; test keys go to the window (`window.sendEvent`, `window.performKeyEquivalent`); Apply as Filter is the footer button's `.keyboardShortcut(.return, modifiers: .command)`.
+- Rule: an AppKit field focuses itself once it has a window, and window-level shortcuts live on a control, not in the field editor's command handler.

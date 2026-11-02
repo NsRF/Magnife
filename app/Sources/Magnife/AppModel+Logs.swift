@@ -359,7 +359,12 @@ extension AppModel {
     }
 
     func updateFilterMenu() {
-        MenuState.shared.update(filterBar: contentMode == .logs ? (showsLogFilterBar ? .shown : .hidden) : .unavailable,
-                                hasFilters: contentMode == .logs && hasLogFilters)
+        switch contentMode {
+        case .logs:
+            MenuState.shared.update(filterBar: showsLogFilterBar ? .shown : .hidden, hasFilters: hasLogFilters)
+        case .traces:
+            // The Traces filter bar comes with S-018; Apply as Filter (S-017) can set filters before it.
+            MenuState.shared.update(filterBar: .unavailable, hasFilters: hasTraceFilters)
+        }
     }
 }

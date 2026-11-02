@@ -63,8 +63,41 @@ final class AppModel {
     }
     /// A full page came back, so there may be older rows to read.
     var hasMoreTraces = false
-    /// Every trace in the scope when the rows were read: the window's subtitle (S-009).
+    /// Every trace the filters keep when the rows were read: the window's subtitle (S-009).
     var listTraceCount = 0
+    /// Every trace of the service scope, the filter bar aside ("312 of 1,204 traces").
+    var listScopeCount = 0
+    /// The trace list's own filters (S-017 to S-020): status chips, "Slower
+    /// than" and condition rows; the sidebar holds the service. Any change
+    /// reads the list again from the top (AppModel+TraceFilter.swift).
+    var traceStatuses: Set<SpanStatus> = [] {
+        didSet { if traceStatuses != oldValue { traceFilterChanged() } }
+    }
+    var traceSlowerThanNs: Int64? {
+        didSet { if traceSlowerThanNs != oldValue { traceFilterChanged() } }
+    }
+    var traceConditions: [TraceCondition] = [] {
+        didSet { if traceConditions.filter(\.isActive) != oldValue.filter(\.isActive) { traceFilterChanged() } }
+    }
+    /// Search (S-017, ⌘K): whether it shows, what is typed, what it found,
+    /// and the highlighted row (suggestions first, then traces).
+    var showsSearch = false
+    var searchText = "" {
+        didSet { if searchText != oldValue { searchTextChanged() } }
+    }
+    var searchResult: TraceSearchResult?
+    var searchSelection = 0
+    /// Attribute keys received, for `has:` (read when Search opens).
+    var searchAttributeKeys: [String] = []
+    @ObservationIgnored var searchTask: Task<Void, Never>?
+    @ObservationIgnored var searchAnnouncement: Task<Void, Never>?
+    /// Bumped to put the focus in the field with its text selected (⌘K while Search shows).
+    var searchFocusRequest = 0
+    /// Another store for Search only: the self-test times it on 100,000 spans.
+    @ObservationIgnored var searchReader: TelemetryReader?
+    /// When the last result was shown, after how long since its key (self-test timing).
+    @ObservationIgnored var searchTypedAt: ContinuousClock.Instant?
+    @ObservationIgnored var lastSearchLatency: Duration?
     /// While paused (S-010), the seq the list paused at; nil when live.
     /// Never restored at launch: Pause is always off then (docs/ux.md).
     var pausedSeq: Int64? {
@@ -204,15 +237,7 @@ final class AppModel {
     var sidebar: SidebarSelection? = .allTraces {
         didSet {
             guard sidebar != oldValue else { return }
-            // A new scope starts from an empty list. Diffing one scope's rows
-            // into another's makes AppKit re-enter its row height cache
-            // ("reentrant operation in its NSTableView delegate").
-            traces = []
-            isListHeld = false
-            newTraceCount = 0
-            hasMoreTraces = false
-            listTraceCount = 0
-            isLoadingScope = true
+            resetTraceList()
             resetLogList()
             updateFilterMenu()
             refreshNow()
@@ -283,7 +308,9 @@ final class AppModel {
     var subtitle: String {
         switch contentMode {
         case .traces:
-            listTraceCount == 0 ? (isPaused ? "Paused" : "") : TraceList.subtitle(traceCount: listTraceCount, isPaused: isPaused)
+            // "312 of 1,204 traces" while the filters hide some (S-018).
+            traceFilter.narrowsScope ? (isLoadingScope ? "" : TraceList.subtitle(shown: listTraceCount, of: listScopeCount, isPaused: isPaused))
+                : listTraceCount == 0 ? (isPaused ? "Paused" : "") : TraceList.subtitle(traceCount: listTraceCount, isPaused: isPaused)
         case .logs:
             // "312 of 1,204 logs" while the filter bar hides some (S-014).
             logFilter.narrowsScope ? (logsLoaded ? LogList.subtitle(shown: logCount, of: logScopeCount, isPaused: isPaused) : "")

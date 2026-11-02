@@ -21,8 +21,11 @@ struct ContentView: View {
                     ToolbarItem { ReceiverStatusView() }
                     ToolbarSpacer(.flexible)
                     ToolbarItem { EnvironmentToolbarButton() }
+                    ToolbarItem { SearchToolbarButton() }
                 }
         }
+        // Search (S-017) floats over every column.
+        .overlay { SearchOverlay() }
         .noInitialFocus()
         .task {
             SelfTest.runIfRequested(model: model)

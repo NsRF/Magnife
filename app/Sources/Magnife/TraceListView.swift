@@ -81,7 +81,15 @@ struct TraceListView: View {
                                    description: Text(error.message))
         case .ready, .waiting, .opening:
             if model.knowsStoredTraces && model.traces.isEmpty && !model.isLoadingScope {
-                if let service = model.sidebar?.serviceName {
+                if model.traceFilter.narrowsScope {
+                    ContentUnavailableView {
+                        Label("No Matching Traces", systemImage: "line.3.horizontal.decrease")
+                    } description: {
+                        Text("No traces match these filters.")
+                    } actions: {
+                        ClearTraceFiltersButton()
+                    }
+                } else if let service = model.sidebar?.serviceName {
                     ContentUnavailableView("No Traces from \(service)", systemImage: "line.3.horizontal.decrease",
                                            description: Text("Traces with a span from \(service) appear here."))
                 } else {
@@ -101,6 +109,17 @@ struct TraceListView: View {
                 }
             }
         }
+    }
+}
+
+/// "Clear Filters" in the empty state of a filtered list; its own view, so
+/// it reads the environment where it is built.
+struct ClearTraceFiltersButton: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.undoManager) private var undoManager
+
+    var body: some View {
+        Button("Clear Filters") { model.clearTraceFilters(undoManager: undoManager) }
     }
 }
 

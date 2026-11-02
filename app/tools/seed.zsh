@@ -5,6 +5,8 @@
 #
 #   seed_store <db in /tmp>           helper on <db> + scripts/send-sample-traces
 #   seed_store <db in /tmp> --empty   helper on <db>, nothing sent (schema only)
+#   seed_store <db in /tmp> --volume N   random traces of the seed scenarios until N spans (S-017 timing)
+#   seed_stop_last                    stops the last one (its store stays readable)
 #   seed_stop                         stops every helper seed_store started
 #   $seed_grpc, $seed_http            the last seeded helper's addresses
 #
@@ -38,7 +40,7 @@ seed_total() {
 }
 
 seed_store() {
-  local db=$1 mode=${2:-}
+  local db=$1 mode=${2:-} volume=${3:-}
   [[ $db == /tmp/* ]] || { print -u2 "seed: $db is not in /tmp"; return 1 }
   local helper; helper=$(seed_helper) || { print -u2 "seed: no helper"; return 1 }
   rm -f $db $db-wal $db-shm
@@ -56,13 +58,25 @@ seed_store() {
   [[ $mode == --empty ]] && return 0
   # The seed set, over mixed protocols (gRPC, HTTP protobuf and JSON, with and without gzip).
   local summary
-  summary=$($root/scripts/send-sample-traces --grpc $grpc --http $http 2>&1 | tail -1)
+  if [[ $mode == --volume ]]; then
+    summary=$($root/scripts/send-sample-traces --grpc $grpc --http $http --volume $volume 2>&1 | tail -1)
+  else
+    summary=$($root/scripts/send-sample-traces --grpc $grpc --http $http 2>&1 | tail -1)
+  fi
   local spans=${${summary##*: }%% spans*} logs=${${summary%% logs,*}##* }
   [[ $spans == <-> && $logs == <-> && $summary == *" 0 errors"* ]] || { print -u2 "seed: sender failed: $summary"; return 1 }
   # Every span and log is committed once the batch lines add up.
-  seed_wait "(( \$(seed_total spans $out) >= $spans && \$(seed_total logs $out) >= $logs ))" 50 \
+  seed_wait "(( \$(seed_total spans $out) >= $spans && \$(seed_total logs $out) >= $logs ))" 300 \
     || { print -u2 "seed: batches did not add up to $spans spans and $logs logs"; return 1 }
   print "seed: $db has $spans spans and $logs logs from $grpc / $http"
+}
+
+# Stops the last seeded helper; its store stays readable (persistent WAL, S-008).
+seed_stop_last() {
+  (( ${#seed_pids} )) || return 0
+  kill -TERM $seed_pids[-1] 2>/dev/null
+  wait $seed_pids[-1] 2>/dev/null
+  seed_pids[-1]=()
 }
 
 seed_stop() {

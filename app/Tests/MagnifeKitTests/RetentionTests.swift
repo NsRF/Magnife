@@ -96,11 +96,11 @@ struct RetentionTests {
         let rows = (1...4).reversed().map { trace($0) }
         let held = HeldTraces(updated: [], removed: [traceID(1), traceID(2)], newCount: 0, services: [], lastSeq: 4)
         let scrolled = TraceListState(traces: rows, baseSeq: 4, appliedSeq: 4, isHeld: true, traceCount: 4)
-        let next = try #require(scrolled.applying(.held(held, scope: nil, base: 4)))
+        let next = try #require(scrolled.applying(.held(held, scope: TraceFilter(), base: 4)))
         #expect(next.traces.map(\.traceID) == [traceID(4), traceID(3)])
         #expect(next.traceCount == 2)
         let paused = TraceListState(traces: rows, baseSeq: 4, appliedSeq: 4, traceCount: 4, pausedSeq: 4)
-        let still = try #require(paused.applying(.held(held, scope: nil, base: 4)))
+        let still = try #require(paused.applying(.held(held, scope: TraceFilter(), base: 4)))
         #expect(still.traces == rows && still.traceCount == 4)
     }
 

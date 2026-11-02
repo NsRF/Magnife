@@ -32,9 +32,27 @@ extension SelfTest {
             print("INFO VoiceOver row check skipped: Magnife has no Accessibility permission")
             return
         }
+        // With the screen locked (an unattended run), the Accessibility API
+        // answers the app's windows with the app itself: there is nothing to read.
+        guard accessibilityShowsWindows() else {
+            print("INFO VoiceOver row check skipped: the Accessibility API shows no window (screen locked?)")
+            return
+        }
         let rows = accessibilityRows()
         check("VoiceOver reads the HTTP 500 row once, as that sentence",
               rows.contains([failed.accessibilityLabel]), "\(rows.prefix(3))")
+    }
+
+    /// The Accessibility API lists this app's windows as windows.
+    static func accessibilityShowsWindows() -> Bool {
+        var windows: AnyObject?
+        guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(getpid()), kAXWindowsAttribute as CFString,
+                                            &windows) == .success else { return false }
+        return ((windows as? [AXUIElement]) ?? []).contains { window in
+            var role: AnyObject?
+            return AXUIElementCopyAttributeValue(window, kAXRoleAttribute as CFString, &role) == .success
+                && role as? String == kAXWindowRole
+        }
     }
 
     /// The texts of each row of this app's tables, through AXUIElement.

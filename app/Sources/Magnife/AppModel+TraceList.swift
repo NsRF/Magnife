@@ -20,10 +20,10 @@ extension AppModel {
             // Paused, no shown row may change, so none is read.
             read = .held(try await reader.heldTraces(base: state.baseSeq, applied: state.appliedSeq,
                                                      shown: state.isPaused ? [] : state.traces.map(\.id),
-                                                     service: state.scope),
+                                                     filter: state.scope),
                          scope: state.scope, base: state.baseSeq)
         } else {
-            read = .page(try await reader.tracePage(limit: limit, service: state.scope, upTo: state.pausedSeq),
+            read = .page(try await reader.tracePage(limit: limit, filter: state.scope, upTo: state.pausedSeq),
                          scope: state.scope)
         }
         // The state may have moved on while reading (a scope change, scrolling, another read).
@@ -35,9 +35,9 @@ extension AppModel {
 
     /// The list's rows and seqs as one value, for `TraceListState.applying`.
     var listState: TraceListState {
-        TraceListState(scope: sidebar?.serviceName, traces: traces, baseSeq: listBaseSeq, appliedSeq: listAppliedSeq,
+        TraceListState(scope: traceFilter, traces: traces, baseSeq: listBaseSeq, appliedSeq: listAppliedSeq,
                        isHeld: isListHeld, newCount: newTraceCount, hasMore: hasMoreTraces,
-                       traceCount: listTraceCount, pausedSeq: pausedSeq)
+                       traceCount: listTraceCount, scopeCount: listScopeCount, pausedSeq: pausedSeq)
     }
 
     /// Takes a new list state, setting only what changed, so equal rows leave the table alone.
@@ -48,6 +48,20 @@ extension AppModel {
         if newTraceCount != state.newCount { newTraceCount = state.newCount }
         if hasMoreTraces != state.hasMore { hasMoreTraces = state.hasMore }
         if listTraceCount != state.traceCount { listTraceCount = state.traceCount }
+        if listScopeCount != state.scopeCount { listScopeCount = state.scopeCount }
+    }
+
+    /// A new scope or filter starts from an empty list. Diffing one scope's
+    /// rows into another's makes AppKit re-enter its row height cache
+    /// ("reentrant operation in its NSTableView delegate").
+    func resetTraceList() {
+        traces = []
+        isListHeld = false
+        newTraceCount = 0
+        hasMoreTraces = false
+        listTraceCount = 0
+        listScopeCount = 0
+        isLoadingScope = true
     }
 
     /// The table's last row appeared: read the next page below it. Only
@@ -56,13 +70,13 @@ extension AppModel {
     func loadMoreTraces() {
         guard hasMoreTraces, isListHeld, !isLoadingMore, let reader, let last = traces.last else { return }
         isLoadingMore = true
-        let service = sidebar?.serviceName
+        let filter = traceFilter
         let upTo = pausedSeq
         Task {
             defer { isLoadingMore = false }
-            let page = (try? await reader.latestTraces(limit: TraceList.pageSize, after: last.cursor, service: service,
+            let page = (try? await reader.latestTraces(limit: TraceList.pageSize, after: last.cursor, filter: filter,
                                                        upTo: upTo)) ?? []
-            guard service == sidebar?.serviceName, upTo == pausedSeq, reader === self.reader,
+            guard filter == traceFilter, upTo == pausedSeq, reader === self.reader,
                   traces.last?.id == last.id else { return }
             traces = TraceList.appending(page, to: traces)
             hasMoreTraces = page.count == TraceList.pageSize
