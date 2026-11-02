@@ -11,7 +11,12 @@ struct LogListView: View {
         table
             .overlay(alignment: .top) { NewLogsButton() }
             // Esc in the list hides the filter bar too; the filters stay on.
-            .onExitCommand { model.hideLogFilterBar() }
+            // onExitCommand does not reach a focused Table (FIXLOG).
+            .onKeyPress(.escape) {
+                guard model.showsLogFilterBar else { return .ignored }
+                model.hideLogFilterBar()
+                return .handled
+            }
     }
 
     // Fixed Time and Level; Service's minimum fits "checkout-api" (at the

@@ -176,13 +176,12 @@ public final class TelemetryReader: Sendable {
                 return TraceSearchResult(text: query.text, traces: rows.traces, total: rows.traces.count, isNewest: false)
             }
         }
-        let conditions = TraceFilterSQL(filter)
-        let sql = TelemetrySQL.traceSearch(filter: conditions, prefixFirst: prefix != nil)
-        var arguments = conditions.arguments
-        if let prefix { arguments += [String(TraceFilterSQL.containsPattern(prefix).dropFirst())] }
-        arguments += [limit]
-        let rows = try await pool.read { [arguments] db in
-            try Row.fetchAll(db, sql: sql, arguments: arguments).map { (try TraceSummary(row: $0), $0["total"] as Int? ?? 0) }
+        let prefixArgument: StatementArguments = prefix.map { [String(TraceFilterSQL.containsPattern($0).dropFirst())] } ?? []
+        let rows = try await pool.read { db in
+            let conditions = try Self.searchConditions(filter, db)
+            let sql = TelemetrySQL.traceSearch(filter: conditions, prefixFirst: prefix != nil)
+            return try Row.fetchAll(db, sql: sql, arguments: conditions.arguments + prefixArgument + [limit])
+                .map { (try TraceSummary(row: $0), $0["total"] as Int? ?? 0) }
         }
         return TraceSearchResult(text: query.text, traces: rows.map(\.0), total: rows.first?.1 ?? 0, isNewest: false)
     }
@@ -191,9 +190,28 @@ public final class TelemetryReader: Sendable {
     /// back without its total ("50 of 312"). Cancel the task to stop it.
     @concurrent
     public func searchCount(_ query: TraceQuery) async throws -> Int {
-        let conditions = TraceFilterSQL(query.filter)
-        let sql = TelemetrySQL.traceCount(upTo: false, filter: conditions)
-        return try await pool.read { try Int.fetchOne($0, sql: sql, arguments: conditions.arguments) ?? 0 }
+        try await pool.read { db in
+            let conditions = try Self.searchConditions(query.filter, db)
+            return try Int.fetchOne(db, sql: TelemetrySQL.traceCount(upTo: false, filter: conditions),
+                                    arguments: conditions.arguments) ?? 0
+        }
+    }
+
+    /// Search's conditions over the whole store. When the trace's own columns
+    /// (service, status, duration, route) leave at most a few thousand traces,
+    /// their own spans are cheaper to read than every span; else every span
+    /// is read once.
+    private static func searchConditions(_ filter: TraceFilter, _ db: Database) throws -> TraceFilterSQL {
+        let readsSpans = filter.activeConditions.contains { $0.field != .route }
+        guard readsSpans, filter.service != nil || !filter.statuses.isEmpty || filter.slowerThanNs != nil else {
+            return TraceFilterSQL(filter)
+        }
+        var columns = filter
+        columns.conditions = filter.activeConditions.filter { $0.field == .route }
+        let candidates = TraceFilterSQL(columns)
+        let count = try Int.fetchOne(db, sql: TelemetrySQL.traceCount(upTo: false, filter: candidates),
+                                     arguments: candidates.arguments) ?? 0
+        return TraceFilterSQL(filter, spans: count <= TraceSearch.perTraceLimit ? .perTrace : .set)
     }
 
     @concurrent

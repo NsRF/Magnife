@@ -79,6 +79,12 @@ final class AppModel {
     var traceConditions: [TraceCondition] = [] {
         didSet { if traceConditions.filter(\.isActive) != oldValue.filter(\.isActive) { traceFilterChanged() } }
     }
+    /// The Traces filter bar (S-018), shown with ⌘F or the Filter button.
+    var showsTraceFilterBar = false {
+        didSet { updateFilterMenu() }
+    }
+    /// Set by View > Show Filter Bar (⌘F): the bar's first field takes the focus once.
+    var focusesTraceFilterField = false
     /// Search (S-017, ⌘K): whether it shows, what is typed, what it found,
     /// and the highlighted row (suggestions first, then traces).
     var showsSearch = false

@@ -129,7 +129,10 @@ this app starts the helper and reads its database. No server, no accounts.
   the window: `TelemetryReader.searchTraces` walks the newest 2,000 traces
   first, else reads the store in one pass; `searchCount` fills a missing
   total; each keystroke cancels the read before it. `APP_SELFTEST_ONLY=search`
-  runs its checks, timed on `APP_SEARCH_STORE` (100,000 spans, selftest.sh).
+  runs its checks, timed on `APP_SEARCH_STORE` (100,000 spans, selftest.sh),
+  and the Traces filter bar's (`TraceFilterBar.swift`, S-018: Service pop-up,
+  status chips, Clear Filters; `showsTraceFilterBar`, `toggleFilterBar` acts
+  on the current view). Esc on a focused Table needs `.onKeyPress(.escape)`.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -203,7 +206,8 @@ this app starts the helper and reads its database. No server, no accounts.
   `05-logs` the Logs view with the payment log's detail, `05-logs-no-trace`
   a log without a trace id, `05-logs-new-logs`, `05-logs-paused`, `05-logs-empty`,
   `05-logs-filtered` (ERROR and WARN on), `05-logs-filter-hidden`, `05-logs-no-matches`,
-  `06-command-k` (Search for "checkout") with `-empty`, `-suggestions`, `-tokens`, `-no-match`.
+  `06-command-k` (Search for "checkout") with `-empty`, `-suggestions`, `-tokens`, `-no-match`,
+  `07-filter-bar` (Error on) and `07-filter-bar-no-matches`.
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Both scripts pass an empty "NSSplitView Subview Frames …" default, so the

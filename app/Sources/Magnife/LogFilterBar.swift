@@ -14,7 +14,7 @@ struct LogFilterBar: View {
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: Space.sm) {
-                LogServicePicker()
+                ServiceScopePicker(help: "Show the logs of one service")
                 LevelChips()
                 bodyField
                 Spacer(minLength: 0)
@@ -22,7 +22,7 @@ struct LogFilterBar: View {
             }
             VStack(alignment: .leading, spacing: Space.sm) {
                 HStack(spacing: Space.sm) {
-                    LogServicePicker()
+                    ServiceScopePicker(help: "Show the logs of one service")
                         .gridProbe("log-filter-service", area: "log-filter-bar")
                     bodyField
                     trailing
@@ -55,15 +55,7 @@ struct LogFilterBar: View {
         HStack(spacing: Space.sm) {
             Button("Clear Filters") { model.clearLogFilters(undoManager: undoManager) }
                 .disabled(!model.hasLogFilters)
-            Button {
-                model.hideLogFilterBar()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.borderless)
-            .help("Hide the filter bar (Esc)")
-            .accessibilityLabel("Hide Filter Bar")
+            FilterBarCloseButton { model.hideLogFilterBar() }
         }
     }
 
@@ -71,24 +63,6 @@ struct LogFilterBar: View {
         guard model.focusesLogFilterField else { return }
         model.focusesLogFilterField = false
         bodyFocused = true
-    }
-}
-
-/// All Services and each service: the same setting as the sidebar.
-struct LogServicePicker: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        Picker("Service", selection: Binding(get: { model.sidebar?.serviceName ?? "" },
-                                             set: { model.sidebar = $0.isEmpty ? .allTraces : .service($0) })) {
-            Text("All Services").tag("")
-            ForEach(model.services) { service in
-                Text(service.name).tag(service.name)
-            }
-        }
-        .labelsHidden()
-        .fixedSize()
-        .help("Show the logs of one service")
     }
 }
 
@@ -109,7 +83,7 @@ struct LevelChips: View {
     }
 
     /// ⌘-click, or Space on the focused chip, adds or removes one level.
-    private static var adds: Bool {
+    static var adds: Bool {
         guard let event = NSApp.currentEvent else { return false }
         return event.modifierFlags.contains(.command) || event.type == .keyDown
     }
@@ -143,30 +117,6 @@ struct LevelChip: View {
         .accessibilityLabel(level.title)
         .accessibilityValue(isOn ? "on" : "off")
         .accessibilityAddTraits(.isToggle)
-    }
-}
-
-/// The toolbar's Filter button in the Logs view, filled with the accent
-/// while a level or body filter is on (docs/ux.md, Toolbar item 5).
-struct LogFilterButton: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        Button {
-            model.toggleLogFilterBar()
-        } label: {
-            Label("Filter", systemImage: model.hasLogBarFilters ? "line.3.horizontal.decrease.circle.fill"
-                                                                : "line.3.horizontal.decrease.circle")
-        }
-        .labelStyle(.iconOnly)
-        .foregroundStyle(model.hasLogBarFilters ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
-        .help(help)
-        .accessibilityValue(model.hasLogBarFilters ? "Filters are on" : "")
-    }
-
-    private var help: String {
-        if model.showsLogFilterBar { return "Hide the filter bar (⌘F)" }
-        return model.hasLogBarFilters ? "Filters are on. Show the filter bar (⌘F)" : "Show the filter bar (⌘F)"
     }
 }
 

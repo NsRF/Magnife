@@ -55,6 +55,32 @@ extension AppModel {
         undoManager?.setActionName("Clear Filters")
     }
 
+    /// A status chip: a click shows only that status, ⌘-click or Space adds or removes it.
+    func clickStatusChip(_ status: SpanStatus, adding: Bool) {
+        let next = traceFilter.clicking(status, adding: adding).statuses
+        if traceStatuses != next { traceStatuses = next }
+    }
+
+    /// The current view's filter bar shows.
+    var showsFilterBar: Bool { contentMode == .traces ? showsTraceFilterBar : showsLogFilterBar }
+
+    /// View > Show Filter Bar (⌘F) and the Filter button, for the current
+    /// view. Shown from the menu, the bar's first field takes the focus.
+    func toggleFilterBar(focusField: Bool = false) {
+        switch contentMode {
+        case .traces:
+            showsTraceFilterBar.toggle()
+            if showsTraceFilterBar && focusField { focusesTraceFilterField = true }
+        case .logs:
+            toggleLogFilterBar(focusField: focusField)
+        }
+    }
+
+    /// Esc and the bar's close button: the bar hides, the filters stay on.
+    func hideTraceFilterBar() {
+        if showsTraceFilterBar { showsTraceFilterBar = false }
+    }
+
     /// View > Clear Filters: the current view's.
     func clearFilters(undoManager: UndoManager?) {
         switch contentMode {

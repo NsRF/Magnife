@@ -129,12 +129,14 @@ extension AppModel {
     }
 
     /// ⌘Return, "Apply as Filter": the query becomes the trace list's
-    /// filters (the sidebar takes its service) and Search closes.
+    /// filters (the sidebar takes its service), the filter bar shows them
+    /// and Search closes.
     func applySearchAsFilter() {
         let filter = searchQuery.filter
         closeSearch()
         showContentMode(.traces)
         applyTraceFilter(filter)
+        showsTraceFilterBar = true
     }
 }
 

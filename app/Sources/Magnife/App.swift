@@ -61,9 +61,9 @@ struct MagnifeApp: App {
                 Button(ContentMode.logs.title) { delegate.model.showContentMode(.logs) }
                     .keyboardShortcut("2", modifiers: .command)
                 Divider()
-                // The Logs filter bar (S-014); the Traces one comes with S-018.
+                // The current view's filter bar (S-014, S-018).
                 Button(menu.filterBar == .shown ? "Hide Filter Bar" : "Show Filter Bar") {
-                    delegate.model.toggleLogFilterBar(focusField: true)
+                    delegate.model.toggleFilterBar(focusField: true)
                 }
                 .keyboardShortcut("f", modifiers: .command)
                 .disabled(menu.filterBar == .unavailable)

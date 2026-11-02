@@ -32,6 +32,7 @@ enum SnapshotPage: String, CaseIterable {
         }
         model.closeSearch()
         model.applyTraceFilter(.cleared)
+        model.showsTraceFilterBar = false
         model.selectedTraceID = nil
         model.selectedLogID = nil
         model.showContentMode(self == .logs ? .logs : .traces)
@@ -53,7 +54,9 @@ enum SnapshotPage: String, CaseIterable {
             model.selectedTraceID = (model.traces.first { $0.route == "POST /checkout/pay" }
                 ?? model.traces.first { $0.status == .error })?.traceID
         case .filterBar:
-            model.sidebar = .service("checkout-api")
+            // The bar with Error on: the failed checkout (S-018).
+            model.showsTraceFilterBar = true
+            model.clickStatusChip(.error, adding: false)
         }
         await model.reload()
         if self == .logs {
@@ -87,6 +90,7 @@ enum SnapshotPage: String, CaseIterable {
 /// 03-trace-detail-trace-logs (S-012), 03-trace-detail-no-longer-stored (S-015), 05-logs-no-trace, -new-logs, -paused and -empty (S-013),
 /// 05-logs-filtered, -filter-hidden and -no-matches (S-014),
 /// 06-command-k (Search for "checkout"), -empty, -suggestions, -tokens and -no-match (S-017),
+/// 07-filter-bar (Error on) and -no-matches (OK on, a hidden trace still in the detail column) (S-018),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab,
 /// and 09-settings-general-delete (S-016's dialog), then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
@@ -131,6 +135,7 @@ enum Snapshot {
                     }
                     if page == .logs { await captureLogStates(model, dir: dir, mode: mode) }
                     if page == .commandK { await captureSearchStates(model, dir: dir, mode: mode) }
+                    if page == .filterBar { await captureFilterBarStates(model, dir: dir, mode: mode) }
                     if page == .spanDetail {
                         await captureSpanEvents(model, dir: dir, mode: mode)
                         await captureSpanLogs(model, dir: dir, mode: mode)

@@ -363,8 +363,7 @@ extension AppModel {
         case .logs:
             MenuState.shared.update(filterBar: showsLogFilterBar ? .shown : .hidden, hasFilters: hasLogFilters)
         case .traces:
-            // The Traces filter bar comes with S-018; Apply as Filter (S-017) can set filters before it.
-            MenuState.shared.update(filterBar: .unavailable, hasFilters: hasTraceFilters)
+            MenuState.shared.update(filterBar: showsTraceFilterBar ? .shown : .hidden, hasFilters: hasTraceFilters)
         }
     }
 }

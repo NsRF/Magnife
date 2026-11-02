@@ -247,7 +247,7 @@ Depends: S-004
 Acceptance:
 - [snap] The status filter shows in the filter bar above the list.
 - [unit] Error, OK and Unset match the trace's root and child span statuses as documented.
-Status: todo
+Status: done
 
 ### S-019 Filter traces by minimum duration
 As the user, I show only traces slower than a duration I type.

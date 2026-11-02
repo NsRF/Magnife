@@ -12,7 +12,7 @@ import Testing
 struct TraceSearchSpeedTests {
     static let queries = ["o", "or", "orders", "paymnt", "payment", "http", "status:error", "service:orders",
                           ">200ms", "http.route=/orders", "has:db.system", "status:error service:orders >100ms",
-                          "4bf92f3577b34da6"]
+                          "4bf92f3577b34da6", "orders status:error >100ms ht", "service:orders paymnt"]
 
     /// 2,400 traces of 5 spans, each span with three attributes, a few with a statement.
     private func makeStore() async throws -> (TempDir, TelemetryReader) {

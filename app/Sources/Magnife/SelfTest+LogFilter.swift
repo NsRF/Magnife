@@ -16,7 +16,7 @@ extension SelfTest {
         model.sidebar = .allTraces
         model.showContentMode(.logs)
         await model.reload()
-        check("Show Filter Bar is offered in the Logs view only", MenuState.shared.filterBar == .hidden)
+        check("Show Filter Bar is offered in the Logs view", MenuState.shared.filterBar == .hidden)
 
         // A log with no level, to see that no chip means every log.
         let now = UInt64(Date().timeIntervalSince1970 * 1e9)
@@ -73,6 +73,16 @@ extension SelfTest {
               hidden && model.logLevels == [.warn, .error] && model.logBodyFilter == "PAYMENT"
                 && model.hasLogBarFilters && MenuState.shared.filterBar == .hidden)
 
+        // Esc in the list hides it too.
+        model.toggleLogFilterBar()
+        window.makeFirstResponder(model.logScroller.tableView)
+        if let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                         windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
+                                         charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53) {
+            window.sendEvent(escape)
+        }
+        check("Esc in the log list hides the filter bar", await waitUntil(1) { !model.showsLogFilterBar })
+
         let undoManager = window.undoManager
         model.clearLogFilters(undoManager: undoManager)
         await model.reload()
@@ -106,7 +116,8 @@ extension SelfTest {
         model.clearLogFilters(undoManager: nil)
         model.hideLogFilterBar()
         model.showContentMode(.traces)
-        check("the Traces view has no Logs filter bar", MenuState.shared.filterBar == .unavailable && !MenuState.shared.hasFilters)
+        check("the Traces view shows its own filter bar's state, not the Logs one",
+              MenuState.shared.filterBar == (model.showsTraceFilterBar ? .shown : .hidden) && !MenuState.shared.hasFilters)
         await model.reload()
     }
 }

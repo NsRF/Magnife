@@ -7,12 +7,12 @@ import MagnifeKit
 /// window, with more traces sent to the seed helper that writes the store.
 extension SelfTest {
     static func checkTraceList(_ model: AppModel) async {
-        checkColorsAndLabels(model)
+        await checkColorsAndLabels(model)
         await checkArrival()
         await checkHoldStill(model)
     }
 
-    private static func checkColorsAndLabels(_ model: AppModel) {
+    private static func checkColorsAndLabels(_ model: AppModel) async {
         let slots = model.services.map { model.serviceColors.slot(for: $0.name) }
         check("each seed service has its own color", Set(slots).count == model.services.count, "\(slots)")
         let byFirstSeen = model.services.sorted { ($0.firstSeenNs, $0.name) < ($1.firstSeenNs, $1.name) }
@@ -38,6 +38,8 @@ extension SelfTest {
             print("INFO VoiceOver row check skipped: the Accessibility API shows no window (screen locked?)")
             return
         }
+        // The table takes the rows on SwiftUI's next update; before it, it has none to read.
+        _ = await waitUntil(2) { model.listScroller.rowCount == model.traces.count }
         let rows = accessibilityRows()
         check("VoiceOver reads the HTTP 500 row once, as that sentence",
               rows.contains([failed.accessibilityLabel]), "\(rows.prefix(3))")

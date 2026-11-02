@@ -149,3 +149,17 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: three things. The field asked for focus before it was in a window (`field.window` was nil); the test sent keys through `NSApp.sendEvent`, which drops them when another app is frontmost (no key window); and ⌘Return never reaches the field editor's `doCommandBy`.
 - Fix: the field takes focus in `viewDidMoveToWindow`; test keys go to the window (`window.sendEvent`, `window.performKeyEquivalent`); Apply as Filter is the footer button's `.keyboardShortcut(.return, modifiers: .command)`.
 - Rule: an AppKit field focuses itself once it has a window, and window-level shortcuts live on a control, not in the field editor's command handler.
+
+## Esc in a list did not hide its filter bar (S-014, found in S-018)
+
+- Symptom: with the focus in the Logs list (or the new Traces list), Esc left the filter bar open; only Esc in "Body contains" hid it.
+- Cause: the list used `.onExitCommand`, which SwiftUI never calls while its Table (an NSTableView) is the first responder.
+- Fix: `.onKeyPress(.escape)` on the table hides the current bar and returns `.handled` only when a bar shows; the self-test now presses Esc with the list focused in both views.
+- Rule: keys on a focused SwiftUI Table go through `.onKeyPress`, not `.onExitCommand`; test them with the table as first responder.
+
+## The VoiceOver row check never saw the list's rows (S-004, found in S-018)
+
+- Symptom: once the Accessibility permission was there, "VoiceOver reads the HTTP 500 row once" failed, listing only the sidebar's rows; the last checkpoint's build failed the same way.
+- Cause: the check ran right after the sidebar reloaded the list, before SwiftUI's next update gave the NSTableView its rows, so the table had 0 rows to expose.
+- Fix: the check waits until the table has as many rows as the model (`listScroller.rowCount`) before it reads the Accessibility tree.
+- Rule: a self-test that reads a table through AppKit waits for the table to show the model's rows first.

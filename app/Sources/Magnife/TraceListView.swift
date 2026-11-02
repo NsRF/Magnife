@@ -10,6 +10,13 @@ struct TraceListView: View {
         // Banners, the pause bar, the title and the toolbar are ContentColumn's.
         table
             .overlay(alignment: .top) { NewTracesButton() }
+            // Esc in the list hides the filter bar; the filters stay on (docs/ux.md,
+            // Keyboard map). onExitCommand does not reach a focused Table.
+            .onKeyPress(.escape) {
+                guard model.showsTraceFilterBar else { return .ignored }
+                model.hideTraceFilterBar()
+                return .handled
+            }
     }
 
     private var table: some View {

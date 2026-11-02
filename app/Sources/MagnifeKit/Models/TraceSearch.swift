@@ -44,6 +44,8 @@ public enum TraceSearch {
     public static let newestLimit = 10
     /// Search's first look reads this many of the newest traces (TelemetryReader.searchTraces).
     public static let quickWindow = 2_000
+    /// Up to this many traces left by the trace's own columns, Search reads their spans one trace at a time.
+    public static let perTraceLimit = 5_000
 
     public static let label = "Search traces"
     public static let placeholder = "Search traces: service:, status:, route:, >200ms or any text"

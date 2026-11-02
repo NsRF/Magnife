@@ -19,7 +19,7 @@ extension SelfTest {
         _ = await waitUntil(3) { model.waterfallOutline != nil && !model.waterfall.isEmpty }
 
         // ⌘K from the list, the waterfall, the Logs view and a text field; Esc closes.
-        let table = window.contentView.flatMap { firstView(of: NSTableView.self, in: $0) { !($0 is NSOutlineView) } }
+        let table = model.listScroller.tableView
         let places: [(String, () -> Void)] = [
             ("the trace list", { if let table { window.makeFirstResponder(table) } }),
             ("the waterfall", { if let outline = model.waterfallOutline { window.makeFirstResponder(outline) } }),
@@ -92,10 +92,11 @@ extension SelfTest {
         await ensureKey(window)
         pressKey(window, "\r", keyCode: 36, modifiers: .command)
         await model.reload()
-        check("⌘Return applies the query: the sidebar takes the service, the list the status",
-              !model.showsSearch && model.sidebar == .service("checkout-api") && model.traceStatuses == [.error]
+        check("⌘Return applies the query: the filter bar shows it, the sidebar takes the service, the list the status",
+              !model.showsSearch && model.showsTraceFilterBar && model.sidebar == .service("checkout-api") && model.traceStatuses == [.error]
                 && model.traces.map(\.route) == ["POST /checkout/pay"] && model.subtitle == "1 of 4 traces", model.subtitle)
         model.clearTraceFilters(undoManager: nil)
+        model.hideTraceFilterBar()
         await model.reload()
         check("Clear Filters puts every trace back", model.traces.count == 5 && !model.hasTraceFilters)
 
@@ -169,14 +170,5 @@ extension SelfTest {
     /// Search's own field has the focus (its field editor is the first responder).
     static func searchFieldFocused(_ window: NSWindow) -> Bool {
         (window.firstResponder as? NSTextView)?.delegate is SearchField.SearchTextField
-    }
-
-    /// The first view of a type under `view`, depth first.
-    static func firstView<T: NSView>(of type: T.Type, in view: NSView, where match: (T) -> Bool = { _ in true }) -> T? {
-        if let found = view as? T, match(found) { return found }
-        for subview in view.subviews {
-            if let found = firstView(of: type, in: subview, where: match) { return found }
-        }
-        return nil
     }
 }

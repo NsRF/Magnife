@@ -18,6 +18,22 @@ extension Snapshot {
     }
 }
 
+extension Snapshot {
+    /// 07-filter-bar-no-matches: OK on, which no seed trace is; the selected
+    /// failed checkout stays in the detail column.
+    static func captureFilterBarStates(_ model: AppModel, dir: String, mode: String) async {
+        let page = SnapshotPage.filterBar.rawValue
+        model.selectedTraceID = model.traces.first { $0.route == "POST /checkout/pay" }?.traceID
+        for _ in 0..<40 where model.waterfall.isEmpty { try? await Task.sleep(for: .milliseconds(50)) }
+        model.clickStatusChip(.ok, adding: false)
+        await model.reload()
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-no-matches-\(mode).png")
+        model.applyTraceFilter(.cleared)
+        model.selectedTraceID = nil
+    }
+}
+
 extension SnapshotPage {
     /// Opens Search with `text` typed and waits for its results.
     @MainActor
