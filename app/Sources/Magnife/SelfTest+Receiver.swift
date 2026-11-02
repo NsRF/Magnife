@@ -1,7 +1,7 @@
 import Foundation
 import MagnifeKit
 
-/// Receiver checks (S-001) with the real bundled helper, started the
+/// Receiver checks (S-001, S-002) with the real bundled helper, started the
 /// way the app starts it (AppModel.startReceiver), on free ports and fresh
 /// databases in /tmp. Never 4317/4318, never the real database.
 extension SelfTest {
@@ -17,11 +17,12 @@ extension SelfTest {
         await checkLaunch(helper)
         await checkHTTPBusy(helper)
         await checkWildcardGRPCBusy(helper)
+        await checkBothBusy(helper)
         await checkQuietStart()
         try? FileManager.default.removeItem(at: receiverRoot)
     }
 
-    /// S-001: HTTP within 1 s of launch, loopback only.
+    /// S-001: HTTP within 1 s of launch, loopback only; S-002: gRPC export stored.
     private static func checkLaunch(_ helper: URL) async {
         let model = AppModel(storeURL: receiverRoot.appending(path: "launch/magnife.sqlite"))
         let ports = (grpc: freePort(), http: freePort())
@@ -47,6 +48,20 @@ extension SelfTest {
                                          "--http", "0.0.0.0:\(freePort())", "--grpc", "127.0.0.1:\(freePort())", "--no-stdin"])
         check("the helper refuses a non-loopback address", refused.status != 0, "exit \(refused.status)")
 
+        // S-002: a real OTLP/gRPC exporter (the sample sender) sends traces and logs to the gRPC port.
+        if let sender = ProcessInfo.processInfo.environment["APP_SAMPLE_SENDER"].map(URL.init(fileURLWithPath:)) {
+            let sent = await run(sender, ["--protocol", "grpc", "--scenarios", "healthy,logs",
+                                          "--grpc", "127.0.0.1:\(ports.grpc)", "--http", "127.0.0.1:\(ports.http)"])
+            check("an OTLP/gRPC export of traces and logs succeeds", sent.status == 0, sent.output)
+            let stored = await waitUntil(2) { model.traces.contains { $0.route == "GET /checkout" } }
+            let trace = model.traces.first { $0.route == "GET /checkout" }
+            let spans = (try? await model.reader?.spans(traceID: trace?.traceID ?? "")) ?? []
+            let received = (try? await model.reader?.latestLogs())?.filter { $0.serviceName != ReceiverPayload.service } ?? []
+            check("the gRPC spans and logs are stored", stored && spans.count == 12 && received.count == 12,
+                  "trace \(stored), \(spans.count) spans, \(received.count) logs")
+        } else {
+            check("APP_SAMPLE_SENDER names the sample sender (tools/selftest.sh)", false)
+        }
         await model.stopHelperAndWait()
         check("stopping the receiver frees its ports", portIsFree(ports.http) && portIsFree(ports.grpc))
     }
@@ -73,7 +88,7 @@ extension SelfTest {
         await model.stopHelperAndWait()
     }
 
-    /// S-001: a collector on *:gRPC (any address) is reported busy, not bound alongside.
+    /// S-001 / S-002: a collector on *:gRPC (any address) is reported busy; HTTP keeps working.
     private static func checkWildcardGRPCBusy(_ helper: URL) async {
         guard let holder = PortHolder(address: "0.0.0.0") else { return check("hold a wildcard port", false) }
         defer { holder.close() }
@@ -84,6 +99,26 @@ extension SelfTest {
         check("a listener on *:<gRPC> shows the busy-port banner instead of binding alongside it",
               model.receiver.busyBanner?.hasPrefix("Port \(ports.grpc) is in use by ") == true
                 && !listeningSockets(pid: model.helperPID).contains("127.0.0.1:\(ports.grpc)"),
+              model.receiver.busyBanner ?? "nil")
+        check("a busy gRPC port reads \"Receiving on <HTTP> only\"",
+              model.receiverStatusText == "Receiving on \(ports.http) only", model.receiverStatusText ?? "nil")
+        check("with gRPC busy, HTTP keeps working",
+              await post(port: ports.http, path: "/v1/traces", body: ReceiverPayload.trace) == 200)
+        await model.stopHelperAndWait()
+    }
+
+    /// S-002: both ports busy reads "Not receiving" with one banner naming both.
+    private static func checkBothBusy(_ helper: URL) async {
+        guard let grpc = PortHolder(address: "127.0.0.1"), let http = PortHolder(address: "0.0.0.0") else {
+            return check("hold two ports", false)
+        }
+        defer { grpc.close(); http.close() }
+        let model = AppModel(storeURL: receiverRoot.appending(path: "both-busy/magnife.sqlite"))
+        model.startReceiver(executable: helper, ports: (grpc.port, http.port))
+        _ = await waitUntil(3) { model.receiver != .starting }
+        check("both ports busy reads \"Not receiving\"", model.receiverStatusText == "Not receiving", model.receiverStatusText ?? "nil")
+        check("one banner names both ports",
+              model.receiver.busyBanner == "Ports \(grpc.port) and \(http.port) are in use by other apps. Quit them, then click Try Again.",
               model.receiver.busyBanner ?? "nil")
         await model.stopHelperAndWait()
     }

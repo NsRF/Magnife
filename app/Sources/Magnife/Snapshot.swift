@@ -48,7 +48,7 @@ enum SnapshotPage: String, CaseIterable {
 /// Screenshot mode for agents.
 ///   APP_STORE=/tmp/Magnife-test.sqlite APP_HELPER=none APP_SNAPSHOT=/tmp/Magnife-shots ~/Applications/Magnife.app/Contents/MacOS/Magnife
 /// writes <page>-light.png and <page>-dark.png for every SnapshotPage,
-/// 02-trace-list-busy (the busy-port banner),
+/// 02-trace-list-busy and 02-trace-list-not-receiving (the busy-port banners),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab, then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
 /// APP_SNAPSHOT_PAGES=02-trace-list,09-settings limits the pages.
@@ -110,7 +110,8 @@ enum Snapshot {
         }
     }
 
-    /// The S-001 banner: 02-trace-list-busy (one port held by otelcol-contrib).
+    /// The S-001 / S-002 banners: 02-trace-list-busy (one port held by
+    /// otelcol-contrib) and 02-trace-list-not-receiving (both ports held).
     /// APP_HELPER=none has no helper, so these replay its "ports" lines.
     private static func captureReceiverStates(_ model: AppModel, dir: String, mode: String) async {
         let page = SnapshotPage.traceList.rawValue
@@ -119,7 +120,11 @@ enum Snapshot {
         var busyHTTP = http
         busyHTTP.state = .busy
         busyHTTP.owner = "otelcol-contrib"
-        for (name, ports) in [("busy", ReceiverPorts(grpc: grpc, http: busyHTTP))] {
+        var busyGRPC = grpc
+        busyGRPC.state = .busy
+        busyGRPC.owner = "jaeger-all-in-one"
+        for (name, ports) in [("busy", ReceiverPorts(grpc: grpc, http: busyHTTP)),
+                              ("not-receiving", ReceiverPorts(grpc: busyGRPC, http: busyHTTP))] {
             model.handle(.helper(.ports(ports)))
             try? await Task.sleep(for: .seconds(0.8))
             capture(to: "\(dir)/\(page)-\(name)-\(mode).png")

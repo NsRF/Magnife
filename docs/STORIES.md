@@ -48,7 +48,7 @@ UX:
 - States: one port busy -> status "Receiving on 4318 only" plus the S-001 banner naming 4317; both busy -> "Not receiving" plus one banner naming both ports
 - Words: "Receiving on 4318 only", "Not receiving", "Ports 4317 and 4318 are in use by other apps. Quit them, then click Try Again."
 - Access: as S-001
-Status: todo
+Status: done
 
 ### S-003 Copy the environment variables for my language
 As the user, I pick my language in the empty window and copy the env vars that point my app at Magnife.

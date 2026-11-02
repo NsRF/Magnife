@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import MagnifeKit
 
-/// The receiver's words in the toolbar and the busy-port banner (S-001).
+/// The receiver's words in the toolbar and the busy-port banner (S-001, S-002).
 @Suite("ReceiverStatus")
 struct ReceiverStatusTests {
     private func ports(_ grpc: PortStatus.State, _ http: PortStatus.State,
@@ -40,6 +40,14 @@ struct ReceiverStatusTests {
         #expect(status.busyBanner == banner)
         #expect(status.isReceiving)
         #expect(status.text == (grpc == .busy ? "Receiving on 4318 only" : "Receiving on 4317 only"))
+    }
+
+    @Test("both busy: one banner naming both ports, \"Not receiving\"")
+    func bothBusy() {
+        let status = ports(.busy, .busy, grpcOwner: "otelcol-contrib", httpOwner: "jaeger")
+        #expect(status.busyBanner == "Ports 4317 and 4318 are in use by other apps. Quit them, then click Try Again.")
+        #expect(status.text == "Not receiving")
+        #expect(!status.isReceiving)
     }
 
     @Test("an unknown state counts as busy, so it is never shown as receiving")

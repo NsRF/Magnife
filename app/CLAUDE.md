@@ -72,12 +72,14 @@ this app starts the helper and reads its database. No server, no accounts.
 - Unit tests: `swift test --scratch-path ~/Library/Developer/Magnife/test-build`.
 - Self-test (the app's real functions on the seeded store, the supervisor on
   `FakeHelper`, and the receiver checks with the real bundled helper on free
-  ports, in `SelfTest+Receiver.swift`): `tools/selftest.sh`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
+  ports, in `SelfTest+Receiver.swift`; the gRPC check runs the sample sender
+  named by `APP_SAMPLE_SENDER`, which `selftest.sh` sets): `tools/selftest.sh`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots and look at them: `tools/snap.sh`.
   It writes `/tmp/Magnife-shots/<page>-light.png` and `-dark.png` for every
   `SnapshotPage` (the pages in `docs/STORIES.md`), and
   `09-settings-<tab>-light.png` / `-dark.png`, then quits. `02-trace-list-busy`
-  shows the busy-port banner (replayed "ports" line, since APP_HELPER=none).
+  and `02-trace-list-not-receiving` show the busy-port banners (replayed
+  "ports" lines, since APP_HELPER=none).
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Never test against the real database in `~/Library/Application Support/Magnife/`.
