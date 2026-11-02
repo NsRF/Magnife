@@ -340,7 +340,7 @@ Acceptance:
 - [unit] A burst of failures within 10 seconds produces one notification naming the count (decided by the agent).
 - [manual] Clicking the notification opens the trace like S-027, including when the click launched the app.
 - [self] Notifications show even while Magnife is frontmost, and group by service (platform decision 9).
-Status: todo
+Status: done
 
 ## M6 Polish
 

@@ -158,6 +158,8 @@ struct MainWindowCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        // Kept for a notification click, which has no SwiftUI context (S-028).
+        let _ = MainWindow.openAction = openWindow
         CommandGroup(before: .windowArrangement) {
             Button("Magnife") { MainWindow.bringForward(openWindow) }
             .keyboardShortcut("0", modifiers: .command)
@@ -175,6 +177,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppDefaults.protectLayout()
         // One main window: no Show Tab Bar / Show All Tabs in the View menu.
         NSWindow.allowsAutomaticWindowTabbing = false
+        // Before launch finishes, or the click that launched Magnife is lost (S-028).
+        NotificationRouter.install(model: model)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

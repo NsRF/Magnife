@@ -187,6 +187,22 @@ this app starts the helper and reads its database. No server, no accounts.
   `MenuBarProbe` clicks the real status item for the self-test
   (`APP_SELFTEST_ONLY=menu-bar`) and snapshots (`08-menu-bar`, `-icon`,
   `-empty`, region captures with the glass).
+- Notifications (S-028): each batch line's `error_traces` go to
+  `AppModel.notifyFailures` (paused too; ids wait until the store is open),
+  `TelemetryReader.failedTraces` reads their words off the main actor, and
+  `FailureNotifier` asks macOS on the first failure (or when the setting is
+  turned on), then posts what `FailureCoalescer` (MagnifeKit, pure, time
+  passed in, unit-tested) says: a banner at once, one follow-up per 10 s
+  window per service that replaces it (same request id). `NotificationPosting`
+  is `SystemNotificationPoster` in real runs and `FakeNotificationPoster` in
+  snapshot and self-test runs, which never touch `UNUserNotificationCenter`.
+  `NotificationRouter` is the center's delegate (set in
+  `applicationWillFinishLaunching`, real runs only): `[.banner, .list]` while
+  frontmost, and a click runs `openFailedTrace` through `MainWindow.bringForward()`
+  (`MainWindow.openAction`, kept by `MainWindowCommands`). Settings >
+  Notifications in `NotificationSettings.swift`; `APP_SELFTEST_ONLY=notifications`
+  runs the checks with a 1 s window; snapshots `09-settings-notifications`
+  and `-notifications-denied`.
 - Test runs and the user's defaults: AppKit saves window frames and column
   widths in the app's domain by itself; snapshot and self-test runs copy
   those keys aside at launch (`AppDefaults.protectLayout`, in

@@ -300,6 +300,8 @@ final class AppModel {
         didSet { publishRecentErrors() }
     }
     var recentErrorTraces: [TraceSummary] = []
+    /// Notifications for traces with errors (S-028), with their setting.
+    let failureNotifier = FailureNotifier()
     var newErrorCount = 0
     /// The items' times count from when the menu last opened (docs/ux.md, S-026).
     var recentErrorsOpenedAt = Date()
@@ -542,6 +544,8 @@ final class AppModel {
             now = Date()
             // The menu bar extra keeps counting while paused (docs/ux.md, S-010 States).
             await refreshRecentErrors(reader)
+            // Batch lines that came before the store opened (S-028).
+            drainFailures()
             // Paused, the open waterfall holds still too (S-010).
             if !isPaused {
                 try await refreshOpenTrace(reader)

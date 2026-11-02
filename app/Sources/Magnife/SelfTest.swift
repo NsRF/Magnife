@@ -55,6 +55,8 @@ enum SelfTest {
                 await checkFindings(model)
             } else if only == "menu-bar" {
                 await checkMenuBar(model)
+            } else if only == "notifications" {
+                await checkNotifications(model)
             } else if only == "retention" {
                 await checkRetention(model)
             } else if only == "span-detail" {
@@ -87,6 +89,7 @@ enum SelfTest {
                 await checkWindowClose()
                 // With the window closed: a Recent Errors item brings it back (S-027).
                 await checkMenuBar(model)
+                await checkNotifications(model)
                 // Last: it starts a second Magnife, which takes the focus.
                 await checkLifecycle()
             }

@@ -81,6 +81,8 @@ extension AppModel {
                 requestRefresh()
             }
             if receiverRestarted && !batch.traces.isEmpty { receiverRestarted = false }
+            // Paused too: notifications keep coming (docs/ux.md, S-010 States).
+            notifyFailures(batch.errorTraces)
         case .helper(.pruned):
             // Pruned rows leave the lists and the sidebar counts drop (S-015);
             // a selected trace that was deleted shows "Trace No Longer Stored".

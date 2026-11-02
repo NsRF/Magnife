@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Magnife}/app",
+            "name": "Debug Magnife (app)",
+            "target": "Magnife",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug Magnife (app)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Magnife}/app",
+            "name": "Release Magnife (app)",
+            "target": "Magnife",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release Magnife (app)"
+        }
+    ]
+}

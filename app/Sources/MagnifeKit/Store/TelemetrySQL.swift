@@ -271,6 +271,18 @@ enum TelemetrySQL {
     /// Traces with an error that a batch after ?1 changed: the menu bar icon's count.
     static let errorTracesChangedAfter = "SELECT COUNT(*) FROM traces WHERE status = 2 AND updated_seq > ?"
 
+    /// Failure notifications (S-028): the traces of a batch's `error_traces`
+    /// (a JSON array of ids) that are still Error, by primary key.
+    static let failedTraces = """
+        SELECT trace_id, route, root_service, start_ns FROM traces
+        WHERE trace_id IN (SELECT value FROM json_each(?)) AND status = 2
+        ORDER BY start_ns, trace_id
+        """
+    /// A trace's Error spans in start order, on spans_by_trace; read until one has an exception.
+    static let errorSpans = """
+        SELECT name, events FROM spans WHERE trace_id = ? AND status_code = 2 ORDER BY start_ns, span_id
+        """
+
     /// Keys last seen at or after ?1 (the retention's cutoff, so pruned keys
     /// leave the suggestions; the helper keeps every key it ever saw).
     static func attributeKeys(source: Bool) -> String {

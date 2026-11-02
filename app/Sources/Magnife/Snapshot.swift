@@ -182,6 +182,7 @@ enum Snapshot {
                         }
                         capture(to: "\(dir)/\(SnapshotPage.settings.rawValue)-\(tab.rawValue)-\(mode).png", window: settings)
                         if tab == .general, let settings { await captureRetentionDialog(model, settings: settings, dir: dir, mode: mode) }
+                        if tab == .notifications, let settings { await captureNotificationsDenied(model, settings: settings, dir: dir, mode: mode) }
                     }
                 }
             }

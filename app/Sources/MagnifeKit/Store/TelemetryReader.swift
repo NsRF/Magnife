@@ -244,6 +244,33 @@ public final class TelemetryReader: Sendable {
         }
     }
 
+    /// What the notifications of a batch's traces with errors say (S-028):
+    /// route, root service, and the first exception of their Error spans in
+    /// start order, else the earliest Error span's name. Traces no longer
+    /// stored or no longer Error are left out; oldest first.
+    @concurrent
+    public func failedTraces(ids: [String]) async throws -> [FailedTrace] {
+        guard !ids.isEmpty else { return [] }
+        let json = String(decoding: try JSONEncoder().encode(ids), as: UTF8.self)
+        return try await pool.read { db in
+            try Row.fetchAll(db, sql: TelemetrySQL.failedTraces, arguments: [json]).map { row in
+                var trace = FailedTrace(traceID: row["trace_id"], route: row["route"], service: row["root_service"],
+                                        startNs: row["start_ns"])
+                let spans = try Row.fetchCursor(db, sql: TelemetrySQL.errorSpans, arguments: [trace.traceID])
+                while let span = try spans.next() {
+                    if trace.errorSpanName == nil { trace.errorSpanName = span["name"] }
+                    let events = JSONColumn.decode([SpanEvent].self, from: span["events"] ?? "[]") ?? []
+                    if let exception = events.lazy.compactMap(\.exception).first {
+                        trace.exceptionType = exception.type
+                        trace.exceptionMessage = exception.message
+                        break
+                    }
+                }
+                return trace
+            }
+        }
+    }
+
     // MARK: Spans
 
     /// Every span of a trace, by start time.

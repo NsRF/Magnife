@@ -138,13 +138,17 @@ enum MainWindow {
         NSApp.windows.first { ($0.identifier?.rawValue.hasPrefix("main") ?? false) && ($0.isVisible || $0.isMiniaturized) }
     }
 
-    static func bringForward(_ openWindow: OpenWindowAction) {
+    /// The scene's openWindow, kept by MainWindowCommands for callers with
+    /// no SwiftUI context (a notification click, S-028).
+    static var openAction: OpenWindowAction?
+
+    static func bringForward(_ openWindow: OpenWindowAction? = openAction) {
         NSApp.activate()
         if let window {
             if window.isMiniaturized { window.deminiaturize(nil) }
             window.makeKeyAndOrderFront(nil)
         } else {
-            openWindow(id: "main")
+            openWindow?(id: "main")
         }
     }
 }
