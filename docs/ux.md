@@ -254,6 +254,7 @@ One query language for Search, the filter bar and saved filters. A saved filter 
 | `>200ms`, `>1.5s`, `>200` (ms) | Slower than | "Slower than" field |
 | `key=value`, `key!=value`, `key~value` | Attribute is, is not, contains | Condition row |
 | `has:key` | Attribute exists | Condition "key exists" |
+| `"_dd.p.tid"=abc`, `has:"my key"` | A key that is not letters, digits, `.`, `_` and `-` from a letter (or is `route`) is quoted, with any operator above | Condition row |
 | any other word or `"quoted text"` | Any field contains it: service, route, trace ID, attribute values | Condition "Any Field contains" |
 
 Tokens combine with AND. Values with spaces use quotes: `route:"GET /items/{id}"`.

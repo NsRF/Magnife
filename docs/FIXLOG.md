@@ -212,3 +212,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: `TraceListState.applying` drops a read whose scope differs from the list's, comparing the whole `TraceFilter`, inactive condition rows included, while a new read starts only when the active conditions change.
 - Fix: the list's scope is `traceFilter.normalized` (active conditions only), in `listState` and the next-page read.
 - Rule: what decides whether a read is still wanted is the same value that decides whether to start one.
+
+## Saving a filter changed what some conditions meant (S-021, M2 review)
+
+- Symptom: a condition row `_dd.p.tid is abc` (or a key with `/`, a space, `"`, `=` or `~`) was saved as `_dd.p.tid=abc` and read back as "Any Field contains _dd.p.tid=abc"; since Save selects the new filter, the list changed meaning the moment it was saved, and after every relaunch.
+- Cause: `TraceQuery.format` wrote keys unquoted, while the parser accepts a key only when it starts with a letter and holds letters, digits, `.`, `_` and `-`.
+- Fix: odd keys are quoted when formatting, and a quoted key before an operator parses as an attribute; round-trip unit tests for 11 odd keys.
+- Rule: a format/parse pair is tested on every value the editor accepts, not just the ones the parser was written for.

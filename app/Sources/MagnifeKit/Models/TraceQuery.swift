@@ -176,16 +176,26 @@ public struct TraceQuery: Sendable, Equatable {
             case .isNot: return "route!=\(value)"
             default: return "route:\(value)"
             }
-        case .attribute(let key):
+        case .attribute(let name):
+            // A key the bare form cannot carry ("_dd.p.tid", "app.kubernetes.io/name", spaces) is quoted.
+            let key = isBareKey(name) ? name : quoted(name, always: true)
             switch condition.op {
             case .is: return "\(key)=\(value)"
             case .isNot: return "\(key)!=\(value)"
             case .contains: return "\(key)~\(value)"
-            case .exists: return "has:\(key)"
+            case .exists: return "has:\(quotedValue(name))"
             case .greater: return "\(key)>\(value)"
             case .less: return "\(key)<\(value)"
             }
         }
+    }
+
+    /// A key `key=value` can carry unquoted: letters, digits, `.`, `_` and
+    /// `-`, starting with a letter, and not a built-in field's name.
+    static func isBareKey(_ key: String) -> Bool {
+        guard let first = key.first, first.isLetter,
+              key.allSatisfy({ $0.isLetter || $0.isNumber || "._-".contains($0) }) else { return false }
+        return TraceCondition.Field(key: key) == .attribute(key)
     }
 
     /// A value after a prefix or operator: quoted when it has spaces, quotes or backslashes.
@@ -213,6 +223,9 @@ public struct TraceQuery: Sendable, Equatable {
         /// Characters of `plain` before the first quoted part (the key and
         /// operator of `key="a b"`), or nil when nothing was quoted.
         var prefixLength: Int?
+        /// Where the first quoted part closed, in `plain` and in `text`
+        /// (`"_dd.p.tid"=abc`: a quoted key), or nil while it is open.
+        var firstQuoteEnd: (plain: Int, text: Int)?
 
         var isDuration: Bool { !leadingQuoted && plain.hasPrefix(">") }
 
@@ -245,6 +258,9 @@ public struct TraceQuery: Sendable, Equatable {
                 escaped = true
             } else if char == "\"" {
                 if !inQuote, current!.prefixLength == nil { current!.prefixLength = current!.plain.count }
+                if inQuote, current!.firstQuoteEnd == nil {
+                    current!.firstQuoteEnd = (current!.plain.count, current!.text.count)
+                }
                 inQuote.toggle()
             } else {
                 current!.plain.append(char)
@@ -266,7 +282,10 @@ public struct TraceQuery: Sendable, Equatable {
     /// What one word means.
     static func classify(_ word: Word) -> Classified {
         let anyField = Classified.condition(TraceCondition(field: .anyField, op: .contains, value: word.plain))
-        if word.leadingQuoted { return word.plain.isEmpty ? .ignored : anyField }
+        if word.leadingQuoted {
+            if let condition = quotedKeyCondition(word), condition.isActive { return .condition(condition) }
+            return word.plain.isEmpty ? .ignored : anyField
+        }
         if word.isDuration {
             // A duration still being typed (">", ">100m") filters nothing yet.
             return DurationInput.parse(word.plain).map { .slowerThan($0) } ?? .ignored
@@ -298,14 +317,27 @@ public struct TraceQuery: Sendable, Equatable {
         return anyField
     }
 
+    /// `"key"=value` and the other operators after a quoted key: always an
+    /// attribute, whatever the key holds.
+    static func quotedKeyCondition(_ word: Word) -> TraceCondition? {
+        guard let end = word.firstQuoteEnd, end.plain > 0 else { return nil }
+        let after = word.text.dropFirst(end.text)
+        guard let (symbol, op) = attributeOperators.first(where: { after.hasPrefix($0.0) }) else { return nil }
+        let value = String(word.plain.dropFirst(end.plain + symbol.count))
+        guard !value.isEmpty else { return nil }
+        return TraceCondition(field: .attribute(String(word.plain.prefix(end.plain))), op: op, value: value)
+    }
+
+    /// The operators after a key, longest first where they share a start.
+    static let attributeOperators: [(String, TraceCondition.Operator)] = [("!=", .isNot), ("=", .is), ("~", .contains),
+                                                                         (">", .greater), ("<", .less)]
+
     /// `key=value`, `key!=value`, `key~value`, `key>1`, `key<1`; `route`
     /// as the key means the built-in Route. The key is letters, digits,
     /// `.`, `_` and `-`, starting with a letter, so URLs stay free text.
     static func attributeCondition(_ word: Word) -> TraceCondition? {
         let head = word.unquotedPrefix
-        let operators: [(String, TraceCondition.Operator)] = [("!=", .isNot), ("=", .is), ("~", .contains),
-                                                              (">", .greater), ("<", .less)]
-        guard let (range, op) = operators.compactMap({ symbol, op in head.range(of: symbol).map { ($0, op) } })
+        guard let (range, op) = attributeOperators.compactMap({ symbol, op in head.range(of: symbol).map { ($0, op) } })
             .min(by: { $0.0.lowerBound < $1.0.lowerBound }) else { return nil }
         let key = String(head[..<range.lowerBound])
         guard let first = key.first, first.isLetter, key.allSatisfy({ $0.isLetter || $0.isNumber || "._-".contains($0) })

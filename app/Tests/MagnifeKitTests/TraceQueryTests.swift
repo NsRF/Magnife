@@ -163,7 +163,32 @@ struct TraceQueryTests {
             any("a=b"),
             any("back\\slash"),
         ]),
+        // Keys the bare form cannot carry are quoted (saved filters keep their meaning).
+        TraceFilter(conditions: [
+            attribute("_dd.p.tid", .is, "abc"),
+            attribute("k8s.pod.label.app.kubernetes.io/name", .is, "x"),
+            attribute("my key", .contains, "a b"),
+            attribute("odd\"key", .isNot, "v"),
+            attribute("a=b", .is, "c"),
+            attribute("x~y", .greater, "3"),
+            attribute("1st", .less, "2"),
+            attribute("route", .is, "/orders"),
+            attribute("any field", .is, "x"),
+            attribute("weird key", .exists),
+            attribute("with\\slash", .is, "\"quoted\""),
+        ]),
     ]
+
+    @Test("odd keys are quoted, bare keys are not")
+    func quotedKeys() {
+        #expect(TraceQuery.format(TraceFilter(conditions: [attribute("_dd.p.tid", .is, "abc")])) == "\"_dd.p.tid\"=abc")
+        #expect(TraceQuery.format(TraceFilter(conditions: [attribute("http.route", .is, "/x")])) == "http.route=/x")
+        #expect(TraceQuery("\"_dd.p.tid\"=abc").filter.conditions == [attribute("_dd.p.tid", .is, "abc")])
+        // A quoted word with no operator after its quote is still free text.
+        #expect(TraceQuery("\"a b\"").filter.conditions == [any("a b")])
+        #expect(TraceQuery("\"a\"b").filter.conditions == [any("ab")])
+        #expect(TraceQuery("\"k\">x").filter.conditions == [any("k>x")])
+    }
 
     @Test("a filter formats into a query that parses back to it", arguments: filters)
     func roundTrips(_ filter: TraceFilter) {
