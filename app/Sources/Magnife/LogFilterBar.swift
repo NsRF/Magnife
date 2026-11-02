@@ -114,9 +114,9 @@ struct LevelChip: View {
             }
         }
         .help(level.chipHelp)
+        // A plain button element, as StatusChip: the toggle trait left nothing to press.
         .accessibilityLabel(level.title)
         .accessibilityValue(isOn ? "on" : "off")
-        .accessibilityAddTraits(.isToggle)
     }
 }
 

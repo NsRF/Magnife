@@ -226,3 +226,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: `updateLogMenu` set `canOpenTrace: false` for the Traces view, and the context menu was built without it.
 - Fix: `canOpenSelectedTraceLogSpan` enables it while Trace Logs shows a log whose span is in the waterfall; `openSelectedLogTrace` then runs `openTraceLogSpan` (select and focus); the context menu shows the item for such logs.
 - Rule: a story marked done checks every row of docs/ux.md's menu and context-menu tables for its surfaces.
+
+## The filter chips could not be pressed with VoiceOver or System Events (S-018, S-014, M2 end-to-end)
+
+- Symptom: AXPress (or a System Events click) on the Error, OK and Unset chips, and on the level chips, left them off; the status chips had no name and no actions.
+- Cause: the status chip wrapped its Button in `.accessibilityElement(children: .ignore)`, a new element that has no press action, and both chips added `.isToggle`, which exposes a checkbox SwiftUI does not press.
+- Fix: the label and value sit on the Button itself; no new element, no toggle trait.
+- Rule: never wrap a Button in `.accessibilityElement(children: .ignore)` or retype it with traits; label the Button and give its state as the value.

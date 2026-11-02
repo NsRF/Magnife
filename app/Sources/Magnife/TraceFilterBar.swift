@@ -166,10 +166,10 @@ struct StatusChip: View {
             }
         }
         .help(status.chipHelp)
-        .accessibilityElement(children: .ignore)
+        // The Button's own element, so it keeps its press action: a new element
+        // (children: .ignore) or the toggle trait left VoiceOver and System Events nothing to press.
         .accessibilityLabel(status.title)
         .accessibilityValue(isOn ? "on" : "off")
-        .accessibilityAddTraits([.isButton, .isToggle])
     }
 }
 
