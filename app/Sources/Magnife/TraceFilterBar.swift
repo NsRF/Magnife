@@ -11,14 +11,28 @@ struct TraceFilterBar: View {
     @Environment(\.undoManager) private var undoManager
 
     var body: some View {
-        HStack(spacing: Space.sm) {
-            ServiceScopePicker(help: "Show the traces with a span from one service")
-                .gridProbe("trace-filter-service", area: "trace-filter-bar")
-            StatusChips()
-            Spacer(minLength: 0)
-            Button("Clear Filters") { model.clearTraceFilters(undoManager: undoManager) }
-                .disabled(!model.hasTraceFilters)
-            FilterBarCloseButton { model.hideTraceFilterBar() }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Space.sm) {
+                service
+                StatusChips()
+                SlowerThanField()
+                Spacer(minLength: 0)
+                trailing
+            }
+            // A narrow column: the chips and "Slower than" take a second line.
+            VStack(alignment: .leading, spacing: Space.sm) {
+                HStack(spacing: Space.sm) {
+                    service
+                    Spacer(minLength: 0)
+                    trailing
+                }
+                // Top-aligned: a wrapped error under the field never moves the chips.
+                HStack(alignment: .top, spacing: Space.sm) {
+                    StatusChips()
+                        .gridProbe("trace-status-chips", area: "trace-filter-bar")
+                    SlowerThanField()
+                }
+            }
         }
         .controlSize(.small)
         .padding(.horizontal, Space.lg)
@@ -26,6 +40,73 @@ struct TraceFilterBar: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .gridArea("trace-filter-bar", inset: Space.lg)
         .onExitCommand { model.hideTraceFilterBar() }
+    }
+
+    private var service: some View {
+        ServiceScopePicker(help: "Show the traces with a span from one service")
+            .gridProbe("trace-filter-service", area: "trace-filter-bar")
+    }
+
+    private var trailing: some View {
+        HStack(spacing: Space.sm) {
+            Button("Clear Filters") { model.clearTraceFilters(undoManager: undoManager) }
+                .disabled(!model.hasTraceFilters)
+            FilterBarCloseButton { model.hideTraceFilterBar() }
+        }
+    }
+}
+
+/// "Slower than" (S-019): 200, 200ms, >200ms or 1.5s. Text that does not
+/// parse gets a red outline and says how to write it; the list keeps the
+/// last valid rule. Focus leaving the field writes the value normalized.
+struct SlowerThanField: View {
+    @Environment(AppModel.self) private var model
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        @Bindable var model = model
+        HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
+            Text("Slower than")
+                .foregroundStyle(.secondary)
+                .fixedSize()
+            TextField("Slower than", text: $model.traceSlowerThanText, prompt: Text("200 ms"))
+                .textFieldStyle(.roundedBorder)
+                .labelsHidden()
+                .frame(width: 72)
+                .focused($focused)
+                .overlay {
+                    if !model.slowerThanIsValid {
+                        RoundedRectangle(cornerRadius: Radius.small - 3).strokeBorder(.red, lineWidth: 1)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .accessibilityLabel("Slower than")
+                .accessibilityValue(spokenValue)
+                .accessibilityHint(model.slowerThanIsValid ? "" : DurationInput.errorText)
+            if !model.slowerThanIsValid {
+                // Wraps in the room left, so it never widens the column.
+                Text(DurationInput.errorText)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityHidden(true)
+            }
+        }
+        .onChange(of: focused) { _, isFocused in if !isFocused { model.normalizeSlowerThanText() } }
+        .onAppear { focusIfAsked() }
+        .onChange(of: model.focusesTraceFilterField) { focusIfAsked() }
+    }
+
+    /// "200 milliseconds" for VoiceOver.
+    private var spokenValue: String {
+        DurationInput.parse(model.traceSlowerThanText).map(DurationInput.spoken) ?? model.traceSlowerThanText
+    }
+
+    private func focusIfAsked() {
+        guard model.focusesTraceFilterField else { return }
+        model.focusesTraceFilterField = false
+        focused = true
     }
 }
 

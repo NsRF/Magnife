@@ -20,7 +20,7 @@ extension Snapshot {
 
 extension Snapshot {
     /// 07-filter-bar-no-matches: OK on, which no seed trace is; the selected
-    /// failed checkout stays in the detail column.
+    /// failed checkout stays in the detail column. -duration and -duration-error: S-019.
     static func captureFilterBarStates(_ model: AppModel, dir: String, mode: String) async {
         let page = SnapshotPage.filterBar.rawValue
         model.selectedTraceID = model.traces.first { $0.route == "POST /checkout/pay" }?.traceID
@@ -29,6 +29,20 @@ extension Snapshot {
         await model.reload()
         try? await Task.sleep(for: .seconds(0.8))
         capture(to: "\(dir)/\(page)-no-matches-\(mode).png")
+
+        // 07-filter-bar-duration: "Slower than 100 ms" as typed ">100ms", normalized (S-019).
+        // 07-filter-bar-duration-error: "200x", flagged; the list keeps 100 ms.
+        model.selectedTraceID = nil
+        model.applyTraceFilter(.cleared)
+        model.traceSlowerThanText = ">100ms"
+        for _ in 0..<20 where model.traceSlowerThanNs == nil { try? await Task.sleep(for: .milliseconds(50)) }
+        model.normalizeSlowerThanText()
+        await model.reload()
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-duration-\(mode).png")
+        model.traceSlowerThanText = "200x"
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-duration-error-\(mode).png")
         model.applyTraceFilter(.cleared)
         model.selectedTraceID = nil
     }

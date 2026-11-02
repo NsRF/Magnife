@@ -256,7 +256,7 @@ Depends: S-018
 Acceptance:
 - [unit] `>200ms`, `>1.5s` and plain numbers in ms parse to the same rule.
 - [self] The list updates as the value changes.
-Status: todo
+Status: done
 
 ### S-020 Filter traces by any attribute
 As the user, I filter by an attribute key and value, such as `http.route = /orders`.

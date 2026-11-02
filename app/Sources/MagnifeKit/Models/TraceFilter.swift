@@ -208,6 +208,14 @@ public enum DurationInput {
         return "\(trimmed(Double(ns) / 1_000_000_000)) s"
     }
 
+    /// The normalized value for VoiceOver: "200 milliseconds", "1.5 seconds", "1 second".
+    public static func spoken(_ ns: Int64) -> String {
+        let parts = normalized(ns).split(separator: " ").map(String.init)
+        let words = ["µs": ("microsecond", "microseconds"), "ms": ("millisecond", "milliseconds"), "s": ("second", "seconds")]
+        guard parts.count == 2, let unit = words[parts[1]] else { return normalized(ns) }
+        return "\(parts[0]) \(parts[0] == "1" ? unit.0 : unit.1)"
+    }
+
     /// The token form: ">200ms", ">1.5s" (no spaces, so it stays one token).
     public static func token(_ ns: Int64) -> String {
         ">" + normalized(ns).replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "µs", with: "us")

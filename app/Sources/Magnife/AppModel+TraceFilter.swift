@@ -29,7 +29,9 @@ extension AppModel {
     /// the sidebar takes the service, the bar the rest.
     func applyTraceFilter(_ filter: TraceFilter) {
         traceStatuses = filter.statuses
+        slowerThanTask?.cancel()
         traceSlowerThanNs = filter.slowerThanNs
+        traceSlowerThanText = filter.slowerThanNs.map(DurationInput.normalized) ?? ""
         traceConditions = filter.conditions
         sidebar = filter.service.map { .service($0) } ?? .allTraces
     }
@@ -53,6 +55,42 @@ extension AppModel {
             MainActor.assumeIsolated { model.clearTraceFilters(undoManager: undoManager) }
         }
         undoManager?.setActionName("Clear Filters")
+    }
+
+    /// "Slower than": the list follows 100 ms after the last key (docs/ux.md,
+    /// S-019). An empty field removes the rule; text that does not parse
+    /// leaves the last valid rule on and the field says so.
+    func applySlowerThanText() {
+        slowerThanTask?.cancel()
+        let text = traceSlowerThanText
+        slowerThanTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.slowerThanDelay)
+            guard let self, !Task.isCancelled, self.traceSlowerThanText == text else { return }
+            if text.trimmingCharacters(in: .whitespaces).isEmpty {
+                self.traceSlowerThanNs = nil
+            } else if let ns = DurationInput.parse(text) {
+                self.traceSlowerThanNs = ns
+            }
+        }
+    }
+
+    static let slowerThanDelay: Duration = .milliseconds(100)
+
+    /// The typed text is a duration, or empty.
+    var slowerThanIsValid: Bool {
+        traceSlowerThanText.trimmingCharacters(in: .whitespaces).isEmpty || DurationInput.parse(traceSlowerThanText) != nil
+    }
+
+    /// Focus left the field: a valid value reads normalized ("1.5 s").
+    func normalizeSlowerThanText() {
+        guard let ns = DurationInput.parse(traceSlowerThanText) else { return }
+        let normalized = DurationInput.normalized(ns)
+        if traceSlowerThanText != normalized {
+            // The same rule: setting the text must not wait to apply it again.
+            traceSlowerThanText = normalized
+            slowerThanTask?.cancel()
+            traceSlowerThanNs = ns
+        }
     }
 
     /// A status chip: a click shows only that status, ⌘-click or Space adds or removes it.

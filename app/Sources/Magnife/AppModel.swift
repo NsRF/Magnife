@@ -76,6 +76,12 @@ final class AppModel {
     var traceSlowerThanNs: Int64? {
         didSet { if traceSlowerThanNs != oldValue { traceFilterChanged() } }
     }
+    /// "Slower than" as typed (S-019); it becomes `traceSlowerThanNs` a moment
+    /// after the last key, when it parses. Text that does not parse keeps the last rule.
+    var traceSlowerThanText = "" {
+        didSet { if traceSlowerThanText != oldValue { applySlowerThanText() } }
+    }
+    @ObservationIgnored var slowerThanTask: Task<Void, Never>?
     var traceConditions: [TraceCondition] = [] {
         didSet { if traceConditions.filter(\.isActive) != oldValue.filter(\.isActive) { traceFilterChanged() } }
     }

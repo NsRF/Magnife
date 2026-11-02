@@ -76,5 +76,43 @@ extension SelfTest {
         model.clearTraceFilters(undoManager: nil)
         model.selectedTraceID = nil
         await model.reload()
+        await checkSlowerThan(model, window: window, all: all)
+    }
+
+    /// S-019: typing in "Slower than" moves the list 100 ms after the last key.
+    private static func checkSlowerThan(_ model: AppModel, window: NSWindow, all: Int) async {
+        await ensureKey(window)
+        model.hideTraceFilterBar()
+        model.toggleFilterBar(focusField: true)
+        let focused = await waitUntil(2) { window.firstResponder is NSTextView }
+        check("⌘F shows the bar with \"Slower than\" focused", focused && model.showsTraceFilterBar,
+              String(describing: window.firstResponder.map { type(of: $0) }))
+        let started = ContinuousClock.now
+        for character in "800" { pressKey(window, String(character), keyCode: 0) }
+        let slow = await waitUntil(2) { model.traceSlowerThanNs == 800_000_000 && !model.isLoadingScope }
+        let elapsed = (ContinuousClock.now - started) / .milliseconds(1)
+        check("typing 800 keeps the traces slower than 800 ms, a moment after the last key (\(Int(elapsed)) ms)",
+              slow && model.traces.map(\.route).sorted() == ["GET /admin/reports", "inventory.reconcile"]
+                && model.traces.allSatisfy { $0.durationNs > 800_000_000 }, "\(model.traces.map(\.route))")
+        pressKey(window, "x", keyCode: 0)
+        try? await Task.sleep(for: .milliseconds(300))
+        check("text that is no duration is flagged and the last rule stays",
+              model.traceSlowerThanText == "800x" && !model.slowerThanIsValid && model.traceSlowerThanNs == 800_000_000
+                && model.traces.count == 2)
+        for _ in 0..<4 { pressKey(window, "\u{7f}", keyCode: 51) }
+        let cleared = await waitUntil(2) { model.traceSlowerThanNs == nil && !model.isLoadingScope && model.traces.count == all }
+        check("clearing the field removes the rule", cleared && model.traceSlowerThanText.isEmpty && !model.hasTraceBarFilters)
+        for character in ">1.5s" { pressKey(window, String(character), keyCode: 0) }
+        _ = await waitUntil(2) { model.traceSlowerThanNs == 1_500_000_000 }
+        window.makeFirstResponder(model.listScroller.tableView)
+        let normalized = await waitUntil(1) { model.traceSlowerThanText == "1.5 s" }
+        _ = await waitUntil(2) { !model.isLoadingScope && model.traces.count == 1 }
+        check("focus leaving the field writes it normalized, \"1.5 s\"", normalized && model.traceSlowerThanNs == 1_500_000_000
+              && model.traces.map(\.route) == ["inventory.reconcile"], model.traceSlowerThanText)
+        check("the subtitle counts what the rule keeps", model.subtitle == TraceList.subtitle(shown: 1, of: all), model.subtitle)
+        model.clearTraceFilters(undoManager: nil)
+        model.hideTraceFilterBar()
+        await model.reload()
+        check("Clear Filters empties \"Slower than\"", model.traceSlowerThanText.isEmpty && model.traceSlowerThanNs == nil)
     }
 }
