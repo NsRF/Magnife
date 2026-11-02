@@ -73,12 +73,13 @@ struct ServiceRow: View {
                     .font(.callout)
                     .monospacedDigit()
                     .foregroundStyle(.red)
-                    .help("\(service.errorCount.formatted()) traces with errors")
+                    .help(service.errorCountText)
             }
         }
+        // VoiceOver: "checkout-api, 12 traces with errors" or "web, no errors"; the dot is decoration.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(service.name)
-        .accessibilityValue(service.errorCount == 0 ? "no errors" : "\(service.errorCount.formatted()) traces with errors")
+        .accessibilityValue(service.spokenErrors)
     }
 }
 

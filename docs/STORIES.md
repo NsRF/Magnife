@@ -158,7 +158,7 @@ Depends: S-004
 Acceptance:
 - [snap] The sidebar lists each detected service with its error count.
 - [self] A new service appears in the sidebar when its first span arrives.
-Status: todo
+Status: done
 
 ### S-010 Pause the live list while I investigate
 As the user, I pause the list so new traces stop pushing my selection away.

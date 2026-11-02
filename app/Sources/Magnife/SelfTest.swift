@@ -37,12 +37,15 @@ enum SelfTest {
                 await checkLifecycle()
             } else if only == "trace-list" {
                 await checkTraceList(model)
+            } else if only == "sidebar" {
+                await checkSidebar()
             } else if only == "span-detail" {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
             } else {
                 await checkEnvironment(model)
                 await checkTraceList(model)
+                await checkSidebar()
                 await checkWaterfall(model)
                 await checkSpanDetail(model)
                 await checkExceptions(model)

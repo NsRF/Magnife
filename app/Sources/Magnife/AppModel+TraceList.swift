@@ -31,7 +31,8 @@ extension AppModel {
     /// The list's rows and seqs as one value, for `TraceListState.applying`.
     var listState: TraceListState {
         TraceListState(scope: sidebar?.serviceName, traces: traces, baseSeq: listBaseSeq, appliedSeq: listAppliedSeq,
-                       isHeld: isListHeld, newCount: newTraceCount, hasMore: hasMoreTraces)
+                       isHeld: isListHeld, newCount: newTraceCount, hasMore: hasMoreTraces,
+                       traceCount: listTraceCount)
     }
 
     /// Takes a new list state, setting only what changed, so equal rows leave the table alone.
@@ -41,6 +42,7 @@ extension AppModel {
         listAppliedSeq = state.appliedSeq
         if newTraceCount != state.newCount { newTraceCount = state.newCount }
         if hasMoreTraces != state.hasMore { hasMoreTraces = state.hasMore }
+        if listTraceCount != state.traceCount { listTraceCount = state.traceCount }
     }
 
     /// The table's last row appeared: read the next page below it. Only

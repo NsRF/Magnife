@@ -62,18 +62,21 @@ public final class TelemetryReader: Sendable {
         return try await pool.read { [arguments] in try TraceSummary.fetchAll($0, sql: sql, arguments: arguments) }
     }
 
-    /// The first page of the list with the services and the last seq, in
-    /// one read, so "new since this page" is exact (S-004).
+    /// The first page of the list with the services, the scope's trace count
+    /// and the last seq, in one read, so "new since this page" is exact (S-004).
     @concurrent
     public func tracePage(limit: Int = TraceList.pageSize, service: String? = nil) async throws -> TracePage {
         var arguments: StatementArguments = []
         if let service { arguments += [service] }
         arguments += [limit]
         let sql = TelemetrySQL.latestTraces(cursor: false, service: service != nil)
+        let countSQL = TelemetrySQL.scopeTraceCount(service: service != nil)
+        let countArguments: StatementArguments = service.map { [$0] } ?? []
         return try await pool.read { [arguments] db in
             TracePage(traces: try TraceSummary.fetchAll(db, sql: sql, arguments: arguments),
                       services: try ServiceSummary.fetchAll(db, sql: TelemetrySQL.servicesWithErrors),
-                      lastSeq: try Self.lastSeq(db))
+                      lastSeq: try Self.lastSeq(db),
+                      traceCount: try Int.fetchOne(db, sql: countSQL, arguments: countArguments) ?? 0)
         }
     }
 

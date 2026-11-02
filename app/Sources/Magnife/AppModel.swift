@@ -63,6 +63,8 @@ final class AppModel {
     }
     /// A full page came back, so there may be older rows to read.
     var hasMoreTraces = false
+    /// Every trace in the scope when the rows were read: the window's subtitle (S-009).
+    var listTraceCount = 0
     @ObservationIgnored var isLoadingMore = false
     /// Reports scrolling in the trace list's table.
     @ObservationIgnored lazy var listScroller: TraceListScroller = {
@@ -129,6 +131,7 @@ final class AppModel {
             isListHeld = false
             newTraceCount = 0
             hasMoreTraces = false
+            listTraceCount = 0
             isLoadingScope = true
             refreshNow()
         }
@@ -178,8 +181,15 @@ final class AppModel {
         traces.first { $0.id == selectedTraceID }
     }
 
+    /// The window's title: the sidebar scope (docs/ux.md, Window).
     var title: String {
         sidebar?.serviceName ?? "All Services"
+    }
+
+    /// The window's subtitle: the count in the list, "1,204 traces"; blank
+    /// while there is nothing to count.
+    var subtitle: String {
+        listTraceCount == 0 ? "" : TraceList.subtitle(traceCount: listTraceCount)
     }
 
     /// Starts the clock for the Time column and opens the database.

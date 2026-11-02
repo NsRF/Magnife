@@ -9,14 +9,25 @@ enum TelemetrySQL {
         span_count, error_count, status, first_seq, updated_seq, received_ns
         """
 
-    /// Newest first. Optional cursor (start_ns, trace_id) and service, which
-    /// matches traces with any span from that service.
+    /// A service scope: traces with any span from that service (PROGRESS
+    /// decision 15). The subquery reads the covering index
+    /// spans_by_service_status by its first column, so its cost is the
+    /// service's own spans, never a scan of spans (pinned by
+    /// `ServiceScopeTests`).
+    static let serviceScope = "trace_id IN (SELECT trace_id FROM spans WHERE service_name = ?)"
+
+    /// Newest first. Optional cursor (start_ns, trace_id) and service scope.
     static func latestTraces(cursor: Bool, service: Bool) -> String {
         var conditions: [String] = []
         if cursor { conditions.append("(start_ns < ? OR (start_ns = ? AND trace_id < ?))") }
-        if service { conditions.append("trace_id IN (SELECT trace_id FROM spans WHERE service_name = ?)") }
+        if service { conditions.append(serviceScope) }
         let filter = conditions.isEmpty ? "" : "WHERE " + conditions.joined(separator: " AND ")
         return "SELECT \(traceColumns) FROM traces \(filter) ORDER BY start_ns DESC, trace_id DESC LIMIT ?"
+    }
+
+    /// How many traces the scope has: the window's subtitle (S-009).
+    static func scopeTraceCount(service: Bool) -> String {
+        "SELECT COUNT(*) FROM traces" + (service ? " WHERE \(serviceScope)" : "")
     }
 
     /// The shown rows (a JSON array of trace ids) that changed after seq
@@ -29,7 +40,7 @@ enum TelemetrySQL {
 
     /// Traces created after seq `base`: the "12 new traces" count (S-004).
     static func tracesCreatedAfter(service: Bool) -> String {
-        let scope = service ? " AND trace_id IN (SELECT trace_id FROM spans WHERE service_name = ?)" : ""
+        let scope = service ? " AND \(serviceScope)" : ""
         return "SELECT COUNT(*) FROM traces WHERE first_seq > ?\(scope)"
     }
 

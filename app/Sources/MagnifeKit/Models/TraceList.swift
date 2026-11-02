@@ -10,11 +10,14 @@ public struct TracePage: Sendable, Equatable {
     public var traces: [TraceSummary]
     public var services: [ServiceSummary]
     public var lastSeq: Int64
+    /// Every trace in the scope, for the window's subtitle (S-009).
+    public var traceCount: Int
 
-    public init(traces: [TraceSummary], services: [ServiceSummary], lastSeq: Int64) {
+    public init(traces: [TraceSummary], services: [ServiceSummary], lastSeq: Int64, traceCount: Int? = nil) {
         self.traces = traces
         self.services = services
         self.lastSeq = lastSeq
+        self.traceCount = traceCount ?? traces.count
     }
 }
 
@@ -63,6 +66,21 @@ public enum TraceList {
     public static func spansText(_ count: Int) -> String {
         count == 1 ? "1 span" : "\(count.formatted()) spans"
     }
+
+    /// The window's subtitle: the count in the list, "1,204 traces", "1 trace".
+    public static func subtitle(traceCount: Int) -> String {
+        traceCount == 1 ? "1 trace" : "\(traceCount.formatted()) traces"
+    }
+}
+
+extension ServiceSummary {
+    /// The sidebar count's tooltip (S-009): "12 traces with errors", "1 trace with errors".
+    public var errorCountText: String {
+        errorCount == 1 ? "1 trace with errors" : "\(errorCount.formatted()) traces with errors"
+    }
+
+    /// What VoiceOver reads after the name: "12 traces with errors" or "no errors".
+    public var spokenErrors: String { errorCount == 0 ? "no errors" : errorCountText }
 }
 
 extension TraceSummary {
@@ -99,9 +117,11 @@ public struct TraceListState: Sendable, Equatable {
     public var newCount: Int
     /// A full page came back, so there may be older rows to read.
     public var hasMore: Bool
+    /// Every trace in the scope when the rows were read (the subtitle).
+    public var traceCount: Int
 
     public init(scope: String? = nil, traces: [TraceSummary] = [], baseSeq: Int64 = 0, appliedSeq: Int64 = 0,
-                isHeld: Bool = false, newCount: Int = 0, hasMore: Bool = false) {
+                isHeld: Bool = false, newCount: Int = 0, hasMore: Bool = false, traceCount: Int = 0) {
         self.scope = scope
         self.traces = traces
         self.baseSeq = baseSeq
@@ -109,6 +129,7 @@ public struct TraceListState: Sendable, Equatable {
         self.isHeld = isHeld
         self.newCount = newCount
         self.hasMore = hasMore
+        self.traceCount = traceCount
     }
 
     /// True when the next read is a held one: the list holds still and shows rows.
@@ -127,6 +148,7 @@ public struct TraceListState: Sendable, Equatable {
             next.baseSeq = page.lastSeq
             next.appliedSeq = page.lastSeq
             next.newCount = 0
+            next.traceCount = page.traceCount
         case .held(let held, _, let base):
             // Back at the top, or a newer page arrived while reading: that read decides.
             guard isHeld, base == baseSeq else { return nil }

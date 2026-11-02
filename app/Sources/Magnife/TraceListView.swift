@@ -12,6 +12,7 @@ struct TraceListView: View {
             .overlay(alignment: .top) { NewTracesButton() }
             .safeAreaInset(edge: .top, spacing: 0) { Banners() }
             .navigationTitle(model.title)
+            .navigationSubtitle(model.subtitle)
     }
 
     private var table: some View {

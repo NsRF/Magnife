@@ -41,6 +41,12 @@ this app starts the helper and reads its database. No server, no accounts.
   `TraceListScroller`, which watches the table's NSScrollView. A sidebar scope change empties the list before the
   new read: diffing one scope's rows into another's trips AppKit's
   "reentrant operation in its NSTableView delegate" warning.
+- The sidebar (S-009): services come with every list read
+  (`servicesWithErrors`, counts derived from spans); a service scope is
+  `TelemetrySQL.serviceScope`, an IN subquery on the covering index
+  `spans_by_service_status` that every scoped query shares
+  (`ServiceScopeTests` pins the plans). The subtitle is the scope's count
+  (`TracePage.traceCount`).
 - The waterfall (S-005): `TelemetryReader.waterfallSpans` reads only the
   columns it draws; `Waterfall` (MagnifeKit) builds the tree off the main
   actor, without recursion; `AppModel+Waterfall.swift` re-reads the open trace
@@ -105,7 +111,7 @@ this app starts the helper and reads its database. No server, no accounts.
   The S-008 checks (`SelfTest+Lifecycle.swift`, last: relaunch, helper
   crashes, and a second Magnife process that is quit and killed with
   `kill -9`) print their timings as INFO lines; `APP_SELFTEST_ONLY=lifecycle`
-  runs them alone.
+  runs them alone; `APP_SELFTEST_ONLY=sidebar` the S-009 checks.
   `APP_SELFTEST_ONLY=waterfall tools/selftest.sh` runs only the reader, model
   and waterfall checks (`APP_SELFTEST_ONLY=span-detail`: the span detail and
   exception checks); the waterfall checks time 1,000/5,000/30,000-span
@@ -119,7 +125,7 @@ this app starts the helper and reads its database. No server, no accounts.
   banner. `01-empty-state-copied` shows the
   S-003 copy feedback and `02-trace-list-environment` the toolbar popover
   (cropped from the window capture), `02-trace-list-new-traces` the S-004
-  button over a held list. `04-span-detail` shows the HTTP 500 trace's
+  button over a held list, `02-trace-list-service` the orders scope (S-009). `04-span-detail` shows the HTTP 500 trace's
   POST /payments span (Exception first), `04-span-detail-events` the gRPC
   server span scrolled to Events, `04-span-detail-long-value` a statement
   cut with "Show All", `04-span-detail-copied` Copy Stack Trace's "Copied".
