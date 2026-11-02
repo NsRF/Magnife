@@ -1,0 +1,17 @@
+#!/bin/zsh
+# Sends realistic OTLP traces and logs (checkout-api, orders, web) to a
+# Magnife helper. Builds ingest/cmd/send-sample-traces, then runs it with
+# the given arguments. Try --help.
+#
+#   scripts/send-sample-traces                      # the seed set, mixed protocols
+#   scripts/send-sample-traces --volume 100000
+#   scripts/send-sample-traces --rate 5000 --duration 60s
+#   scripts/send-sample-traces --huge-trace 30000 --protocol grpc
+#   scripts/send-sample-traces --live
+set -euo pipefail
+
+ingest="${0:A:h}/../ingest"
+bin="$ingest/bin/send-sample-traces"
+mkdir -p "$ingest/bin"
+CGO_ENABLED=0 go -C "$ingest" build -o "$bin" ./cmd/send-sample-traces
+exec "$bin" "$@"

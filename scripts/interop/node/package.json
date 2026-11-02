@@ -1,0 +1,13 @@
+{
+  "name": "magnife-interop-node",
+  "private": true,
+  "type": "module",
+  "description": "Sends a trace, logs and a metric to Magnife with @opentelemetry/sdk-node, configured only by OTEL_* environment variables.",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/sdk-node": "^0.300.0"
+  }
+}
