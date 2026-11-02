@@ -100,3 +100,17 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: Spans was 44–48 pt and Route had no maximum, so the table gave extra width to no column in particular; the Time column was 136–150 pt for at most 86 pt of text.
 - Fix: widths from measured 13 pt text ("28 Nov, 22:32" 86 pt, "30.000" 44 pt, "2 min 5 s" 56 pt, the Error label 64 pt): Service 72, Route 98 and up (max: .infinity), Duration 56, Spans 52, Status 64, Time 88; at docs/ux.md's 520 pt list only Route truncates (in the middle, tooltip), and a wider list gives the room to Route.
 - Rule: size table columns from the longest text they show, measured, and give the free width to the column that truncates.
+
+## Switching spans kept the span detail's scroll position (S-006 / S-007, M1 review)
+
+- Symptom: with span A's detail scrolled down to Resource, clicking an Error span left the pane scrolled down, so its Exception section, which S-007 says opens first, was out of view.
+- Cause: the pane's ScrollView was the same view for every span; only `spanDetailScrollTarget` (snapshots) ever scrolled it.
+- Fix: the ScrollView takes the span's trace and span id as its identity (`SpanDetailValueID.span`), so another span starts at the top; a re-read of the same span (a rebuild) keeps the position. Self-test "another span's detail starts at the top, so an Error span opens on Exception".
+- Rule: a pane that shows "the selected thing" resets its scroll position when the thing changes, and only then.
+
+## A span with a huge value or thousands of events hitched on selection (S-006, M1 review)
+
+- Symptom: a span with a 500 KB `db.statement` and 2,000 events stalled the main actor for about 700 ms when selected.
+- Cause: every event row was laid out at once (a plain VStack), each long value was laid out twice (shown, and a hidden full copy to decide "Show All"), and `SpanDetail.sections`, `attributes`, `events` and `exceptions` were computed properties that sorted again on every access during a view update.
+- Fix: the events list is a LazyVStack; a value over 4,000 UTF-8 bytes counts as cut without measuring and shows only its start while collapsed (the whole value when expanded); `SpanDetail` orders its lists once in `init`, where the reader builds it off the main actor. Measured: 700 ms to about 20 ms (self-test INFO line, check "a 500 KB value and 2,000 events open without a hang"); the 500 KB value alone went to 26 ms with the prefix measure.
+- Rule: a detail view lays out only what is on screen and never measures more text than it can show.

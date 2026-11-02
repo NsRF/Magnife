@@ -178,10 +178,15 @@ extension SelfTest {
         // that read the database before the rows shown never replaces them.
         let shownRows = model.traces
         let applied = model.listAppliedSeq
-        _ = await send(spans: 4)
-        let shownIDs = Set(shownRows.map(\.id))
-        for _ in 0..<50 {
-            if let top = try? await reader.latestTraces(limit: 1).first, !shownIDs.contains(top.id) { break }
+        // One new trace that starts now, so the first page changes.
+        let fresh = "5e1f7e5700000000000000000000000a"
+        let now = UInt64(Date().timeIntervalSince1970 * 1e9)
+        let posted = await post(port: Int(http.split(separator: ":").last ?? "") ?? 0, path: "/v1/traces", body: """
+            {"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"selftest"}}]},
+            "scopeSpans":[{"spans":[{"traceId":"\(fresh)","spanId":"5e1f7e5700000d01","name":"GET /fresh","kind":2,
+            "startTimeUnixNano":"\(now)","endTimeUnixNano":"\(now + 1_000_000)"}]}]}]}
+            """)
+        for _ in 0..<50 where (try? await reader.trace(id: fresh)) == nil {
             try? await Task.sleep(for: .milliseconds(100))
         }
         model.listAppliedSeq = applied + 1_000_000
@@ -189,10 +194,9 @@ extension SelfTest {
         let kept = model.traces == shownRows
         model.listAppliedSeq = applied
         await model.reload()
-        let newestNow = try? await reader.latestTraces(limit: 1).first
         check("a list read older than the rows shown is dropped, and the next one applies",
-              kept && model.traces != shownRows && model.traces.first?.id == newestNow?.id,
-              "kept \(kept), changed \(model.traces != shownRows), first \(model.traces.first?.id ?? "nil") newest \(newestNow?.id ?? "nil")")
+              posted == 200 && kept && model.traces.first?.id == fresh,
+              "posted \(posted), kept \(kept), first \(model.traces.first?.id ?? "nil")")
     }
 }
 

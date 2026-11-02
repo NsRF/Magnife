@@ -11,6 +11,7 @@ extension SelfTest {
         await checkSeedSpanDetail(model)
         await checkLongValues(model)
         await checkSpanDetailPane(model)
+        await checkSpanDetailScrolling(model)
         model.selectedTraceID = nil
     }
 

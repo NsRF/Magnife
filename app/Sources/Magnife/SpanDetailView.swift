@@ -13,6 +13,8 @@ struct SpanDetailPane: View {
                 ScrollView {
                     SpanDetailContent(detail: detail)
                 }
+                // Another span starts at the top, so an Error span opens on Exception (S-007).
+                .id(SpanDetailValueID.span(detail))
                 .scrollBounceBehavior(.basedOnSize)
                 .onChange(of: model.spanDetailScrollTarget) { _, target in
                     guard let target else { return }

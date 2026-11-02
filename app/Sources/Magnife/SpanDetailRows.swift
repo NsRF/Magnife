@@ -46,7 +46,8 @@ struct EventList: View {
     let detail: SpanDetail
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.md) {
+        // Lazy: a span can carry thousands of events, and only those in view are laid out.
+        LazyVStack(alignment: .leading, spacing: Space.md) {
             ForEach(Array(detail.events.enumerated()), id: \.offset) { index, event in
                 VStack(alignment: .leading, spacing: Space.xs) {
                     HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
@@ -82,11 +83,18 @@ struct ExpandableText: View {
     @State private var shownHeight: CGFloat = 0
 
     private var isExpanded: Bool { model.expandedValues.contains(id) }
-    private var isTruncated: Bool { ValueLayout(full: fullHeight, shown: shownHeight).isTruncated }
+    private var isTruncated: Bool { isLong || ValueLayout(full: fullHeight, shown: shownHeight).isTruncated }
+    /// More than this many UTF-8 bytes is more than three lines at any pane
+    /// width: no need to lay the whole value out (a 500 KB statement or body
+    /// would cost a hitch on every selection) to know "Show All" belongs.
+    static let longValueBytes = 4_000
+    private var isLong: Bool { text.utf8.count > Self.longValueBytes }
+    /// What the collapsed value lays out: its start, which fills the three lines.
+    private var collapsedText: String { isLong ? String(text.prefix(Self.longValueBytes / 4)) : text }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
-            Text(text)
+            Text(isExpanded ? text : collapsedText)
                 .lineLimit(isExpanded ? nil : lineLimit)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -96,13 +104,15 @@ struct ExpandableText: View {
                 }
                 .background(alignment: .topLeading) {
                     // The whole text at the same width, never drawn: its height says whether the shown text is cut.
-                    Text(text)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .hidden()
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                            fullHeight = $0
-                            report()
-                        }
+                    if !isLong {
+                        Text(text)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .hidden()
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                                fullHeight = $0
+                                report()
+                            }
+                    }
                 }
             if isExpanded || isTruncated {
                 Button(isExpanded ? "Show Less" : "Show All") { model.toggleExpanded(id) }
@@ -119,6 +129,7 @@ struct ExpandableText: View {
     static let noLanguage = Locale.Language(identifier: "zxx")
 
     private func report() {
-        model.valueLayouts[id] = ValueLayout(full: fullHeight, shown: shownHeight)
+        // A long value is cut by definition: it reports a full height past what shows.
+        model.valueLayouts[id] = ValueLayout(full: isLong ? .infinity : fullHeight, shown: shownHeight)
     }
 }

@@ -86,6 +86,8 @@ extension AppModel {
 
 /// Ids for the span detail's expandable values, unique within one span.
 enum SpanDetailValueID {
+    /// The span itself: the detail's scroll view starts over for each.
+    static func span(_ detail: SpanDetail) -> String { "\(detail.span.traceID)/\(detail.span.spanID)" }
     static func attribute(_ key: String) -> String { "attribute:\(key)" }
     static func event(_ index: Int, _ key: String) -> String { "event:\(index):\(key)" }
     static func resource(_ key: String) -> String { "resource:\(key)" }
