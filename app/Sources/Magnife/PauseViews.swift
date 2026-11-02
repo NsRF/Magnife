@@ -25,7 +25,8 @@ struct PauseBar: View {
 
     var body: some View {
         if model.isPaused {
-            Banner(text: TraceList.pausedText(newCount: model.newTraceCount), symbol: "pause.circle") {
+            Banner(text: model.contentMode == .logs ? LogList.pausedText(newCount: model.newLogCount)
+                   : TraceList.pausedText(newCount: model.newTraceCount), symbol: "pause.circle") {
                 Button("Resume") { model.resume() }
                     .help(TraceList.pauseHelp(isPaused: true))
             }

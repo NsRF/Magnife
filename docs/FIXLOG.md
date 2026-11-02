@@ -121,3 +121,17 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: after replaying the busy and not-receiving "ports" lines, `captureReceiverStates` set the receiver to "listening on both ports" instead of putting back the state it found.
 - Fix: it keeps the receiver state it found and restores it after the replayed banners and the restart banner.
 - Rule: a snapshot step that fakes a state restores the state it found, never a default.
+
+## The Logs view crashed when its rows went away (S-013, during the story)
+
+- Symptom: switching the Logs view to an empty store (all rows removed at once) stopped the app with "No Observable object of type AppModel found".
+- Cause: the Body column's cell (`LogBodyCell`) read `@Environment(AppModel.self)` in its own root view. When the table dropped its rows, SwiftUI updated the cell's view once more outside the window's hierarchy, where that environment is gone.
+- Fix: the cell takes its Open Trace action as a closure from the table, which already holds the model; no table cell root reads the environment. A button in `ContentUnavailableView`'s actions also gets its own view (`CopyEnvironmentButton`), not the outer view's `model`.
+- Rule: a Table cell's root view never reads `@Environment`; pass it the values and actions it needs.
+
+## The empty trace list cut the environment variables at 270 pt (S-003, found in S-013's snapshots)
+
+- Symptom: `01-empty-state` showed the variables in a 270 pt code block that scrolled sideways ("export OTEL_SERVICE_NAME=my-serv…") in a 520 pt column.
+- Cause: the list kept its width in `@State` from `onGeometryChange`. While the window first lays out, the content column briefly reports 310 pt (the sidebar's 210 pt as a leading safe-area inset), and the change back to 520 pt was not always reported, so the setup stayed sized for 310 pt. Moving the toolbar items to the content column (S-013) changed the layout passes enough to show it on every run.
+- Fix: the empty state reads the width from a `GeometryReader` in the overlay, on every layout, and the overlay is there only while the list is empty.
+- Rule: a size that lays out other views is read where it is used, on every layout, not cached in `@State` from a geometry callback.

@@ -18,6 +18,7 @@ extension AppModel {
     func pause() {
         guard !isPaused else { return }
         pausedSeq = listState.paused().pausedSeq
+        pauseLogs()
         AccessibilityNotification.Announcement("Paused").post()
     }
 
@@ -40,7 +41,13 @@ extension AppModel {
             } catch {
                 FileHandle.standardError.write(Data("magnife: read failed: \(error)\n".utf8))
             }
-            await revealSelectedTrace()
+            if contentMode == .logs {
+                await resumeLogs()
+            } else {
+                logPausedID = nil
+                isLogListHeld = false
+                await revealSelectedTrace()
+            }
         }
     }
 
@@ -68,5 +75,7 @@ extension AppModel {
             pausedSeq = nil
             newTraceCount = 0
         }
+        logPausedID = newTraces == nil ? nil : logBaseID
+        if contentMode == .logs { newLogCount = newTraces ?? 0 }
     }
 }

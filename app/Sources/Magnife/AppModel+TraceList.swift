@@ -74,7 +74,7 @@ extension AppModel {
     func listScrolled(awayFromTop away: Bool) {
         guard away != isListHeld else { return }
         isListHeld = away
-        MenuState.shared.update(newTraceCount: 0)
+        updateNewRowsMenu()
         if !away { refreshNow() }
     }
 

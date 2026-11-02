@@ -5,21 +5,11 @@ import SwiftUI
 /// color per service, and still while you are scrolled away from the top.
 struct TraceListView: View {
     @Environment(AppModel.self) private var model
-    @State private var listWidth: CGFloat = 0
 
     var body: some View {
+        // Banners, the pause bar, the title and the toolbar are ContentColumn's.
         table
             .overlay(alignment: .top) { NewTracesButton() }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                VStack(spacing: 0) {
-                    Banners()
-                    PauseBar()
-                }
-            }
-            .navigationTitle(model.title)
-            .navigationSubtitle(model.subtitle)
-            // Over the list it holds still (docs/ux.md, Toolbar item 4).
-            .toolbar { ToolbarItem { PauseButton() } }
     }
 
     private var table: some View {
@@ -70,12 +60,21 @@ struct TraceListView: View {
             .width(min: 88, ideal: 88, max: 140)
         }
         .alternatingRowBackgrounds(model.traces.isEmpty ? .disabled : .enabled)
-        .overlay { emptyState }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
+        // Read on every layout: a width kept in @State could miss the
+        // column's last resize and leave the variables cut (FIXLOG).
+        // Only over an empty list, so it never stands between the pointer and the rows.
+        .overlay {
+            if model.traces.isEmpty {
+                GeometryReader { proxy in
+                    emptyState(width: proxy.size.width)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                }
+            }
+        }
     }
 
     @ViewBuilder
-    private var emptyState: some View {
+    private func emptyState(width listWidth: CGFloat) -> some View {
         switch model.storeState {
         case .failed(let error):
             ContentUnavailableView("Can't Read the Database", systemImage: "exclamationmark.triangle",

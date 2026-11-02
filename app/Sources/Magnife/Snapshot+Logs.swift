@@ -39,4 +39,34 @@ extension Snapshot {
         model.selectTraceLog(nil)
         model.showSpanDetailTab(.span)
     }
+
+    /// 05-logs-no-trace: a startup log with no trace ID selected: no arrow, no Trace section.
+    /// 05-logs-new-logs: "12 new logs" over a list that holds still (set, not scrolled: the seed fits).
+    /// 05-logs-paused: the pause bar counting logs. 05-logs-empty: "No Logs Yet" (S-013).
+    static func captureLogStates(_ model: AppModel, dir: String, mode: String) async {
+        let page = SnapshotPage.logs.rawValue
+        model.selectedLogID = model.logs.first { !$0.hasTrace }?.id
+        for _ in 0..<40 where model.logDetail?.item.id != model.selectedLogID { try? await Task.sleep(for: .milliseconds(50)) }
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-no-trace-\(mode).png")
+
+        model.isLogListHeld = true
+        model.newLogCount = 12
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-new-logs-\(mode).png")
+        model.isLogListHeld = false
+        model.newLogCount = 0
+
+        model.pauseForSnapshot(newTraces: 12)
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-paused-\(mode).png")
+        model.pauseForSnapshot(newTraces: nil)
+
+        let store = model.storeURL
+        model.selectedLogID = nil
+        await model.useStore(at: SnapshotPage.emptyStore(next: store))
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-empty-\(mode).png")
+        await model.useStore(at: store)
+    }
 }

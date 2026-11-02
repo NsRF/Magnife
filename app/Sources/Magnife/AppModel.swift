@@ -59,7 +59,7 @@ final class AppModel {
     var isListHeld = false
     /// Traces newer than the shown rows while the list holds still.
     var newTraceCount = 0 {
-        didSet { MenuState.shared.update(newTraceCount: showsNewTracesButton ? newTraceCount : 0) }
+        didSet { updateNewRowsMenu() }
     }
     /// A full page came back, so there may be older rows to read.
     var hasMoreTraces = false
@@ -70,7 +70,7 @@ final class AppModel {
     var pausedSeq: Int64? {
         didSet {
             MenuState.shared.update(isPaused: isPaused)
-            MenuState.shared.update(newTraceCount: showsNewTracesButton ? newTraceCount : 0)
+            updateNewRowsMenu()
         }
     }
     @ObservationIgnored var isLoadingMore = false
@@ -102,7 +102,7 @@ final class AppModel {
     /// Every log of the open trace (S-012), and the selected one.
     var traceLogs = TraceLogs()
     var selectedTraceLogID: LogLine.ID? {
-        didSet { MenuState.shared.update(hasSelectedLog: selectedTraceLogID != nil) }
+        didSet { updateLogMenu() }
     }
     @ObservationIgnored var traceLogsTask: Task<Void, Never>?
     /// The span detail's tab, Span or Trace Logs; remembered across launches.
@@ -138,6 +138,43 @@ final class AppModel {
     @ObservationIgnored var lastWaterfallOpen: Duration?
     /// The waterfall's outline, for the self-test.
     @ObservationIgnored weak var waterfallOutline: NSOutlineView?
+    /// Traces or Logs in the content and detail columns (docs/ux.md, Traces
+    /// vs Logs; View ⌘1 / ⌘2). Remembered across launches; test runs start on Traces.
+    var contentMode: ContentMode = .stored {
+        didSet { if contentMode != oldValue { contentModeChanged() } }
+    }
+    /// The Logs list (S-013): its rows, newest first, and what
+    /// `LogListState.applying` keeps beside them (AppModel+Logs.swift).
+    var logs: [LogListItem] = []
+    @ObservationIgnored var logBaseID: Int64 = 0
+    @ObservationIgnored var logAppliedSeq: Int64 = 0
+    var isLogListHeld = false
+    var newLogCount = 0 {
+        didSet { updateNewRowsMenu() }
+    }
+    var hasMoreLogs = false
+    var logCount = 0
+    /// A page for the current filter has been shown: the empty state waits for it.
+    var logsLoaded = false
+    /// While paused, the log id the Logs list paused at (S-010).
+    var logPausedID: Int64?
+    @ObservationIgnored var isLoadingMoreLogs = false
+    @ObservationIgnored lazy var logScroller: TraceListScroller = {
+        let scroller = TraceListScroller()
+        scroller.onChange = { [weak self] away in self?.logListScrolled(awayFromTop: away) }
+        return scroller
+    }()
+    var selectedLogID: LogListItem.ID? {
+        didSet { if selectedLogID != oldValue { loadLogDetail() } }
+    }
+    /// The selected log with its resource (the Log Detail), read off the main actor.
+    var logDetail: LogDetail? {
+        didSet { updateLogMenu() }
+    }
+    @ObservationIgnored var logDetailTask: Task<Void, Never>?
+    /// The span Open Trace selects once that trace's waterfall is built
+    /// (nil span: the root, which opening selects anyway).
+    @ObservationIgnored var pendingSpan: (traceID: String, spanID: String?)?
     /// The Time column counts from this; it ticks every 15 seconds.
     private(set) var now = Date()
 
@@ -153,6 +190,7 @@ final class AppModel {
             hasMoreTraces = false
             listTraceCount = 0
             isLoadingScope = true
+            resetLogList()
             refreshNow()
         }
     }
@@ -206,15 +244,21 @@ final class AppModel {
         sidebar?.serviceName ?? "All Services"
     }
 
-    /// The window's subtitle: the count in the list, "1,204 traces"; blank
-    /// while there is nothing to count.
+    /// The window's subtitle: the count in the list, "1,204 traces" or
+    /// "8,310 logs"; blank while there is nothing to count.
     var subtitle: String {
-        listTraceCount == 0 ? (isPaused ? "Paused" : "") : TraceList.subtitle(traceCount: listTraceCount, isPaused: isPaused)
+        switch contentMode {
+        case .traces:
+            listTraceCount == 0 ? (isPaused ? "Paused" : "") : TraceList.subtitle(traceCount: listTraceCount, isPaused: isPaused)
+        case .logs:
+            logCount == 0 ? (isPaused ? "Paused" : "") : LogList.subtitle(logCount: logCount, isPaused: isPaused)
+        }
     }
 
     /// Starts the clock for the Time column and opens the database.
     func start() {
         MenuState.shared.update(showsSpanDetail: showsSpanDetail)
+        MenuState.shared.update(contentMode: contentMode)
         Task { await openStore() }
         Task { [weak self] in
             while !Task.isCancelled {
@@ -264,6 +308,8 @@ final class AppModel {
         listBaseSeq = 0
         listAppliedSeq = 0
         pausedSeq = nil
+        logPausedID = nil
+        resetLogList()
         storeState = .opening
         do {
             reader = try await TelemetryReader.open(at: url)
@@ -304,10 +350,13 @@ final class AppModel {
             services = []
             traces = []
             isLoadingScope = false
+            resetLogList()
             return
         }
         do {
             try await reloadList(reader)
+            // The Logs list is read while it shows; switching to it reads it at once.
+            if contentMode == .logs { try await reloadLogs(reader) }
             now = Date()
             // Paused, the open waterfall holds still too (S-010).
             if !isPaused {

@@ -215,6 +215,90 @@ public final class TelemetryReader: Sendable {
         return try await pool.read { [arguments] in try LogRecord.fetchAll($0, sql: sql, arguments: arguments) }
     }
 
+    // MARK: The Logs list (S-013)
+
+    /// The first page of the Logs list, newest first, with the count in
+    /// scope, the newest log id and the last seq, in one read. Paused
+    /// (`upTo`, S-010): the page and count as of that log id, and how many
+    /// logs in scope came after it.
+    @concurrent
+    public func logPage(limit: Int = LogList.pageSize, filter: LogFilter = LogFilter(),
+                        upTo: Int64? = nil) async throws -> LogPage {
+        let scope = Self.arguments(for: filter)
+        let pageSQL = TelemetrySQL.logList(cursor: false, upTo: upTo != nil, filter: filter)
+        let pageArguments = (upTo.map { [$0] as StatementArguments } ?? []) + scope + [limit]
+        let countSQL = TelemetrySQL.logCount(upTo: upTo != nil, filter: filter)
+        let countArguments = (upTo.map { [$0] as StatementArguments } ?? []) + scope
+        let rows = try await pool.read { db in
+            (rows: try Self.logRows(db, sql: pageSQL, arguments: pageArguments),
+             lastID: try Int64.fetchOne(db, sql: TelemetrySQL.lastLogID) ?? 0,
+             lastSeq: try Self.lastSeq(db),
+             count: try Int.fetchOne(db, sql: countSQL, arguments: countArguments) ?? 0,
+             newCount: try upTo.map { try Int.fetchOne(db, sql: TelemetrySQL.logsAfter(filter: filter),
+                                                       arguments: [$0] + scope) ?? 0 } ?? 0)
+        }
+        // The lines are built here, off the main actor.
+        return LogPage(items: rows.rows.map(Self.logItem), lastID: rows.lastID, lastSeq: rows.lastSeq,
+                       logCount: rows.count, upTo: upTo, newCount: rows.newCount)
+    }
+
+    /// The next page of the Logs list below `cursor` (the last row shown).
+    @concurrent
+    public func logItems(limit: Int = LogList.pageSize, after cursor: LogCursor, filter: LogFilter = LogFilter(),
+                         upTo: Int64? = nil) async throws -> [LogListItem] {
+        let sql = TelemetrySQL.logList(cursor: true, upTo: upTo != nil, filter: filter)
+        let arguments: StatementArguments = [cursor.timeNs, cursor.timeNs, cursor.id]
+            + (upTo.map { [$0] as StatementArguments } ?? []) + Self.arguments(for: filter) + [limit]
+        let rows = try await pool.read { try Self.logRows($0, sql: sql, arguments: arguments) }
+        return rows.map(Self.logItem)
+    }
+
+    /// While the Logs list holds still: how many logs in scope came after `base`.
+    @concurrent
+    public func heldLogs(base: Int64, filter: LogFilter = LogFilter()) async throws -> HeldLogs {
+        let sql = TelemetrySQL.logsAfter(filter: filter)
+        let arguments: StatementArguments = [base] + Self.arguments(for: filter)
+        return try await pool.read { db in
+            HeldLogs(newCount: try Int.fetchOne(db, sql: sql, arguments: arguments) ?? 0, lastSeq: try Self.lastSeq(db))
+        }
+    }
+
+    /// The newest log id, where Pause holds a Logs list it has not read yet.
+    @concurrent
+    public func lastLogID() async throws -> Int64 {
+        try await pool.read { try Int64.fetchOne($0, sql: TelemetrySQL.lastLogID) ?? 0 }
+    }
+
+    /// The Log Detail: one log, the resource it came from and whether its
+    /// trace has stored spans, in one read.
+    @concurrent
+    public func logDetail(id: Int64) async throws -> LogDetail? {
+        let read = try await pool.read { db -> (LogRow, ResourceRecord?)? in
+            guard let row = try Self.logRows(db, sql: TelemetrySQL.logItemByID, arguments: [id]).first else { return nil }
+            let resource = try ResourceRecord.fetchOne(db, sql: TelemetrySQL.resourceByID, arguments: [row.record.resourceID])
+            return (row, resource)
+        }
+        guard let read else { return nil }
+        return LogDetail(item: Self.logItem(read.0), resource: read.1)
+    }
+
+    /// A row of `TelemetrySQL.logList`, decoded inside the read (GRDB's Row is not Sendable).
+    private typealias LogRow = (record: LogRecord, hasTrace: Bool)
+
+    private static func logRows(_ db: Database, sql: String, arguments: StatementArguments) throws -> [LogRow] {
+        try Row.fetchAll(db, sql: sql, arguments: arguments).map { (try LogRecord(row: $0), $0["has_trace"] ?? false) }
+    }
+
+    /// The row ready to show; its line is built on the caller's (nonisolated) side.
+    private static func logItem(_ row: LogRow) -> LogListItem {
+        LogListItem(line: LogLine(row.record), hasStoredTrace: row.hasTrace)
+    }
+
+    /// The arguments of `TelemetrySQL.logFilterConditions`, in its order.
+    private static func arguments(for filter: LogFilter) -> StatementArguments {
+        filter.service.map { [$0] } ?? []
+    }
+
     // MARK: Services, meta, keys
 
     /// Every service by name, with its error count derived from spans.

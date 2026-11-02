@@ -196,7 +196,7 @@ Acceptance:
 - [snap] Rows show time, level, service and body.
 - [self] Opening a log that has a trace id opens that trace with the span selected.
 - [self] Logs without a trace id still show.
-Status: todo
+Status: done
 
 ### S-014 Filter the Logs tab by level and service
 As the user, I narrow the Logs tab to one level and service.

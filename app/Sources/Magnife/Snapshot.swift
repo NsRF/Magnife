@@ -32,12 +32,19 @@ enum SnapshotPage: String, CaseIterable {
         }
         model.sidebar = .allTraces
         model.selectedTraceID = nil
+        model.selectedLogID = nil
+        model.showContentMode(self == .logs ? .logs : .traces)
         // The first page of a run can come before the store opened and the list was read.
         await model.openStore()
         if model.traces.isEmpty { await model.reload() }
         switch self {
-        case .emptyState, .traceList, .logs, .commandK, .menuBar, .settings:
+        case .emptyState, .traceList, .commandK, .menuBar, .settings:
             break
+        case .logs:
+            await model.reload()
+            // The HTTP 500 trace's ERROR log: a trace and a span to open.
+            model.selectedLogID = model.logs.first { $0.record.body.hasPrefix("Payment for order") }?.id
+                ?? model.logs.first { $0.canOpenTrace }?.id
         case .traceDetail, .spanDetail:
             // The HTTP 500 trace: three services nested two levels, an Error span.
             model.selectedTraceID = (model.traces.first { $0.route == "POST /checkout/pay" }
@@ -46,6 +53,9 @@ enum SnapshotPage: String, CaseIterable {
             model.sidebar = .service("checkout-api")
         }
         await model.reload()
+        if self == .logs {
+            for _ in 0..<40 where model.logDetail == nil { try? await Task.sleep(for: .milliseconds(50)) }
+        }
         if self == .spanDetail {
             // The failed checkout-api span: attributes, the exception event, the resource.
             await Self.select(model) { $0.name == "POST /payments" }
@@ -71,7 +81,7 @@ enum SnapshotPage: String, CaseIterable {
 /// 02-trace-list-busy and 02-trace-list-not-receiving (the busy-port banners),
 /// 02-trace-list-restarted (the S-008 banner), 02-trace-list-service (S-009),
 /// 02-trace-list-paused (S-010), 04-span-detail-logs and -log-json (S-011),
-/// 03-trace-detail-trace-logs (S-012),
+/// 03-trace-detail-trace-logs (S-012), 05-logs-no-trace, -new-logs, -paused and -empty (S-013),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab, then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
 /// APP_SNAPSHOT_PAGES=02-trace-list,09-settings limits the pages.
@@ -110,6 +120,7 @@ enum Snapshot {
                     capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
                     if page == .emptyState { await captureCopied(model, dir: dir, mode: mode) }
                     if page == .traceDetail { await captureTraceLogs(model, dir: dir, mode: mode) }
+                    if page == .logs { await captureLogStates(model, dir: dir, mode: mode) }
                     if page == .spanDetail {
                         await captureSpanEvents(model, dir: dir, mode: mode)
                         await captureSpanLogs(model, dir: dir, mode: mode)

@@ -43,36 +43,53 @@ struct MagnifeApp: App {
                     .disabled(!menu.hasWaterfall)
                 Button("Copy Stack Trace") { delegate.model.copyStackTrace() }
                     .disabled(!menu.hasStackTrace)
-                Button("Copy Body") { delegate.model.copySelectedLogBody() }
+                Button("Copy Body") {
+                    menu.contentMode == .logs ? delegate.model.copySelectedListLogBody() : delegate.model.copySelectedLogBody()
+                }
                     .disabled(!menu.hasSelectedLog)
                 Button("Copy Environment Variables") { delegate.model.copyEnvironmentVariables() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
             }
             CommandGroup(before: .sidebar) {
+                // Traces | Logs (docs/ux.md, View menu; PROGRESS decision 16).
+                Button(ContentMode.traces.title) { delegate.model.showContentMode(.traces) }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button(ContentMode.logs.title) { delegate.model.showContentMode(.logs) }
+                    .keyboardShortcut("2", modifiers: .command)
+                Divider()
+                // The span detail belongs to the Traces view.
                 Button(menu.showsSpanDetail ? "Hide Span Detail" : "Show Span Detail") { delegate.model.toggleSpanDetail() }
                     .keyboardShortcut("i", modifiers: [.command, .control])
+                    .disabled(menu.contentMode != .traces)
                 // The span detail's tabs (docs/ux.md, View menu).
                 Button(SpanDetailTab.span.title) { delegate.model.showSpanDetailTab(.span) }
                     .keyboardShortcut("1", modifiers: [.command, .option])
-                    .disabled(!menu.hasWaterfall)
+                    .disabled(!menu.hasWaterfall || menu.contentMode != .traces)
                 Button(SpanDetailTab.traceLogs.title) { delegate.model.showSpanDetailTab(.traceLogs) }
                     .keyboardShortcut("2", modifiers: [.command, .option])
-                    .disabled(!menu.hasWaterfall)
+                    .disabled(!menu.hasWaterfall || menu.contentMode != .traces)
                 Divider()
             }
             CommandMenu("Trace") {
                 // ⌃⌘P, not ⌘P, which is Print (docs/ux.md, Keyboard map).
                 Button(TraceList.pauseTitle(isPaused: menu.isPaused)) { delegate.model.togglePause() }
                     .keyboardShortcut("p", modifiers: [.command, .control])
-                Button("Show Newest Traces") { delegate.model.showNewestTraces() }
-                    .disabled(menu.newTraceCount == 0)
+                Button(menu.contentMode == .logs ? "Show Newest Logs" : "Show Newest Traces") {
+                    delegate.model.showNewestRows()
+                }
+                .disabled(menu.newTraceCount == 0)
+                Divider()
+                // The selected log's trace, from the Logs view (S-013).
+                Button("Open Trace") { delegate.model.openSelectedLogTrace() }
+                    .keyboardShortcut("o", modifiers: .command)
+                    .disabled(!menu.canOpenTrace)
                 Divider()
                 Button("Expand All Spans") { delegate.model.expandAllSpans() }
                     .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
-                    .disabled(!menu.hasWaterfall)
+                    .disabled(!menu.hasWaterfall || menu.contentMode != .traces)
                 Button("Collapse All Spans") { delegate.model.collapseAllSpans() }
                     .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
-                    .disabled(!menu.hasWaterfall)
+                    .disabled(!menu.hasWaterfall || menu.contentMode != .traces)
             }
             // No help book in v0.1 (docs/ux.md, Help menu).
             CommandGroup(replacing: .help) {

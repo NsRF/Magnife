@@ -173,6 +173,20 @@ final class MenuState: ObservableObject {
         if self.hasSelectedLog != hasSelectedLog { self.hasSelectedLog = hasSelectedLog }
     }
 
+    /// Traces or Logs: the View and Trace menus follow it (S-013).
+    @Published private(set) var contentMode: ContentMode = .traces
+
+    func update(contentMode: ContentMode) {
+        if self.contentMode != contentMode { self.contentMode = contentMode }
+    }
+
+    /// Trace > Open Trace is enabled while the selected log's trace has stored spans.
+    @Published private(set) var canOpenTrace = false
+
+    func update(canOpenTrace: Bool) {
+        if self.canOpenTrace != canOpenTrace { self.canOpenTrace = canOpenTrace }
+    }
+
     /// View > Show Span Detail reads "Hide Span Detail" while the pane shows.
     @Published private(set) var showsSpanDetail = true
 

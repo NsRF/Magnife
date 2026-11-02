@@ -85,6 +85,17 @@ this app starts the helper and reads its database. No server, no accounts.
   Span column is `TraceLogSpan` ("—", the name, "Span not received").
   The table is a SwiftUI `Table` in `TraceLogsView.swift`; its column
   ideals must fit the 560 pt detail column.
+- The Logs view (S-013): `AppModel.contentMode` (Traces | Logs, ⌘1 / ⌘2,
+  `ContentColumn` / `DetailColumn` in `ContentView.swift`) swaps the content
+  and detail columns. `AppModel+Logs.swift` reads 200-row pages
+  (`TelemetryReader.logPage`, newest first by time) only while Logs shows;
+  `LogListState.applying` (MagnifeKit, unit-tested) holds the list still
+  when scrolled away (its own `TraceListScroller`, `logScroller`) or paused,
+  counting logs whose id is above the shown rows' newest id. Open Trace
+  (`openTrace(ofLog:)`) switches to Traces and selects the log's span
+  through `pendingSpan` once the waterfall is built. Views in
+  `LogListView.swift` and `LogDetailView.swift`. A Table cell's root view
+  never reads `@Environment` (FIXLOG): pass it values and actions.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -132,7 +143,7 @@ this app starts the helper and reads its database. No server, no accounts.
   The S-008 checks (`SelfTest+Lifecycle.swift`, last: relaunch, helper
   crashes, and a second Magnife process that is quit and killed with
   `kill -9`) print their timings as INFO lines; `APP_SELFTEST_ONLY=lifecycle`
-  runs them alone; `APP_SELFTEST_ONLY=sidebar` the S-009 checks, `=pause` the S-010 ones.
+  runs them alone; `APP_SELFTEST_ONLY=sidebar` the S-009 checks, `=pause` the S-010 ones, `=logs` the S-013 ones.
   `APP_SELFTEST_ONLY=waterfall tools/selftest.sh` runs only the reader, model
   and waterfall checks (`APP_SELFTEST_ONLY=span-detail`: the span detail,
   exception, span log and Trace Logs checks, incl. a 10,000-log trace timed as an INFO line); the waterfall checks time 1,000/5,000/30,000-span
@@ -151,7 +162,9 @@ this app starts the helper and reads its database. No server, no accounts.
   server span scrolled to Events, `04-span-detail-long-value` a statement
   cut with "Show All", `04-span-detail-copied` Copy Stack Trace's "Copied",
   `04-span-detail-logs` the Logs section with a log's attributes open, `04-span-detail-log-json` a pretty-printed JSON body,
-  `03-trace-detail-trace-logs` Trace Logs with a log (and so its span) selected.
+  `03-trace-detail-trace-logs` Trace Logs with a log (and so its span) selected,
+  `05-logs` the Logs view with the payment log's detail, `05-logs-no-trace`
+  a log without a trace id, `05-logs-new-logs`, `05-logs-paused`, `05-logs-empty`.
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Both scripts pass an empty "NSSplitView Subview Frames …" default, so the

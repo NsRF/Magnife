@@ -78,6 +78,11 @@ extension AppModel {
         waterfall = tree
         waterfallGeneration += 1
         MenuState.shared.update(hasWaterfall: !tree.isEmpty)
+        // Open Trace from a log (S-013): its span, with its parents open.
+        if opening, let pending = pendingSpan, pending.traceID == selectedTraceID {
+            pendingSpan = nil
+            selectSpanOpeningParents(pending.spanID)
+        }
     }
 
     /// The trace's row, its tree, and the spans to collapse in it, off the main actor.

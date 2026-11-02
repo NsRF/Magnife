@@ -99,6 +99,51 @@ enum TelemetrySQL {
         return "SELECT \(logColumns) FROM logs \(filter) ORDER BY time_ns DESC, id DESC LIMIT ?"
     }
 
+    /// The Logs list (S-013), newest first by time: the log's columns and
+    /// whether its trace has stored spans (a primary-key lookup per row).
+    /// Optional cursor (time_ns, id), pause point (logs up to an id) and
+    /// filter, with their arguments in that order. logs_by_time orders it;
+    /// a service reads logs_by_service.
+    static func logList(cursor: Bool, upTo: Bool, filter: LogFilter) -> String {
+        var conditions: [String] = []
+        if cursor { conditions.append("(time_ns < ? OR (time_ns = ? AND id < ?))") }
+        if upTo { conditions.append("id <= ?") }
+        conditions += logFilterConditions(filter)
+        return """
+            SELECT \(logColumns),
+                   EXISTS (SELECT 1 FROM traces WHERE traces.trace_id = logs.trace_id) AS has_trace
+            FROM logs \(whereClause(conditions)) ORDER BY time_ns DESC, id DESC LIMIT ?
+            """
+    }
+
+    /// The conditions of a log filter, in the order `TelemetryReader.arguments(for:)` binds them.
+    static func logFilterConditions(_ filter: LogFilter) -> [String] {
+        filter.service == nil ? [] : ["service_name = ?"]
+    }
+
+    /// How many logs the filter keeps (the subtitle), up to a pause point.
+    static func logCount(upTo: Bool, filter: LogFilter) -> String {
+        "SELECT COUNT(*) FROM logs " + whereClause((upTo ? ["id <= ?"] : []) + logFilterConditions(filter))
+    }
+
+    /// Logs stored after an id that the filter keeps: "12 new logs".
+    static func logsAfter(filter: LogFilter) -> String {
+        "SELECT COUNT(*) FROM logs " + whereClause(["id > ?"] + logFilterConditions(filter))
+    }
+
+    /// The newest log id; the rowid's last entry, no scan.
+    static let lastLogID = "SELECT COALESCE(MAX(id), 0) FROM logs"
+
+    static let logItemByID = """
+        SELECT \(logColumns),
+               EXISTS (SELECT 1 FROM traces WHERE traces.trace_id = logs.trace_id) AS has_trace
+        FROM logs WHERE id = ?
+        """
+
+    private static func whereClause(_ conditions: [String]) -> String {
+        conditions.isEmpty ? "" : "WHERE " + conditions.joined(separator: " AND ")
+    }
+
     /// Error count per service: distinct traces with an Error span from it
     /// (spans_by_service_status covers the subquery).
     static let servicesWithErrors = """

@@ -11,10 +11,10 @@ struct ContentView: View {
             Sidebar()
                 .navigationSplitViewColumnWidth(min: 180, ideal: 210)
         } content: {
-            TraceListView()
+            ContentColumn()
                 .navigationSplitViewColumnWidth(min: 360, ideal: 520)
         } detail: {
-            TraceDetail()
+            DetailColumn()
                 .navigationSplitViewColumnWidth(min: 420, ideal: 560)
                 .toolbar {
                     // Receiver status, at the leading edge of the detail column (docs/ux.md, Toolbar).
@@ -27,6 +27,65 @@ struct ContentView: View {
         .task {
             SelfTest.runIfRequested(model: model)
             Snapshot.runIfRequested(model: model, openSettings: openSettings)
+        }
+    }
+}
+
+/// The content column: the trace list or the Logs list (docs/ux.md,
+/// Traces vs Logs), under the receiver banners and the pause bar, with the
+/// window's title and the toolbar items over it.
+struct ContentColumn: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Group {
+            switch model.contentMode {
+            case .traces: TraceListView()
+            case .logs: LogListView()
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                Banners()
+                PauseBar()
+            }
+        }
+        .navigationTitle(model.title)
+        .navigationSubtitle(model.subtitle)
+        // Over the list they act on (docs/ux.md, Toolbar items 3 and 4).
+        .toolbar {
+            ToolbarItem { ContentModePicker() }
+            ToolbarItem { PauseButton() }
+        }
+    }
+}
+
+/// Traces | Logs, also View > Traces (⌘1) and View > Logs (⌘2).
+struct ContentModePicker: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Picker("View", selection: Binding(get: { model.contentMode }, set: { model.showContentMode($0) })) {
+            ForEach(ContentMode.allCases) { mode in
+                Text(mode.title)
+                    .help(mode.help)
+                    .tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+    }
+}
+
+/// The detail column: the trace's waterfall and span detail, or the Log Detail.
+struct DetailColumn: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        switch model.contentMode {
+        case .traces: TraceDetail()
+        case .logs: LogDetailView()
         }
     }
 }

@@ -41,6 +41,8 @@ enum SelfTest {
                 await checkSidebar()
             } else if only == "pause" {
                 await checkPause(model)
+            } else if only == "logs" {
+                await checkLogs(model)
             } else if only == "span-detail" {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
@@ -56,6 +58,7 @@ enum SelfTest {
                 await checkExceptions(model)
                 await checkSpanLogs(model)
                 await checkTraceLogs(model)
+                await checkLogs(model)
                 await checkSupervisor()
                 await checkReceiver()
                 checkApp()
