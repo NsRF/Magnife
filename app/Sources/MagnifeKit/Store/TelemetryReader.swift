@@ -1,0 +1,143 @@
+import Foundation
+import GRDB
+
+/// Reads the helper's database. Read-only: it never writes, migrates, or
+/// checkpoints. Every method runs its query on GRDB's reader queues, off the
+/// main actor.
+public final class TelemetryReader: Sendable {
+    /// The schema version in docs/schema.sql this app reads.
+    public static let schemaVersion = 1
+
+    public let url: URL
+    private let pool: DatabasePool
+
+    private init(url: URL, pool: DatabasePool) {
+        self.url = url
+        self.pool = pool
+    }
+
+    /// Opens the database read-only and checks its schema version.
+    /// Throws a StoreError; `.missing` and `.notReady` clear once the helper
+    /// has opened the file (it sends "ports" after that).
+    @concurrent
+    public static func open(at url: URL) async throws(StoreError) -> TelemetryReader {
+        guard FileManager.default.fileExists(atPath: url.path) else { throw .missing }
+        var config = Configuration()
+        config.readonly = true
+        config.label = "Magnife.reader"
+        let pool: DatabasePool
+        do {
+            pool = try DatabasePool(path: url.path, configuration: config)
+        } catch let error as DatabaseError where error.resultCode == .SQLITE_CANTOPEN {
+            // A WAL database whose writer is not running has no -wal file,
+            // and a read-only connection cannot create it (WALReadonlyTests).
+            throw FileManager.default.fileExists(atPath: url.path) ? .notReady : .missing
+        } catch {
+            throw .cannotOpen(String(describing: error))
+        }
+        let version: Int
+        do {
+            version = try await pool.read { try Int.fetchOne($0, sql: TelemetrySQL.userVersion) ?? 0 }
+        } catch {
+            throw .cannotOpen(String(describing: error))
+        }
+        // 0 means the helper created the file but not the schema yet.
+        if version == 0 { throw .notReady }
+        guard version == schemaVersion else { throw .unsupportedVersion(found: version, expected: schemaVersion) }
+        return TelemetryReader(url: url, pool: pool)
+    }
+
+    // MARK: Traces
+
+    /// A page of traces, newest first by start. Pass the last row's cursor
+    /// for the next page. `service` keeps traces with any span from it.
+    @concurrent
+    public func latestTraces(limit: Int = 200, after cursor: TraceCursor? = nil,
+                             service: String? = nil) async throws -> [TraceSummary] {
+        var arguments: StatementArguments = []
+        if let cursor { arguments += [cursor.startNs, cursor.startNs, cursor.traceID] }
+        if let service { arguments += [service] }
+        arguments += [limit]
+        let sql = TelemetrySQL.latestTraces(cursor: cursor != nil, service: service != nil)
+        return try await pool.read { [arguments] in try TraceSummary.fetchAll($0, sql: sql, arguments: arguments) }
+    }
+
+    @concurrent
+    public func trace(id: String) async throws -> TraceSummary? {
+        try await pool.read { try TraceSummary.fetchOne($0, sql: TelemetrySQL.traceByID, arguments: [id]) }
+    }
+
+    @concurrent
+    public func traceCount() async throws -> Int {
+        try await pool.read { try Int.fetchOne($0, sql: TelemetrySQL.traceCount) ?? 0 }
+    }
+
+    /// Traces created by batches after `seq`, for the paused list's count.
+    @concurrent
+    public func traceCount(createdAfter seq: Int64) async throws -> Int {
+        try await pool.read { try Int.fetchOne($0, sql: TelemetrySQL.tracesCreatedAfter, arguments: [seq]) ?? 0 }
+    }
+
+    // MARK: Spans
+
+    /// Every span of a trace, by start time.
+    @concurrent
+    public func spans(traceID: String) async throws -> [SpanRecord] {
+        try await pool.read { try SpanRecord.fetchAll($0, sql: TelemetrySQL.spansOfTrace, arguments: [traceID]) }
+    }
+
+    @concurrent
+    public func resource(id: Int64) async throws -> ResourceRecord? {
+        try await pool.read { try ResourceRecord.fetchOne($0, sql: TelemetrySQL.resourceByID, arguments: [id]) }
+    }
+
+    // MARK: Logs
+
+    /// Logs of a trace in time order, including those with no span id.
+    @concurrent
+    public func logs(traceID: String) async throws -> [LogRecord] {
+        try await pool.read { try LogRecord.fetchAll($0, sql: TelemetrySQL.logsOfTrace, arguments: [traceID]) }
+    }
+
+    /// Logs written during one span, in time order.
+    @concurrent
+    public func logs(traceID: String, spanID: String) async throws -> [LogRecord] {
+        try await pool.read {
+            try LogRecord.fetchAll($0, sql: TelemetrySQL.logsOfSpan, arguments: [traceID, spanID])
+        }
+    }
+
+    /// A page of all logs, newest first, optionally one service and one level.
+    @concurrent
+    public func latestLogs(limit: Int = 200, after cursor: LogCursor? = nil, service: String? = nil,
+                           level: SeverityLevel? = nil) async throws -> [LogRecord] {
+        var arguments: StatementArguments = []
+        if let cursor { arguments += [cursor.timeNs, cursor.timeNs, cursor.id] }
+        if let service { arguments += [service] }
+        if let level { arguments += [level.range.lowerBound, level.range.upperBound] }
+        arguments += [limit]
+        let sql = TelemetrySQL.latestLogs(cursor: cursor != nil, service: service != nil, level: level != nil)
+        return try await pool.read { [arguments] in try LogRecord.fetchAll($0, sql: sql, arguments: arguments) }
+    }
+
+    // MARK: Services, meta, keys
+
+    /// Every service by name, with its error count derived from spans.
+    @concurrent
+    public func services() async throws -> [ServiceSummary] {
+        try await pool.read { try ServiceSummary.fetchAll($0, sql: TelemetrySQL.servicesWithErrors) }
+    }
+
+    /// The seq of the last committed batch (meta.last_seq), 0 before the first.
+    @concurrent
+    public func lastSeq() async throws -> Int64 {
+        try await pool.read { Int64(try String.fetchOne($0, sql: TelemetrySQL.lastSeq) ?? "") ?? 0 }
+    }
+
+    @concurrent
+    public func attributeKeys(source: AttributeSource? = nil) async throws -> [AttributeKey] {
+        let sql = TelemetrySQL.attributeKeys(source: source != nil)
+        let arguments: StatementArguments = source.map { [$0.rawValue] } ?? []
+        return try await pool.read { try AttributeKey.fetchAll($0, sql: sql, arguments: arguments) }
+    }
+}
