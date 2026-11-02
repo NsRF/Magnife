@@ -219,3 +219,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: `TraceQuery.format` wrote keys unquoted, while the parser accepts a key only when it starts with a letter and holds letters, digits, `.`, `_` and `-`.
 - Fix: odd keys are quoted when formatting, and a quoted key before an operator parses as an attribute; round-trip unit tests for 11 odd keys.
 - Rule: a format/parse pair is tested on every value the editor accepts, not just the ones the parser was written for.
+
+## Open Trace never worked from Trace Logs (S-012, M2 review)
+
+- Symptom: Trace > Open Trace stayed disabled in the Traces view, and the Trace Logs row's context menu had only Copy Body and Copy Trace ID, while docs/ux.md lists Open Trace for both log lists.
+- Cause: `updateLogMenu` set `canOpenTrace: false` for the Traces view, and the context menu was built without it.
+- Fix: `canOpenSelectedTraceLogSpan` enables it while Trace Logs shows a log whose span is in the waterfall; `openSelectedLogTrace` then runs `openTraceLogSpan` (select and focus); the context menu shows the item for such logs.
+- Rule: a story marked done checks every row of docs/ux.md's menu and context-menu tables for its surfaces.

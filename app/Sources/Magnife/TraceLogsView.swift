@@ -50,7 +50,7 @@ struct TraceLogsView: View {
                 TraceLogSpanCell(span: model.traceLogSpan(log))
                     .accessibilityHidden(true)
             }
-            .width(min: 56, ideal: 80, max: 240)
+            .width(min: 56, ideal: 120, max: 240)  // "Span not received" fits
             TableColumn("Body") { log in
                 Text(log.record.body.prefix(Self.bodyPrefix))
                     .lineLimit(1)
@@ -63,6 +63,10 @@ struct TraceLogsView: View {
         .alternatingRowBackgrounds(.enabled)
         .contextMenu(forSelectionType: LogLine.ID.self) { ids in
             if let log = ids.first.flatMap({ id in model.traceLogs.lines.first { $0.id == id } }) {
+                // Its trace is open: Open Trace selects the log's span (docs/ux.md, context menus).
+                if model.traceLogSpan(log).spanID != nil {
+                    Button("Open Trace") { model.openTraceLogSpan(log.id) }
+                }
                 Button("Copy Body") { model.copyBody(log.record.body) }
                 Button("Copy Trace ID") { model.copyTraceID(model.traceLogs.traceID) }
             }

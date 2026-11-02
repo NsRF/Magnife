@@ -81,6 +81,11 @@ extension AppModel {
         Task { @MainActor in outline.window?.makeFirstResponder(outline) }
     }
 
+    /// Open Trace in Trace Logs: the selected log's span is in the waterfall.
+    var canOpenSelectedTraceLogSpan: Bool {
+        spanDetailTab == .traceLogs && selectedTraceLog.flatMap { traceLogSpan($0).spanID } != nil
+    }
+
     /// View > Span (⌥⌘1) and View > Trace Logs (⌥⌘2), and the picker. Picking
     /// a tab shows the span detail if it was hidden.
     func showSpanDetailTab(_ tab: SpanDetailTab) {

@@ -87,6 +87,20 @@ extension SelfTest {
             check("Return on a log selects its span and moves focus to the waterfall",
                   focused && model.selectedSpanID == payments.record.spanID)
         }
+        // Trace > Open Trace (⌘O) in Trace Logs: the log's span, focused; off for a log without one.
+        if let payments = lines.first(where: { $0.levelWord == "ERROR" && $0.record.serviceName == "checkout-api" }) {
+            model.selectTraceLog(noSpan.id)
+            let offWithoutSpan = !MenuState.shared.canOpenTrace
+            model.selectTraceLog(payments.id)
+            model.selectedSpanID = insert
+            let on = MenuState.shared.canOpenTrace
+            outline.window?.makeFirstResponder(nil)
+            model.openSelectedLogTrace()
+            let opened = await waitUntil(1) { outline.window?.firstResponder === outline }
+            check("Open Trace (⌘O) in Trace Logs selects the log's span and focuses the waterfall",
+                  offWithoutSpan && on && opened && model.selectedSpanID == payments.record.spanID,
+                  "off \(offWithoutSpan), on \(on), focused \(opened)")
+        }
         check("the pane stays on Trace Logs", model.spanDetailTab == .traceLogs)
         model.showSpanDetailTab(.span)
         check("⌥⌘1 goes back to Span", model.spanDetailTab == .span)

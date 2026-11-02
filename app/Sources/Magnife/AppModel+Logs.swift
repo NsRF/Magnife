@@ -239,7 +239,7 @@ extension AppModel {
         switch contentMode {
         case .traces:
             MenuState.shared.update(hasSelectedLog: selectedTraceLogID != nil)
-            MenuState.shared.update(canOpenTrace: false)
+            MenuState.shared.update(canOpenTrace: canOpenSelectedTraceLogSpan)
         case .logs:
             MenuState.shared.update(hasSelectedLog: selectedLogID != nil)
             MenuState.shared.update(canOpenTrace: selectedLog?.canOpenTrace == true || logDetail?.item.canOpenTrace == true)
@@ -265,9 +265,13 @@ extension AppModel {
         Task { await revealSelectedTrace() }
     }
 
-    /// Trace > Open Trace and ⌘O: the selected log's trace.
+    /// Trace > Open Trace and ⌘O: the selected log's trace. In Trace Logs
+    /// that trace is open already: its span is selected and focused.
     func openSelectedLogTrace() {
-        openTrace(ofLog: selectedLogID)
+        switch contentMode {
+        case .logs: openTrace(ofLog: selectedLogID)
+        case .traces: if canOpenSelectedTraceLogSpan { openTraceLogSpan(selectedTraceLogID) }
+        }
     }
 
     /// Selects a span of the open waterfall, opening its collapsed parents

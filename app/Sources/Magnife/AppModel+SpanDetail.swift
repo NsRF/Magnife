@@ -40,7 +40,7 @@ extension AppModel {
 
     /// After a batch (not paused): when a log joined the open trace, read
     /// the selected span again, so its Logs section takes it in time order
-    /// (S-011), and the trace's logs (S-012).
+    /// (S-011), and the trace's logs (S-012) while Trace Logs shows.
     func refreshOpenTraceLogs(_ reader: TelemetryReader) async throws {
         guard let traceID = selectedTraceID, prunedTraceID != traceID else { return }
         let stamp = try await reader.logStamp(traceID: traceID)
@@ -49,7 +49,15 @@ extension AppModel {
         // Also on the trace's first stamp: a log may have joined since the
         // detail was read. An unchanged detail changes nothing on screen.
         loadSpanDetail()
-        if stamp != traceLogs.stamp || traceLogs.traceID != traceID { loadTraceLogs() }
+        loadTraceLogsIfStale()
+    }
+
+    /// Trace Logs reads every log of the trace, so it is read again only
+    /// while it shows, and when it is picked after logs joined meanwhile.
+    func loadTraceLogsIfStale() {
+        guard spanDetailTab == .traceLogs, showsSpanDetail, let traceID = selectedTraceID,
+              let stamp = openTraceLogStamp, stamp != traceLogs.stamp || traceLogs.traceID != traceID else { return }
+        loadTraceLogs()
     }
 
     /// True when the pane has nothing to show: a waterfall with no selected span.

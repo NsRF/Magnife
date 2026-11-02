@@ -109,7 +109,7 @@ struct MagnifeApp: App {
                 }
                 .disabled(menu.newTraceCount == 0)
                 Divider()
-                // The selected log's trace, from the Logs view (S-013).
+                // The selected log's trace, from the Logs view (S-013) or Trace Logs (S-012).
                 Button("Open Trace") { delegate.model.openSelectedLogTrace() }
                     .keyboardShortcut("o", modifiers: .command)
                     .disabled(!menu.canOpenTrace)

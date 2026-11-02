@@ -178,7 +178,11 @@ final class AppModel {
     @ObservationIgnored var traceLogsTask: Task<Void, Never>?
     /// The span detail's tab, Span or Trace Logs; remembered across launches.
     var spanDetailTab: SpanDetailTab = .stored {
-        didSet { if !StoreLocation.isOverridden() { UserDefaults.standard.set(spanDetailTab.rawValue, forKey: SpanDetailTab.defaultsKey) } }
+        didSet {
+            if !StoreLocation.isOverridden() { UserDefaults.standard.set(spanDetailTab.rawValue, forKey: SpanDetailTab.defaultsKey) }
+            updateLogMenu()
+            loadTraceLogsIfStale()
+        }
     }
     /// The exception whose Copy Stack Trace reads "Copied" for 2 seconds (S-007), by index.
     var copiedStackTrace: Int?
@@ -198,6 +202,7 @@ final class AppModel {
         didSet {
             if !StoreLocation.isOverridden() { UserDefaults.standard.set(showsSpanDetail, forKey: "detail.showsSpanDetail") }
             MenuState.shared.update(showsSpanDetail: showsSpanDetail)
+            loadTraceLogsIfStale()
         }
     }
     @ObservationIgnored var waterfallTask: Task<Void, Never>?
