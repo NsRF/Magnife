@@ -10,6 +10,8 @@ extension AppModel {
         waterfallTask?.cancel()
         isOpeningTrace = false
         waterfall = Waterfall()
+        openTraceFindings = TraceFindings()
+        showsAllFindings = false
         waterfallGeneration += 1
         MenuState.shared.update(hasWaterfall: false)
         collapsedSpans = []
@@ -38,7 +40,8 @@ extension AppModel {
             guard let result else { return }
             // A paused list can still show a trace that retention deleted (S-015).
             guard result.trace != nil || !result.tree.isEmpty else { return self.traceNoLongerStored(id) }
-            self.show(result.tree, of: result.trace, collapsing: result.collapsed, opening: true)
+            self.show(result.tree, of: result.trace, findings: result.findings, collapsing: result.collapsed,
+                      opening: true)
         }
     }
 
@@ -67,11 +70,13 @@ extension AppModel {
         let result = try await Self.readWaterfall(reader, traceID: id, after: previous)
         // Two refreshes can overlap: the older read never replaces a newer tree.
         guard selectedTraceID == id, (result.trace?.updatedSeq ?? .max) >= (openTrace?.updatedSeq ?? 0) else { return }
-        show(result.tree, of: result.trace ?? trace, collapsing: result.collapsed, opening: false)
+        show(result.tree, of: result.trace ?? trace, findings: result.findings, collapsing: result.collapsed,
+             opening: false)
     }
 
     /// `collapsing`: the spans `Waterfall.autoCollapsed` closes, worked out off the main actor.
-    private func show(_ tree: Waterfall, of trace: TraceSummary?, collapsing added: Set<String>, opening: Bool) {
+    private func show(_ tree: Waterfall, of trace: TraceSummary?, findings: TraceFindings, collapsing added: Set<String>,
+                      opening: Bool) {
         if let trace { openTrace = trace }
         if opening {
             collapsedSpans = added
@@ -83,6 +88,8 @@ extension AppModel {
             loadSpanDetail()
         }
         waterfall = tree
+        // With the tree, so the outline draws the rows' icons in the same reload.
+        if openTraceFindings != findings { openTraceFindings = findings }
         waterfallGeneration += 1
         MenuState.shared.update(hasWaterfall: !tree.isEmpty)
         // Open Trace from a log (S-013): its span, with its parents open.
@@ -92,14 +99,15 @@ extension AppModel {
         }
     }
 
-    /// The trace's row, its tree, and the spans to collapse in it, off the main actor.
+    /// The trace's row, its tree, its findings and the spans to collapse in it, off the main actor.
     @concurrent
     nonisolated private static func readWaterfall(_ reader: TelemetryReader, traceID: String, after previous: Waterfall?)
-        async throws -> (trace: TraceSummary?, tree: Waterfall, collapsed: Set<String>) {
+        async throws -> (trace: TraceSummary?, tree: Waterfall, findings: TraceFindings, collapsed: Set<String>) {
         let trace = try await reader.trace(id: traceID)
         let spans = try await reader.waterfallSpans(traceID: traceID)
+        let findings = try await reader.traceFindings(traceID: traceID)
         let tree = await Waterfall.build(spans)
-        return (trace, tree, tree.autoCollapsed(after: previous))
+        return (trace, tree, findings, tree.autoCollapsed(after: previous))
     }
 
     /// The outline shows `generation`: the self-test's open time ends here.
@@ -123,6 +131,7 @@ extension AppModel {
         prunedTraceID = id
         openTrace = nil
         waterfall = Waterfall()
+        openTraceFindings = TraceFindings()
         waterfallGeneration += 1
         MenuState.shared.update(hasWaterfall: false)
         collapsedSpans = []

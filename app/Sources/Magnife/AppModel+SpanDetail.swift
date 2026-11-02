@@ -114,6 +114,8 @@ enum SpanDetailValueID {
     static func event(_ index: Int, _ key: String) -> String { "event:\(index):\(key)" }
     static func resource(_ key: String) -> String { "resource:\(key)" }
     static let statusMessage = "status-message"
+    /// A finding's statement in the Findings section (S-023+).
+    static func finding(_ id: String) -> String { "finding:\(id)" }
     static func exceptionMessage(_ index: Int) -> String { "exception:\(index):message" }
     static func exceptionAttribute(_ index: Int, _ key: String) -> String { "exception:\(index):\(key)" }
     static func stackTrace(_ index: Int) -> String { "stack-trace:\(index)" }

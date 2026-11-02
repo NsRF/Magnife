@@ -56,7 +56,15 @@ final class AppModel {
     /// One color slot per service, in the order first seen (S-004).
     private(set) var serviceColors = ServiceColors()
     /// The list's rows: pages from the database, newest first (S-004).
-    var traces: [TraceSummary] = []
+    var traces: [TraceSummary] = [] {
+        didSet { if traces != oldValue { updateTraceFindings() } }
+    }
+    /// The rows' finding badges (S-023+), read off the main actor and kept
+    /// per trace until its `updated_seq` changes.
+    var findingCache = FindingCache()
+    @ObservationIgnored var findingCacheReader: ObjectIdentifier?
+    @ObservationIgnored var findingsTask: Task<Void, Never>?
+    @ObservationIgnored var findingsAgain = false
     /// The seq the shown rows were read at, and the last seq applied to them
     /// while the list holds still.
     var listBaseSeq: Int64 = 0
@@ -154,6 +162,11 @@ final class AppModel {
     var waterfallGeneration = 0
     /// The open trace's row, read with its spans (it may not be in the list).
     var openTrace: TraceSummary?
+    /// The open trace's findings, read with its waterfall (S-023+): the
+    /// strip under the header, the rows' icons, the span detail's Findings.
+    var openTraceFindings = TraceFindings()
+    /// The strip shows every finding, not the first three.
+    var showsAllFindings = false
     /// The selected trace that retention deleted (S-015): the detail column
     /// shows "Trace No Longer Stored" while it stays selected.
     var prunedTraceID: String?

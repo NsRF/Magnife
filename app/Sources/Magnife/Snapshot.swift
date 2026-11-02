@@ -59,6 +59,8 @@ enum SnapshotPage: String, CaseIterable {
             model.clickStatusChip(.error, adding: false)
         }
         await model.reload()
+        // The rows' finding badges are read after the rows (S-023).
+        await model.waitForTraceFindings()
         if self == .logs {
             for _ in 0..<40 where model.logDetail == nil { try? await Task.sleep(for: .milliseconds(50)) }
         }
@@ -92,7 +94,7 @@ enum SnapshotPage: String, CaseIterable {
 /// 06-command-k (Search for "checkout"), -empty, -suggestions, -tokens and -no-match (S-017),
 /// 07-filter-bar (Error on) and -no-matches (OK on, a hidden trace still in the detail column) (S-018),
 /// 02-trace-list-saved-filter, -edited and -rename, 07-filter-bar-save and -save-duplicate (S-021),
-/// 03-trace-detail-waterfall-focus and -span-focus (S-022),
+/// 03-trace-detail-waterfall-focus and -span-focus (S-022), 03-trace-detail-slow-sql and 02-trace-list-findings-wide (S-023),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab,
 /// and 09-settings-general-delete (S-016's dialog), then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
@@ -136,6 +138,7 @@ enum Snapshot {
                         await captureTraceLogs(model, dir: dir, mode: mode)
                         await captureKeyboardFocus(model, dir: dir, mode: mode)
                         await captureNoLongerStored(model, dir: dir, mode: mode)
+                        await captureFindings(model, dir: dir, mode: mode)
                     }
                     if page == .logs { await captureLogStates(model, dir: dir, mode: mode) }
                     if page == .commandK { await captureSearchStates(model, dir: dir, mode: mode) }
@@ -154,6 +157,7 @@ enum Snapshot {
                         await captureServiceScope(model, dir: dir, mode: mode)
                         await capturePaused(model, dir: dir, mode: mode)
                         await captureSavedFilter(model, dir: dir, mode: mode)
+                        await captureWideList(model, dir: dir, mode: mode)
                     }
                 }
             }

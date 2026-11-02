@@ -11,6 +11,7 @@ struct WaterfallOutline: NSViewRepresentable {
     let model: AppModel
     let generation: Int
     let waterfall: Waterfall
+    let findings: TraceFindings
     let collapsed: Set<String>
     let selected: String?
     let colors: ServiceColors
@@ -66,8 +67,8 @@ struct WaterfallOutline: NSViewRepresentable {
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        context.coordinator.update(generation: generation, waterfall: waterfall, collapsed: collapsed,
-                                   selected: selected, colors: colors)
+        context.coordinator.update(generation: generation, waterfall: waterfall, findings: findings,
+                                   collapsed: collapsed, selected: selected, colors: colors)
     }
 }
 
@@ -80,6 +81,8 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
     let model: AppModel
     weak var outline: NSOutlineView?
     private(set) var waterfall = Waterfall()
+    /// The open trace's findings: the rows' icons (S-023+).
+    private(set) var findings = TraceFindings()
     private(set) var items: [SpanItem] = []
     private var itemsByID: [String: SpanItem] = [:]
     private var generation = -1
@@ -99,13 +102,15 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
 
     init(model: AppModel) { self.model = model }
 
-    func update(generation: Int, waterfall: Waterfall, collapsed: Set<String>, selected: String?, colors: ServiceColors) {
+    func update(generation: Int, waterfall: Waterfall, findings: TraceFindings, collapsed: Set<String>, selected: String?,
+                colors: ServiceColors) {
         guard let outline else { return }
         isApplying = true
         defer { isApplying = false }
         if generation != self.generation {
             self.generation = generation
             self.waterfall = waterfall
+            self.findings = findings
             self.collapsed = collapsed
             self.colors = colors
             var reused: [String: SpanItem] = [:]
@@ -232,10 +237,13 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
             cell.identifier = .spanName
             let node = waterfall.nodes[index]
             let hiddenCount = collapsed.contains(span.spanID) ? node.descendantCount : 0
+            let found = findings.findings(forSpan: span.spanID)
+            let marks = found.map { $0.spokenMark(for: span.spanID) }
             cell.configure(name: span.name, service: waterfall.shownService(of: index),
                            duration: DurationFormat.string(nanoseconds: span.durationNs), color: color,
-                           isError: span.status == .error, hiddenCount: hiddenCount, isOrphan: node.isOrphan,
-                           label: waterfall.accessibilityLabel(of: index))
+                           isError: span.status == .error, findings: findings.kinds(forSpan: span.spanID),
+                           hiddenCount: hiddenCount, isOrphan: node.isOrphan,
+                           label: ([waterfall.accessibilityLabel(of: index)] + marks).joined(separator: ", "))
             return cell
         }
         let cell = outlineView.makeView(withIdentifier: .spanBar, owner: nil) as? SpanBarCell ?? SpanBarCell()

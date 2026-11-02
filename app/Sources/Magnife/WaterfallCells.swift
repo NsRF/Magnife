@@ -2,13 +2,21 @@ import AppKit
 import MagnifeKit
 
 /// The waterfall's Span column: service dot, the octagon for an Error span,
-/// the name (truncated, full name in the tooltip), the service where it
+/// an orange icon per finding kind (S-023+), the name (truncated, full name in the tooltip), the service where it
 /// differs from the parent's, and the duration at the trailing edge, where a
 /// bar can never cover it. A collapsed span's "N spans" sits by its bar,
 /// where the timeline has room (a narrow Span column clipped it here).
 final class SpanNameCell: NSTableCellView {
     private let dot = NSImageView()
     private let octagon = NSImageView()
+    /// One icon per finding kind, shown when the span carries it.
+    private let marks = FindingKind.allCases.map { kind in
+        let view = NSImageView()
+        view.image = NSImage(systemSymbolName: kind.symbol, accessibilityDescription: kind.title)
+        view.contentTintColor = .systemOrange
+        view.isHidden = true
+        return view
+    }
     private let name = NSTextField(labelWithString: "")
     private let service = NSTextField(labelWithString: "")
     private let duration = NSTextField(labelWithString: "")
@@ -42,7 +50,7 @@ final class SpanNameCell: NSTableCellView {
         duration.textColor = .secondaryLabelColor
         duration.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
         duration.alignment = .right
-        for view in [dot, octagon, name, service, duration] { view.setContentHuggingPriority(.required, for: .horizontal) }
+        for view in [dot, octagon, name, service, duration] + marks { view.setContentHuggingPriority(.required, for: .horizontal) }
         duration.setContentCompressionResistancePriority(.required, for: .horizontal)
         // When space runs out the service gives way first, then the name
         // truncates; a service with no room for a few letters is not drawn
@@ -51,7 +59,7 @@ final class SpanNameCell: NSTableCellView {
         service.setContentCompressionResistancePriority(.init(249), for: .horizontal)
         name.setContentCompressionResistancePriority(.init(251), for: .horizontal)
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let stack = NSStackView(views: [dot, octagon, name, service, spacer, duration])
+        let stack = NSStackView(views: [dot, octagon] + marks + [name, service, spacer, duration])
         stack.spacing = Space.xs
         stack.alignment = .centerY
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -65,7 +73,7 @@ final class SpanNameCell: NSTableCellView {
         // VoiceOver reads the row as one sentence (S-005 Access).
         setAccessibilityElement(true)
         setAccessibilityRole(.cell)
-        for view in [dot, octagon, name, service, duration] { view.setAccessibilityElement(false) }
+        for view in [dot, octagon, name, service, duration] + marks { view.setAccessibilityElement(false) }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -80,8 +88,8 @@ final class SpanNameCell: NSTableCellView {
     /// The room the name and service share: the cell less the dot, the
     /// octagon, the duration, the margins and the gaps between them.
     private var textRoom: CGFloat {
-        let fixed = [dot, octagon, duration].filter { !$0.isHidden }.map(\.intrinsicContentSize.width).reduce(0, +)
-        let gaps = CGFloat([dot, octagon, name, service, spacer, duration].filter { !$0.isHidden }.count - 1) * Space.xs
+        let fixed = ([dot, octagon, duration] + marks).filter { !$0.isHidden }.map(\.intrinsicContentSize.width).reduce(0, +)
+        let gaps = CGFloat(([dot, octagon, name, service, spacer, duration] + marks).filter { !$0.isHidden }.count - 1) * Space.xs
         return bounds.width - Space.xs - Space.sm - fixed - gaps
     }
 
@@ -106,11 +114,15 @@ final class SpanNameCell: NSTableCellView {
     /// The octagon shows (self-test).
     var showsError: Bool { !octagon.isHidden }
 
+    /// The finding icons shown, in order (self-test).
+    var shownFindings: [FindingKind] { zip(FindingKind.allCases, marks).filter { !$0.1.isHidden }.map(\.0) }
+
     func configure(name text: String, service shown: String?, duration time: String, color: NSColor, isError: Bool,
-                   hiddenCount: Int, isOrphan: Bool, label: String) {
+                   findings: [FindingKind] = [], hiddenCount: Int, isOrphan: Bool, label: String) {
         duration.stringValue = time
         dot.contentTintColor = color
         octagon.isHidden = !isError
+        for (kind, mark) in zip(FindingKind.allCases, marks) { mark.isHidden = !findings.contains(kind) }
         name.stringValue = text
         service.stringValue = shown ?? ""
         service.isHidden = shown == nil
@@ -118,6 +130,7 @@ final class SpanNameCell: NSTableCellView {
         let named = shown.map { "\(text) · \($0)" } ?? text
         var help = hiddenCount == 0 ? named : "\(named) (\(TraceList.spansText(hiddenCount)))"
         if isOrphan { help += " · \(Waterfall.orphanHelp)" }
+        if !findings.isEmpty { help += " · " + findings.map(\.title).joined(separator: ", ") }
         toolTip = help
         name.toolTip = help
         setAccessibilityLabel(hiddenCount == 0 ? label : "\(label), \(TraceList.spansText(hiddenCount))")

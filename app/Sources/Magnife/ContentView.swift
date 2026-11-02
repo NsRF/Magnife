@@ -206,10 +206,11 @@ struct TraceWaterfall: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             WaterfallHeader(trace: trace)
+            FindingsStrip()
             Divider()
             WaterfallOutline(model: model, generation: model.waterfallGeneration, waterfall: model.waterfall,
-                             collapsed: model.collapsedSpans, selected: model.selectedSpanID,
-                             colors: model.serviceColors)
+                             findings: model.openTraceFindings, collapsed: model.collapsedSpans,
+                             selected: model.selectedSpanID, colors: model.serviceColors)
         }
     }
 }

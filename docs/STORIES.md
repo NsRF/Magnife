@@ -295,7 +295,7 @@ Depends: S-005
 Acceptance:
 - [unit] A span with `db.system` and a duration over 100 ms (decided by the agent) gets a Slow SQL finding.
 - [snap] The trace row shows a finding badge; the span is marked in the waterfall; the span detail says why.
-Status: todo
+Status: done
 
 ### S-024 See N+1 queries flagged
 As the user, I see when one trace runs the same SQL statement over and over.

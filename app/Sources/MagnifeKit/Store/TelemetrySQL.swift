@@ -133,6 +133,27 @@ enum TelemetrySQL {
         FROM spans WHERE trace_id = ? ORDER BY start_ns, id
         """
 
+    /// The columns the detectors read (S-023+): promoted columns only, no JSON.
+    static let detectorColumns = """
+        trace_id, span_id, name, kind, start_ns, duration_ns, status_code, status_message,
+        db_system, db_statement, http_method, http_status_code, http_route, http_url
+        """
+
+    /// The spans a detector can flag: database spans (spans_by_db).
+    static let detectorCandidate = "db_system IS NOT NULL"
+
+    /// One trace's candidate spans, by start.
+    static let detectorSpansOfTrace = """
+        SELECT \(detectorColumns) FROM spans
+        WHERE trace_id = ? AND \(detectorCandidate) ORDER BY start_ns, id
+        """
+
+    /// The candidate spans of several traces (a JSON array of trace ids): the trace list's badges.
+    static let detectorSpansOfTraces = """
+        SELECT \(detectorColumns) FROM spans
+        WHERE trace_id IN (SELECT value FROM json_each(?)) AND \(detectorCandidate) ORDER BY start_ns, id
+        """
+
     static let spanByID = "SELECT \(spanColumns) FROM spans WHERE trace_id = ? AND span_id = ?"
 
     static let resourceByID = "SELECT id, service_name, attributes FROM resources WHERE id = ?"

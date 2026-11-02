@@ -266,6 +266,31 @@ public final class TelemetryReader: Sendable {
         return read.map { SpanDetail(span: $0.0, resource: $0.1, logs: $0.2) }
     }
 
+    // MARK: Findings (S-023+)
+
+    /// The open trace's findings: the spans a detector can flag are read and
+    /// the detectors run here, off the main actor.
+    @concurrent
+    public func traceFindings(traceID: String) async throws -> TraceFindings {
+        let spans = try await pool.read {
+            try DetectorSpan.fetchAll($0, sql: TelemetrySQL.detectorSpansOfTrace, arguments: [traceID])
+        }
+        return Detectors.findings(in: spans)
+    }
+
+    /// The trace list's badges for these traces, in one read; a trace with
+    /// no finding gets an empty summary.
+    @concurrent
+    public func findingSummaries(traceIDs: [String]) async throws -> [String: FindingSummary] {
+        guard !traceIDs.isEmpty else { return [:] }
+        let ids = String(decoding: try JSONEncoder().encode(traceIDs), as: UTF8.self)
+        let spans = try await pool.read {
+            try DetectorSpan.fetchAll($0, sql: TelemetrySQL.detectorSpansOfTraces, arguments: [ids])
+        }
+        let found = Detectors.findingsByTrace(spans)
+        return Dictionary(traceIDs.map { ($0, found[$0]?.summary ?? FindingSummary()) }, uniquingKeysWith: { first, _ in first })
+    }
+
     @concurrent
     public func resource(id: Int64) async throws -> ResourceRecord? {
         try await pool.read { try ResourceRecord.fetchOne($0, sql: TelemetrySQL.resourceByID, arguments: [id]) }

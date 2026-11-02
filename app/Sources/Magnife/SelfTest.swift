@@ -51,6 +51,8 @@ enum SelfTest {
                 await checkSavedFilters(model)
             } else if only == "keyboard" {
                 await checkKeyboard(model)
+            } else if only == "findings" {
+                await checkFindings(model)
             } else if only == "retention" {
                 await checkRetention(model)
             } else if only == "span-detail" {
@@ -73,6 +75,7 @@ enum SelfTest {
                 await checkExceptions(model)
                 await checkSpanLogs(model)
                 await checkTraceLogs(model)
+                await checkFindings(model)
                 await checkLogs(model)
                 await checkLogFilters(model)
                 await checkRetention(model)

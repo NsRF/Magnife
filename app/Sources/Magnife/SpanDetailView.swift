@@ -61,7 +61,8 @@ struct SpanTab: View {
         if let detail = model.spanDetail {
             ScrollViewReader { proxy in
                 ScrollView {
-                    SpanDetailContent(detail: detail)
+                    SpanDetailContent(detail: detail,
+                                      findings: model.openTraceFindings.findings(forSpan: detail.span.spanID))
                 }
                 // Another span starts at the top, so an Error span opens on Exception (S-007).
                 .id(SpanDetailValueID.span(detail))
@@ -102,11 +103,25 @@ struct SpanTab: View {
 
 struct SpanDetailContent: View {
     let detail: SpanDetail
+    /// The span's findings (S-023+): a Findings section before the others.
+    var findings: [Finding] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.lg) {
             SpanDetailHeader(detail: detail)
                 .gridProbe("span-header", area: "span-detail")
+            if !findings.isEmpty {
+                VStack(alignment: .leading, spacing: Space.lg) {
+                    Divider()
+                    VStack(alignment: .leading, spacing: Space.sm) {
+                        Text("Findings")
+                            .font(.headline)
+                            .accessibilityAddTraits(.isHeader)
+                        FindingList(findings: findings)
+                    }
+                }
+                .gridProbe("section-findings", area: "span-detail")
+            }
             ForEach(detail.sections) { section in
                 VStack(alignment: .leading, spacing: Space.lg) {
                     Divider()

@@ -1,0 +1,281 @@
+import Foundation
+import GRDB
+
+/// The columns of a span the detectors read: the promoted `db_*` and
+/// `http_*` columns (PROGRESS decision 3), never the attribute JSON.
+public struct DetectorSpan: Sendable, Hashable, FetchableRecord {
+    public var traceID: String
+    public var spanID: String
+    public var name: String
+    public var kind: SpanKind
+    public var startNs: Int64
+    public var durationNs: Int64
+    public var status: SpanStatus
+    public var statusMessage: String
+    public var dbSystem: String?
+    public var dbStatement: String?
+    public var httpMethod: String?
+    public var httpStatusCode: Int?
+    public var httpRoute: String?
+    public var httpURL: String?
+
+    public init(traceID: String = "", spanID: String, name: String = "", kind: SpanKind = .client, startNs: Int64 = 0,
+                durationNs: Int64, status: SpanStatus = .unset, statusMessage: String = "",
+                dbSystem: String? = nil, dbStatement: String? = nil, httpMethod: String? = nil,
+                httpStatusCode: Int? = nil, httpRoute: String? = nil, httpURL: String? = nil) {
+        self.traceID = traceID
+        self.spanID = spanID
+        self.name = name
+        self.kind = kind
+        self.startNs = startNs
+        self.durationNs = durationNs
+        self.status = status
+        self.statusMessage = statusMessage
+        self.dbSystem = dbSystem
+        self.dbStatement = dbStatement
+        self.httpMethod = httpMethod
+        self.httpStatusCode = httpStatusCode
+        self.httpRoute = httpRoute
+        self.httpURL = httpURL
+    }
+
+    public init(row: Row) throws {
+        traceID = try row.decode(forColumn: "trace_id")
+        spanID = try row.decode(forColumn: "span_id")
+        name = try row.decode(forColumn: "name")
+        kind = SpanKind(code: try row.decode(forColumn: "kind"))
+        startNs = try row.decode(forColumn: "start_ns")
+        durationNs = try row.decode(forColumn: "duration_ns")
+        status = SpanStatus(code: try row.decode(forColumn: "status_code"))
+        statusMessage = try row.decode(forColumn: "status_message")
+        dbSystem = try row.decode(forColumn: "db_system")
+        dbStatement = try row.decode(forColumn: "db_statement")
+        httpMethod = try row.decode(forColumn: "http_method")
+        httpStatusCode = try row.decode(forColumn: "http_status_code")
+        httpRoute = try row.decode(forColumn: "http_route")
+        httpURL = try row.decode(forColumn: "http_url")
+    }
+}
+
+/// What a detector flagged (docs/GLOSSARY.md, Finding). Orange with its
+/// icon and name on screen, never a service color.
+public enum FindingKind: Int, Sendable, CaseIterable, Comparable, Identifiable {
+    case slowSQL
+
+    public var id: Int { rawValue }
+    public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+
+    /// The badge, strip and section title.
+    public var title: String {
+        switch self {
+        case .slowSQL: "Slow SQL"
+        }
+    }
+
+    /// The SF Symbol (docs/ux.md, S-023 to S-025).
+    public var symbol: String {
+        switch self {
+        case .slowSQL: "cylinder"
+        }
+    }
+}
+
+/// One finding: its kind and the spans it is about, in start order. A click
+/// on its strip line selects the first of them.
+public struct Finding: Sendable, Hashable, Identifiable {
+    public var kind: FindingKind
+    public var spanIDs: [String]
+    public var startNs: Int64
+    /// Slow SQL: the query's duration.
+    public var durationNs: Int64
+    /// Slow SQL: the statement as stored.
+    public var statement: String?
+    public var dbSystem: String?
+    public var spanName: String
+
+    public var id: String { "\(kind.rawValue)/\(spanIDs.first ?? "")" }
+
+    /// The strip line under the waterfall header:
+    /// "Slow SQL · 340 ms · SELECT * FROM orders WHERE …" (the view cuts it).
+    public var line: String {
+        switch kind {
+        case .slowSQL:
+            [kind.title, DurationFormat.string(nanoseconds: durationNs), Self.oneLine(statement ?? spanName)]
+                .joined(separator: " · ")
+        }
+    }
+
+    /// The span detail's text under the title (docs/ux.md, S-023 Words).
+    public var detailText: String {
+        switch kind {
+        case .slowSQL:
+            let took = DurationFormat.string(nanoseconds: durationNs)
+            let threshold = DurationFormat.string(nanoseconds: Detectors.slowSQLThresholdNs)
+            let query = statement == nil ? "This \(dbSystem ?? "database") query" : "This query"
+            return "\(query) took \(took). Queries over \(threshold) are flagged."
+        }
+    }
+
+    /// The statement shown under the text, monospaced; nil when there is none.
+    public var shownStatement: String? { statement }
+
+    /// The strip line for VoiceOver: "Select span: Slow SQL, 340 milliseconds".
+    public var accessibilityLabel: String {
+        switch kind {
+        case .slowSQL: "Select span: \(kind.title), \(DurationFormat.spoken(nanoseconds: durationNs))"
+        }
+    }
+
+    /// What the waterfall row adds for VoiceOver for this span: "Slow SQL".
+    public func spokenMark(for spanID: String) -> String { kind.title }
+
+    /// A statement on one line, its runs of white space as one space, and
+    /// at most 300 characters: the strip line shows one line.
+    static func oneLine(_ text: String) -> String {
+        let words = text.prefix(600).split(whereSeparator: \.isWhitespace)
+        let joined = words.joined(separator: " ")
+        return joined.count > 300 ? String(joined.prefix(300)) + "…" : joined
+    }
+}
+
+/// Every finding of one trace, and which spans carry which.
+public struct TraceFindings: Sendable, Hashable {
+    /// In kind order, then by the first span's start.
+    public private(set) var findings: [Finding] = []
+    /// The findings of each span, by span id, as indexes into `findings`.
+    private var bySpan: [String: [Int]] = [:]
+
+    public init() {}
+
+    public init(_ findings: [Finding]) {
+        self.findings = findings.sorted { ($0.kind, $0.startNs, $0.id) < ($1.kind, $1.startNs, $1.id) }
+        for (index, finding) in self.findings.enumerated() {
+            for spanID in finding.spanIDs { bySpan[spanID, default: []].append(index) }
+        }
+    }
+
+    public var isEmpty: Bool { findings.isEmpty }
+    public var count: Int { findings.count }
+
+    /// The findings that name this span, in kind order.
+    public func findings(forSpan spanID: String) -> [Finding] {
+        bySpan[spanID]?.map { findings[$0] } ?? []
+    }
+
+    /// The kinds this span carries, in order: the waterfall row's icons.
+    public func kinds(forSpan spanID: String) -> [FindingKind] {
+        var kinds: [FindingKind] = []
+        for finding in findings(forSpan: spanID) where !kinds.contains(finding.kind) { kinds.append(finding.kind) }
+        return kinds
+    }
+
+    /// The trace list's badges: one per kind, with its count.
+    public var summary: FindingSummary {
+        var counts: [FindingKind: Int] = [:]
+        for finding in findings { counts[finding.kind, default: 0] += 1 }
+        return FindingSummary(counts: counts)
+    }
+
+    /// The strip shows this many lines, then "Show All Findings (7)" (docs/ux.md, S-023 States).
+    public static let stripPreviewCount = 3
+
+    public func shownInStrip(all: Bool) -> ArraySlice<Finding> {
+        all ? findings[...] : findings.prefix(Self.stripPreviewCount)
+    }
+
+    /// "Show All Findings (7)" while lines are cut, else nil.
+    public var showAllTitle: String? {
+        findings.count > Self.stripPreviewCount ? "Show All Findings (\(findings.count.formatted()))" : nil
+    }
+}
+
+/// A trace row's badges: the kinds found and how many of each.
+public struct FindingSummary: Sendable, Hashable {
+    public var counts: [FindingKind: Int]
+
+    public init(counts: [FindingKind: Int] = [:]) { self.counts = counts.filter { $0.value > 0 } }
+
+    public var kinds: [FindingKind] { counts.keys.sorted() }
+    public var isEmpty: Bool { counts.isEmpty }
+
+    /// The badge's tooltip: "Slow SQL: 3 queries over 100 ms".
+    public func help(_ kind: FindingKind) -> String {
+        let count = counts[kind] ?? 0
+        let threshold = DurationFormat.string(nanoseconds: Detectors.slowSQLThresholdNs)
+        switch kind {
+        case .slowSQL:
+            return "\(kind.title): \(count == 1 ? "1 query" : "\(count.formatted()) queries") over \(threshold)"
+        }
+    }
+
+    /// What the row adds for VoiceOver: "findings: Slow SQL".
+    public var spoken: String? {
+        isEmpty ? nil : "findings: " + kinds.map(\.title).joined(separator: ", ")
+    }
+}
+
+/// The detectors (S-023 to S-025): pure functions over a trace's spans,
+/// run off the main actor where the spans are read.
+public enum Detectors {
+    /// A database span that took longer than this is Slow SQL (docs/GLOSSARY.md: over 100 ms).
+    public static let slowSQLThresholdNs: Int64 = 100_000_000
+
+    /// Every finding in one trace's spans.
+    public static func findings(in spans: [DetectorSpan]) -> TraceFindings {
+        TraceFindings(slowSQL(spans))
+    }
+
+    /// Findings of several traces at once, by trace id: the trace list's badges.
+    public static func findingsByTrace(_ spans: [DetectorSpan]) -> [String: TraceFindings] {
+        Dictionary(grouping: spans, by: \.traceID).mapValues(findings(in:))
+    }
+
+    /// Slow SQL: a span with `db_system` and a duration over 100 ms, one finding each.
+    public static func slowSQL(_ spans: [DetectorSpan]) -> [Finding] {
+        spans.compactMap { span in
+            guard span.dbSystem != nil, span.durationNs > slowSQLThresholdNs else { return nil }
+            let statement = span.dbStatement.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+            return Finding(kind: .slowSQL, spanIDs: [span.spanID], startNs: span.startNs, durationNs: span.durationNs,
+                           statement: statement, dbSystem: span.dbSystem, spanName: span.name)
+        }
+    }
+}
+
+/// The trace list's badges, kept per trace and read again only when the
+/// trace's `updated_seq` changes (a trace still receiving spans gains badges in place).
+public struct FindingCache: Sendable, Equatable {
+    private var entries: [String: Entry] = [:]
+
+    private struct Entry: Sendable, Equatable {
+        var updatedSeq: Int64
+        var summary: FindingSummary
+    }
+
+    public init() {}
+
+    public var count: Int { entries.count }
+
+    /// The badges of a trace as of its shown row, or nil while not read yet.
+    public func summary(for trace: TraceSummary) -> FindingSummary? {
+        entries[trace.traceID]?.summary
+    }
+
+    /// The rows whose badges are missing or older than the row.
+    public func stale(_ traces: [TraceSummary]) -> [TraceSummary] {
+        traces.filter { entries[$0.traceID]?.updatedSeq != $0.updatedSeq }
+    }
+
+    /// Takes summaries read for the rows at `seqs`; never replaces a newer one.
+    public mutating func store(_ summaries: [String: FindingSummary], seqs: [String: Int64]) {
+        for (id, summary) in summaries {
+            guard let seq = seqs[id] else { continue }
+            if let old = entries[id], old.updatedSeq > seq { continue }
+            entries[id] = Entry(updatedSeq: seq, summary: summary)
+        }
+    }
+
+    /// Forgets traces no longer shown.
+    public mutating func keep(only ids: Set<String>) {
+        entries = entries.filter { ids.contains($0.key) }
+    }
+}

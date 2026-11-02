@@ -157,6 +157,17 @@ this app starts the helper and reads its database. No server, no accounts.
   `KeyboardViews.swift` (`listKeys`), the sidebar's Tab in `SidebarTabKeys`
   (a local key monitor). Self-test keys go through `NSApp.postEvent`;
   `APP_SELFTEST_ONLY=keyboard` runs them and the menu audit.
+- Findings (S-023+): detectors are pure MagnifeKit functions
+  (`Models/Findings.swift`, `Detectors`) over `DetectorSpan` (promoted
+  `db_*` / `http_*` columns only, never attribute JSON); they run inside the
+  reader's `traceFindings` (read with the waterfall, `openTraceFindings`) and
+  `findingSummaries` (the list's badges, one read for the stale rows,
+  `FindingCache` keyed by `updated_seq`, `AppModel+Findings.swift`). Views in
+  `FindingViews.swift`: `RouteCell` badges (icon alone unless the whole route
+  fits beside the word), `FindingsStrip` under the waterfall header
+  (`selectFinding`), `FindingList` first in the span detail; the waterfall
+  row's orange icons are `SpanNameCell.marks`. `APP_SELFTEST_ONLY=findings`
+  runs the checks and the cost INFO lines.
 - Test runs and the user's defaults: AppKit saves window frames and column
   widths in the app's domain by itself; snapshot and self-test runs copy
   those keys aside at launch (`AppDefaults.protectLayout`, in
@@ -246,6 +257,8 @@ this app starts the helper and reads its database. No server, no accounts.
   window's columns start at their ideal widths, and the run puts the user's
   layout keys back when it ends (`AppDefaults.restoreLayout`).
   `03-trace-detail-waterfall-focus` and `-span-focus` show the keyboard focus (S-022).
+  `03-trace-detail-slow-sql` shows a strip line clicked (S-023) and
+  `02-trace-list-findings-wide` the badges' words in a widened Route column.
 - Never test against the real database in `~/Library/Application Support/Magnife/`.
 - Then check the grid: `tools/grid-lint.sh` and `swift tools/check-layout.swift /tmp/Magnife-shots/*-layout.json`. Both print PASS.
 - A change is done when the build has no errors, the grid checks pass, and you looked at the light and dark snapshots.

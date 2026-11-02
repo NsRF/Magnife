@@ -35,16 +35,16 @@ struct TraceListView: View {
                 ServiceName(name: trace.rootService)
                     // VoiceOver reads the row as one sentence here; the other cells are
                     // hidden from it, so it is read once (S-004 Access).
-                    .accessibilityLabel(trace.accessibilityLabel)
+                    .accessibilityLabel(([trace.accessibilityLabel] + [model.findingSummary(for: trace)?.spoken].compactMap { $0 })
+                        .joined(separator: ", "))
                     // The one view inside the NSTableView: it reports scrolling (S-004).
                     .background(TraceListAnchor(scroller: model.listScroller))
                     .onAppear { if trace.id == model.traces.last?.id { model.loadMoreTraces() } }
             }
             .width(min: 64, ideal: 72, max: 200)
             TableColumn("Route") { trace in
-                Text(trace.route)
-                    .truncationMode(.middle)
-                    .help(trace.route)
+                // The route and its finding badges (S-023+).
+                RouteCell(route: trace.route, findings: model.findingSummary(for: trace))
                     .accessibilityHidden(true)
             }
             .width(min: 80, ideal: 98, max: .infinity)
