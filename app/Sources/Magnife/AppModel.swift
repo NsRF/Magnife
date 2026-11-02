@@ -230,6 +230,9 @@ final class AppModel {
     /// Switches to another database file (snapshot pages only).
     func useStore(at url: URL) async {
         reader = nil
+        // Another file has its own seqs.
+        listBaseSeq = 0
+        listAppliedSeq = 0
         storeState = .opening
         do {
             reader = try await TelemetryReader.open(at: url)

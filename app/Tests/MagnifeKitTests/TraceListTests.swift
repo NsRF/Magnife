@@ -49,17 +49,35 @@ struct TraceListTests {
             try insertTrace(db, id: traceID(7), service: "web", route: "GET /7",
                             startNs: Self.base + 7_000_000_000, seq: 7)
         }
-        let held = try await reader.heldTraces(base: 5, applied: 5)
+        let shown = (1...5).reversed().map { traceID($0) }
+        let held = try await reader.heldTraces(base: 5, applied: 5, shown: shown)
         #expect(held.newCount == 2)
         #expect(held.updated.map(\.traceID) == [traceID(3)])
         #expect(held.updated.first?.spanCount == 2)
         #expect(held.lastSeq == 7)
         // Applied up to 6: trace 3's change was already applied.
-        #expect(try await reader.heldTraces(base: 5, applied: 6).updated.isEmpty)
+        #expect(try await reader.heldTraces(base: 5, applied: 6, shown: shown).updated.isEmpty)
+        // A row that is not shown is not read.
+        #expect(try await reader.heldTraces(base: 5, applied: 5, shown: [traceID(1)]).updated.isEmpty)
         // A service scope counts only its traces.
-        let web = try await reader.heldTraces(base: 5, applied: 5, service: "web")
+        let web = try await reader.heldTraces(base: 5, applied: 5, shown: [traceID(2)], service: "web")
         #expect(web.newCount == 1)
         #expect(web.updated.isEmpty)
+    }
+
+    @Test("while holding, every shown row that changed is read, however many changed")
+    func heldManyUpdates() async throws {
+        let (dir, writer, reader) = try await makeStore(count: 1_500)
+        defer { dir.remove() }
+        try await writer.write { db in
+            try db.execute(sql: "UPDATE traces SET span_count = 3, updated_seq = 1501")
+        }
+        let shown = (1...1_500).reversed().map { traceID($0) }
+        let held = try await reader.heldTraces(base: 1_500, applied: 1_500, shown: shown)
+        #expect(held.updated.count == 1_500)
+        #expect(held.updated.allSatisfy { $0.spanCount == 3 })
+        // The oldest rows, far below the newest thousand, update too.
+        #expect(held.updated.contains { $0.traceID == traceID(1) })
     }
 
     @Test("a held row updates in place; new and unshown rows stay out")
@@ -95,6 +113,8 @@ struct TraceListTests {
         row.durationNs = 1_240_000_000
         row.status = .ok
         #expect(row.accessibilityLabel == "checkout-api, POST /orders, 1.24 seconds, 1 span, OK")
+        row.status = .unset
+        #expect(row.accessibilityLabel == "checkout-api, POST /orders, 1.24 seconds, 1 span")
     }
 
     @Test("spoken durations", arguments: [

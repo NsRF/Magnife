@@ -19,41 +19,47 @@ struct TraceListView: View {
         return Table(model.traces, selection: $model.selectedTraceID) {
             TableColumn("Service") { trace in
                 ServiceName(name: trace.rootService)
+                    // VoiceOver reads the row as one sentence here; the other cells are
+                    // hidden from it, so it is read once (S-004 Access).
+                    .accessibilityLabel(trace.accessibilityLabel)
                     // The one view inside the NSTableView: it reports scrolling (S-004).
                     .background(TraceListAnchor(scroller: model.listScroller))
                     .onAppear { if trace.id == model.traces.last?.id { model.loadMoreTraces() } }
             }
-            .width(min: 100, ideal: 120)
+            .width(min: 64, ideal: 72, max: 200)
             TableColumn("Route") { trace in
                 Text(trace.route)
                     .truncationMode(.middle)
                     .help(trace.route)
+                    .accessibilityHidden(true)
             }
-            .width(min: 120, ideal: 220)
+            .width(min: 80, ideal: 98, max: .infinity)
             TableColumn("Duration") { trace in
                 Text(DurationFormat.string(nanoseconds: trace.durationNs))
                     .monospacedDigit()
-                    .accessibilityLabel(trace.spokenDuration)
+                    .accessibilityHidden(true)
             }
-            .width(min: 64, ideal: 72)
+            .width(min: 56, ideal: 56, max: 96)
             .alignment(.trailing)
             TableColumn("Spans") { trace in
                 Text(trace.spanCount, format: .number)
                     .monospacedDigit()
-                    .accessibilityLabel(trace.spokenSpanCount)
+                    .accessibilityHidden(true)
             }
-            .width(min: 44, ideal: 48)
+            .width(min: 52, ideal: 52, max: 80)
             .alignment(.trailing)
             TableColumn("Status") { trace in
                 StatusLabel(status: trace.status)
+                    .accessibilityHidden(true)
             }
-            .width(min: 56, ideal: 64)
+            .width(min: 64, ideal: 64, max: 96)
             TableColumn("Time") { trace in
                 Text(RelativeTime.string(for: trace.start, now: model.now))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                    .accessibilityHidden(true)
             }
-            .width(min: 136, ideal: 150)
+            .width(min: 88, ideal: 88, max: 140)
         }
         .alternatingRowBackgrounds(model.traces.isEmpty ? .disabled : .enabled)
         .overlay { emptyState }

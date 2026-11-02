@@ -19,16 +19,13 @@ enum TelemetrySQL {
         return "SELECT \(traceColumns) FROM traces \(filter) ORDER BY start_ns DESC, trace_id DESC LIMIT ?"
     }
 
-    /// Rows that existed at seq `base` and changed after seq `applied`, for
-    /// a list that holds still (S-004). Optional service as in latestTraces.
-    static func heldTraceUpdates(service: Bool) -> String {
-        let scope = service ? " AND trace_id IN (SELECT trace_id FROM spans WHERE service_name = ?)" : ""
-        return """
-            SELECT \(traceColumns) FROM traces
-            WHERE updated_seq > ? AND first_seq <= ?\(scope)
-            ORDER BY start_ns DESC, trace_id DESC LIMIT ?
-            """
-    }
+    /// The shown rows (a JSON array of trace ids) that changed after seq
+    /// `applied`, for a list that holds still (S-004). Primary-key lookups,
+    /// so every shown row is read however many changed, and no service scan.
+    static let heldTraceUpdates = """
+        SELECT \(traceColumns) FROM traces
+        WHERE trace_id IN (SELECT value FROM json_each(?)) AND updated_seq > ?
+        """
 
     /// Traces created after seq `base`: the "12 new traces" count (S-004).
     static func tracesCreatedAfter(service: Bool) -> String {

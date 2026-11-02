@@ -56,7 +56,8 @@ extension AppModel {
         }
         let previous = waterfall
         let result = try await Self.readWaterfall(reader, traceID: id, after: previous)
-        guard selectedTraceID == id else { return }
+        // Two refreshes can overlap: the older read never replaces a newer tree.
+        guard selectedTraceID == id, (result.trace?.updatedSeq ?? .max) >= (openTrace?.updatedSeq ?? 0) else { return }
         show(result.tree, of: result.trace ?? trace, collapsing: result.collapsed, opening: false)
     }
 

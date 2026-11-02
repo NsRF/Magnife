@@ -14,9 +14,12 @@ extension AppModel {
         let service = sidebar?.serviceName
         if isListHeld && !traces.isEmpty {
             let base = listBaseSeq
-            let held = try await reader.heldTraces(base: base, applied: listAppliedSeq, service: service)
-            // A scope change, a return to the top, or a newer page while reading reads again itself.
-            guard service == sidebar?.serviceName, reader === self.reader, isListHeld, listBaseSeq == base else { return }
+            let applied = listAppliedSeq
+            let held = try await reader.heldTraces(base: base, applied: applied, shown: traces.map(\.id), service: service)
+            // A scope change, a return to the top, or a newer page while reading reads again itself;
+            // an older read that finishes last never puts older rows back.
+            guard service == sidebar?.serviceName, reader === self.reader, isListHeld, listBaseSeq == base,
+                  held.lastSeq >= listAppliedSeq else { return }
             services = held.services
             let rows = TraceList.applying(held.updated, to: traces)
             if rows != traces { traces = rows }
@@ -25,7 +28,9 @@ extension AppModel {
         } else {
             let page = try await reader.tracePage(service: service)
             // Scrolled away while reading: inserting now would move the rows under the pointer.
-            guard service == sidebar?.serviceName, reader === self.reader, !isListHeld || traces.isEmpty else { return }
+            // Two reads can overlap (a batch and a return to the top): the older never wins.
+            guard service == sidebar?.serviceName, reader === self.reader, !isListHeld || traces.isEmpty,
+                  page.lastSeq >= listAppliedSeq else { return }
             services = page.services
             // Equal results leave the table alone.
             if traces != page.traces { traces = page.traces }

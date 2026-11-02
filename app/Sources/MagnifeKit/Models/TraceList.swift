@@ -37,8 +37,6 @@ public struct HeldTraces: Sendable, Equatable {
 public enum TraceList {
     /// Rows read per page (docs/ux.md, S-030).
     public static let pageSize = 200
-    /// At most this many changed rows are read per refresh while holding.
-    public static let heldUpdateLimit = 1_000
 
     /// The held list with changed rows replaced where they are: a trace still
     /// receiving spans updates its row without moving it, and rows that are
@@ -68,10 +66,11 @@ public enum TraceList {
 }
 
 extension TraceSummary {
-    /// What VoiceOver reads for the row, one part per column:
+    /// What VoiceOver reads for the row (S-004 Access):
     /// "checkout-api, POST /orders, 240 milliseconds, 18 spans, Error".
+    /// Unset shows blank, so it says nothing; the Time column is left out.
     public var spokenParts: [String] {
-        [rootService, route, spokenDuration, spokenSpanCount, status.title]
+        [rootService, route, spokenDuration, spokenSpanCount] + (status == .unset ? [] : [status.title])
     }
 
     /// The Duration cell for VoiceOver: "240 milliseconds".

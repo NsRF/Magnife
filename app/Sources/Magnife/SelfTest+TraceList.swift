@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import MagnifeKit
 
 /// S-004: the live trace list. Arrival time with the real helper the way the
@@ -18,10 +19,53 @@ extension SelfTest {
         check("colors follow the order services were first seen",
               byFirstSeen.map { model.serviceColors.slot(for: $0.name) } == Array(0..<byFirstSeen.count))
         let failed = model.traces.first { $0.route == "POST /checkout/pay" }
-        check("VoiceOver reads the HTTP 500 row as service, route, duration, spans, status",
+        check("the HTTP 500 row's sentence is service, route, duration, spans, status",
               failed?.accessibilityLabel.hasPrefix("web, POST /checkout/pay, ") == true
                 && failed?.accessibilityLabel.hasSuffix(" milliseconds, 5 spans, Error") == true,
               failed?.accessibilityLabel ?? "nil")
+        // What VoiceOver hears for that row, read the way VoiceOver reads it:
+        // through the Accessibility API, which needs the Accessibility
+        // permission. (Walking SwiftUI's accessibility elements in process
+        // crashed the app later, in its next render.)
+        guard let failed else { return }
+        guard AXIsProcessTrusted() else {
+            print("INFO VoiceOver row check skipped: Magnife has no Accessibility permission")
+            return
+        }
+        let rows = accessibilityRows()
+        check("VoiceOver reads the HTTP 500 row once, as that sentence",
+              rows.contains([failed.accessibilityLabel]), "\(rows.prefix(3))")
+    }
+
+    /// The texts of each row of this app's tables, through AXUIElement.
+    static func accessibilityRows() -> [[String]] {
+        func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {
+            var value: AnyObject?
+            return AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success ? value : nil
+        }
+        func texts(_ element: AXUIElement, depth: Int) -> [String] {
+            guard depth < 8 else { return [] }
+            var result: [String] = []
+            for name in [kAXDescriptionAttribute, kAXTitleAttribute, kAXValueAttribute] {
+                if let text = attribute(element, name) as? String, !text.isEmpty { result.append(text) }
+            }
+            for child in attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+                result += texts(child, depth: depth + 1)
+            }
+            return result
+        }
+        var rows: [[String]] = []
+        var stack = [AXUIElementCreateApplication(getpid())]
+        var visited = 0
+        while let element = stack.popLast(), visited < 5_000 {
+            visited += 1
+            if attribute(element, kAXRoleAttribute) as? String == kAXRowRole {
+                rows.append(texts(element, depth: 0))
+                continue
+            }
+            stack.append(contentsOf: attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [])
+        }
+        return rows
     }
 
     /// A trace reaches the list within 1 second of its spans arriving.
@@ -72,6 +116,10 @@ extension SelfTest {
         check("the list reads one page of 200 rows", added > 200 && model.traces.count == TraceList.pageSize
               && model.hasMoreTraces, "\(added) added, \(model.traces.count) rows")
         let scroller = model.listScroller
+        // Asking the table for its rows before SwiftUI has applied the new ones
+        // makes it re-enter its own data source (AppKit's "reentrant operation
+        // in its NSTableView delegate" warning): let SwiftUI render first.
+        try? await Task.sleep(for: .milliseconds(300))
         let attached = await waitUntil(3) { scroller.rowCount == model.traces.count }
         check("the list finds its table's scroll view", attached)
         guard attached else { return }
@@ -111,6 +159,7 @@ extension SelfTest {
             !model.isListHeld && model.newTraceCount == 0 && model.traces.count == TraceList.pageSize
                 && model.traces.first?.id == newest?.id
         }
+        try? await Task.sleep(for: .milliseconds(300))
         check("Show Newest Traces scrolls to the top and inserts them",
               shown && scroller.offset <= TraceListScroller.tolerance && model.newTraceCount == 0
                 && MenuState.shared.newTraceCount == 0,
@@ -124,6 +173,26 @@ extension SelfTest {
               model.traces.first?.id == latest?.id && !model.isListHeld && scroller.firstVisibleRow == 0
                 && scroller.offset <= TraceListScroller.tolerance,
               "row \(scroller.firstVisibleRow ?? -1), offset \(scroller.offset), table \(scroller.rowCount) rows \(scroller.tableView?.frame ?? .zero), clip \(scroller.scrollView?.contentView.bounds ?? .zero), first \(model.traces.first?.id == latest?.id)")
+
+        // Two reads can overlap (a batch refresh and a return to the top). One
+        // that read the database before the rows shown never replaces them.
+        let shownRows = model.traces
+        let applied = model.listAppliedSeq
+        _ = await send(spans: 4)
+        let shownIDs = Set(shownRows.map(\.id))
+        for _ in 0..<50 {
+            if let top = try? await reader.latestTraces(limit: 1).first, !shownIDs.contains(top.id) { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        model.listAppliedSeq = applied + 1_000_000
+        await model.reload()
+        let kept = model.traces == shownRows
+        model.listAppliedSeq = applied
+        await model.reload()
+        let newestNow = try? await reader.latestTraces(limit: 1).first
+        check("a list read older than the rows shown is dropped, and the next one applies",
+              kept && model.traces != shownRows && model.traces.first?.id == newestNow?.id,
+              "kept \(kept), changed \(model.traces != shownRows), first \(model.traces.first?.id ?? "nil") newest \(newestNow?.id ?? "nil")")
     }
 }
 

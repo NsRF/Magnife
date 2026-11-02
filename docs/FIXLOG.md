@@ -79,3 +79,24 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: the open read swallowed the error, and `refreshOpenTrace` returned early whenever the waterfall was empty.
 - Fix: `isOpeningTrace` marks the read in flight; a refresh that finds a selected trace with an empty waterfall and no read in flight reads it again. Self-test "a trace whose first read failed opens on the next refresh".
 - Rule: an early return for "still loading" must tell "loading" from "failed".
+
+## An older list read could put older rows back, and held rows past the newest thousand never updated (S-004, M1 review)
+
+- Symptom: with a batch refresh in flight, scrolling back to the top started a second read; if the first finished last it put its older page back and moved `listBaseSeq` backwards, so the newest trace stayed missing until the next batch. While the list held still, a burst that changed more than 1,000 traces left the older shown rows with their old span count and status, although `listAppliedSeq` moved past the change.
+- Cause: the guards compared only the scope, not how new a read was; the held read took at most 1,000 changed rows, newest first, from all of the scope, then marked everything applied.
+- Fix: a page or held read whose `lastSeq` is below `listAppliedSeq` is dropped (the open trace's rebuild likewise by `updated_seq`); the held read asks only for the shown rows by id (`trace_id IN json_each(?)`, primary-key lookups, no cap and no scan of the service's spans). Unit test `heldManyUpdates` (1,500 changed rows, the oldest included); self-test "a list read older than the rows shown is dropped, and the next one applies".
+- Rule: when async reads can overlap, every result carries the version it read and older results never replace newer ones; a capped read never advances the "applied up to" mark past what it read.
+
+## VoiceOver read each trace row cell by cell, Time and "Unset" included (S-004, M1 review)
+
+- Symptom: `TraceSummary.accessibilityLabel` ("web, POST /checkout/pay, 64 milliseconds, 5 spans, Error") was used by no view; VoiceOver read each cell, including the Time cell and "Unset" for a blank status, and the self-test checked the string, not the table.
+- Cause: SwiftUI's TableRow has no accessibility label, so decision 33 put a spoken part in each cell and only unit-tested the sentence.
+- Fix: the Service cell carries the whole sentence and the other cells are hidden from VoiceOver, so the row reads once, as docs/STORIES.md S-004 Access says; Unset says nothing (it shows blank). The self-test reads the row through the Accessibility API (AXUIElement) when Magnife has that permission; walking SwiftUI's accessibility elements in process crashed the app in its next render, so it is not done.
+- Rule: a test of what VoiceOver hears reads the accessibility tree the way VoiceOver does, never the string the code meant to give it.
+
+## Trace list columns cut "30.000" and long routes while space was free (S-004, M1 review)
+
+- Symptom: the Spans column showed "30.0…" for a 30,000-span trace (en_BR digits), and at a wide list Route was cut while space was left after Time.
+- Cause: Spans was 44–48 pt and Route had no maximum, so the table gave extra width to no column in particular; the Time column was 136–150 pt for at most 86 pt of text.
+- Fix: widths from measured 13 pt text ("28 Nov, 22:32" 86 pt, "30.000" 44 pt, "2 min 5 s" 56 pt, the Error label 64 pt): Service 72, Route 98 and up (max: .infinity), Duration 56, Spans 52, Status 64, Time 88; at docs/ux.md's 520 pt list only Route truncates (in the middle, tooltip), and a wider list gives the room to Route.
+- Rule: size table columns from the longest text they show, measured, and give the free width to the column that truncates.

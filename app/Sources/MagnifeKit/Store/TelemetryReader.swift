@@ -77,21 +77,17 @@ public final class TelemetryReader: Sendable {
         }
     }
 
-    /// While the list holds still: rows that existed at seq `base` and changed
-    /// after seq `applied`, and how many traces are newer than `base`.
+    /// While the list holds still: the `shown` rows (trace ids) that changed
+    /// after seq `applied`, and how many traces in the scope are newer than `base`.
     @concurrent
-    public func heldTraces(base: Int64, applied: Int64, service: String? = nil,
-                           limit: Int = TraceList.heldUpdateLimit) async throws -> HeldTraces {
-        var updateArguments: StatementArguments = [applied, base]
+    public func heldTraces(base: Int64, applied: Int64, shown: [String], service: String? = nil) async throws -> HeldTraces {
+        let ids = String(decoding: try JSONEncoder().encode(shown), as: UTF8.self)
+        let updateArguments: StatementArguments = [ids, applied]
         var countArguments: StatementArguments = [base]
-        if let service {
-            updateArguments += [service]
-            countArguments += [service]
-        }
-        updateArguments += [limit]
+        if let service { countArguments += [service] }
         let scoped = service != nil
         return try await pool.read { [updateArguments, countArguments] db in
-            HeldTraces(updated: try TraceSummary.fetchAll(db, sql: TelemetrySQL.heldTraceUpdates(service: scoped),
+            HeldTraces(updated: try TraceSummary.fetchAll(db, sql: TelemetrySQL.heldTraceUpdates,
                                                           arguments: updateArguments),
                        newCount: try Int.fetchOne(db, sql: TelemetrySQL.tracesCreatedAfter(service: scoped),
                                                   arguments: countArguments) ?? 0,
