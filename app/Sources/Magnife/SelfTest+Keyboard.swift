@@ -93,10 +93,14 @@ extension SelfTest {
         let barShown = await waitUntil(1) { model.showsTraceFilterBar }
         // Under load the field can take more than a second to appear and focus; Esc before that goes elsewhere.
         let fieldFocused = await waitUntil(3) { window.firstResponder is NSTextView }
+        let focusedField = ((window.firstResponder as? NSTextView)?.delegate as? NSTextField)?.placeholderString ?? "none"
+        // A person's Esc comes well after the bar appeared; SwiftUI wires the bar's exit command a moment later.
+        try? await Task.sleep(for: .milliseconds(300))
         press(window, "\u{1b}", keyCode: 53)
         let barHidden = await waitUntil(2) { !model.showsTraceFilterBar }
         check("View > Show Filter Bar (⌘F) opens the bar with its field focused, and Esc closes it",
-              barShown && fieldFocused && barHidden, "shown \(barShown), focused \(fieldFocused), hidden \(barHidden)")
+              barShown && fieldFocused && barHidden,
+              "shown \(barShown), focused \(fieldFocused) (\(focusedField)), hidden \(barHidden)")
         model.showsTraceFilterBar = true
         window.makeFirstResponder(outline)
         key(window, .escape)
