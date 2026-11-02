@@ -1,10 +1,10 @@
 import AppKit
 import MagnifeKit
 
-/// Self-test for agents: runs the app's real functions on the fixture store,
+/// Self-test for agents: runs the app's real functions on the seeded store,
 /// prints PASS or FAIL per check, and quits with exit code 0 or 1.
 ///   APP_STORE=/tmp/Magnife-self.sqlite APP_HELPER=none ~/Applications/Magnife.app/Contents/MacOS/Magnife --selftest
-/// (tools/selftest.sh builds the fixture with tools/make-fixture-db.sh and runs this.)
+/// (tools/selftest.sh seeds the store through the real helper and runs this.)
 /// Add a check for every story with logic.
 @MainActor
 enum SelfTest {
@@ -30,6 +30,7 @@ enum SelfTest {
             await checkReader(model)
             await checkModel(model)
             await checkSupervisor()
+            await checkReceiver()
             checkApp()
             await checkWindowClose()
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
@@ -37,50 +38,54 @@ enum SelfTest {
         }
     }
 
-    /// The read layer against the fixture (tools/make-fixture-db.sh).
+    /// The read layer against the seed set (tools/seed.zsh: the helper
+    /// received scripts/send-sample-traces over gRPC and HTTP).
     private static func checkReader(_ model: AppModel) async {
-        check("the fixture store opens read-only", model.storeState == .ready, "\(model.storeState)")
+        check("the seeded store opens read-only", model.storeState == .ready, "\(model.storeState)")
         guard let reader = model.reader else { return }
         do {
             let traces = try await reader.latestTraces()
-            check("the fixture has 10 traces", traces.count == 10, "\(traces.count)")
+            check("the seed set has 5 traces", traces.count == 5, "\(traces.count)")
             check("traces come newest first", traces.map(\.startNs) == traces.map(\.startNs).sorted(by: >))
-            let page = try await reader.latestTraces(limit: 4)
-            let next = try await reader.latestTraces(limit: 4, after: page.last?.cursor)
+            let page = try await reader.latestTraces(limit: 2)
+            let next = try await reader.latestTraces(limit: 2, after: page.last?.cursor)
             check("the second page continues the first",
-                  (page + next).map(\.traceID) == Array(traces.prefix(8)).map(\.traceID))
+                  (page + next).map(\.traceID) == Array(traces.prefix(4)).map(\.traceID))
 
-            let failed = traces.first { $0.route == "POST /orders" }
-            check("the error trace reads as Error", failed?.status == .error)
+            let failed = traces.first { $0.route == "POST /checkout/pay" }
+            check("the HTTP 500 trace reads as Error", failed?.status == .error)
             let spans = try await reader.spans(traceID: failed?.traceID ?? "")
-            check("spans of the error trace", spans.count == 6, "\(spans.count)")
+            check("spans of the HTTP 500 trace", spans.count == 5, "\(spans.count)")
             check("its root span has no parent", spans.first?.isRoot == true)
             check("every other span's parent is in the trace",
                   spans.dropFirst().allSatisfy { span in spans.contains { $0.spanID == span.parentSpanID } })
             let exception = spans.flatMap(\.exceptions).first
             check("the exception has type and stack trace",
-                  exception?.type == "System.InvalidOperationException" && exception?.stackTrace.contains("line 42") == true)
+                  exception?.type == "Microsoft.EntityFrameworkCore.DbUpdateException" && exception?.stackTrace.isEmpty == false,
+                  "\(exception?.type ?? "none")")
 
             let services = try await reader.services()
             check("services by name", services.map(\.name) == ["checkout-api", "orders", "web"], "\(services.map(\.name))")
-            check("error counts derive from spans", services.map(\.errorCount) == [2, 0, 0], "\(services.map(\.errorCount))")
+            check("error counts derive from spans", services.map(\.errorCount) == [1, 1, 1], "\(services.map(\.errorCount))")
             let orders = try await reader.latestTraces(service: "orders")
-            check("a service filter keeps traces with its spans", orders.count == 4, "\(orders.count)")
+            check("a service filter keeps traces with its spans", orders.count == 3, "\(orders.count)")
 
-            let slow = try await reader.spans(traceID: traces.first { $0.route == "GET /api/orders/{id}" }?.traceID ?? "")
+            let slowTrace = traces.first { $0.route == "GET /admin/reports" }
+            let slow = try await reader.spans(traceID: slowTrace?.traceID ?? "")
             check("the slow SQL span reads its promoted columns",
-                  slow.contains { $0.dbSystem == "postgresql" && $0.durationNs == 1_240_000_000 })
-            check("the slow trace's duration reads 1.31 s",
-                  DurationFormat.string(nanoseconds: traces.first { $0.route == "GET /api/orders/{id}" }?.durationNs ?? 0) == "1.31 s")
+                  slow.contains { $0.dbSystem == "postgresql" && $0.durationNs == 851_000_000 })
+            check("the slow trace's duration reads 884 ms",
+                  DurationFormat.string(nanoseconds: slowTrace?.durationNs ?? 0) == "884 ms")
 
             let traceLogs = try await reader.logs(traceID: failed?.traceID ?? "")
-            check("logs of the error trace", traceLogs.count == 4, "\(traceLogs.count)")
+            check("logs of the HTTP 500 trace", traceLogs.count == 3, "\(traceLogs.count)")
             let errors = try await reader.latestLogs(level: .error)
             check("the Error level filter", errors.count == 3 && errors.allSatisfy { $0.level == .error }, "\(errors.count)")
             let all = try await reader.latestLogs()
-            check("logs without a trace id still read", all.contains { $0.traceID == nil })
-            check("last seq is 10", try await reader.lastSeq() == 10)
-            check("traces created after seq 7", try await reader.traceCount(createdAfter: 7) == 3)
+            check("logs without a trace id still read", all.filter { $0.traceID == nil }.count == 8)
+            let seq = try await reader.lastSeq()
+            check("last seq counts the helper's batches", seq >= 1, "\(seq)")
+            check("every trace was created after seq 0", try await reader.traceCount(createdAfter: 0) == 5)
             check("attribute keys for autocomplete", try await reader.attributeKeys(source: .span).contains { $0.key == "http.route" })
         } catch {
             check("the reader reads", false, "\(error)")
@@ -90,11 +95,11 @@ enum SelfTest {
     /// The model's list follows the sidebar and the helper's events.
     private static func checkModel(_ model: AppModel) async {
         await model.reload()
-        check("the list shows every trace", model.traces.count == 10, "\(model.traces.count)")
+        check("the list shows every trace", model.traces.count == 5, "\(model.traces.count)")
         check("the sidebar shows 3 services", model.services.count == 3)
         model.sidebar = .service("web")
         await model.reload()
-        check("a service in the sidebar filters the list", model.traces.count == 3, "\(model.traces.count)")
+        check("a service in the sidebar filters the list", model.traces.count == 4, "\(model.traces.count)")
         model.sidebar = .allTraces
         await model.reload()
 
@@ -170,7 +175,7 @@ enum SelfTest {
               !NSApp.windows.contains { $0.isVisible && $0.canBecomeMain })
     }
 
-    private static func check(_ name: String, _ ok: Bool, _ detail: String = "") {
+    static func check(_ name: String, _ ok: Bool, _ detail: String = "") {
         count += 1
         if !ok { failures += 1 }
         print(ok ? "PASS \(name)" : "FAIL \(name)\(detail.isEmpty ? "" : ": \(detail)")")

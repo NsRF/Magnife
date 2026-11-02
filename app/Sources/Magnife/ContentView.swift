@@ -16,6 +16,11 @@ struct ContentView: View {
         } detail: {
             TraceDetail()
                 .navigationSplitViewColumnWidth(min: 420, ideal: 560)
+                .toolbar {
+                    // Receiver status, at the leading edge of the detail column (docs/ux.md, Toolbar).
+                    ToolbarItem { ReceiverStatusView() }
+                    ToolbarSpacer(.flexible)
+                }
         }
         .noInitialFocus()
         .task {
@@ -85,8 +90,14 @@ struct TraceList: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        table
+            .safeAreaInset(edge: .top, spacing: 0) { Banners() }
+            .navigationTitle(model.title)
+    }
+
+    private var table: some View {
         @Bindable var model = model
-        Table(model.traces, selection: $model.selectedTraceID) {
+        return Table(model.traces, selection: $model.selectedTraceID) {
             TableColumn("Service") { trace in
                 ServiceName(name: trace.rootService)
             }
@@ -122,13 +133,6 @@ struct TraceList: View {
         }
         .alternatingRowBackgrounds(model.traces.isEmpty ? .disabled : .enabled)
         .overlay { emptyState }
-        .safeAreaInset(edge: .top, spacing: 0) { Banners() }
-        .navigationTitle(model.title)
-        .toolbar {
-            ToolbarItem {
-                ReceiverStatusView()
-            }
-        }
     }
 
     @ViewBuilder
@@ -205,79 +209,6 @@ struct StatusLabel: View {
             Text("")
                 .accessibilityLabel(status.title)
         }
-    }
-}
-
-/// The receiver's state in the toolbar, in the glossary's words.
-struct ReceiverStatusView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        Label(model.receiver.text, systemImage: model.receiver.isReceiving
-              ? "dot.radiowaves.left.and.right" : "exclamationmark.triangle")
-            .labelStyle(.titleAndIcon)
-            .foregroundStyle(.secondary)
-            .help("Magnife accepts OTLP over gRPC on \(HelperConfiguration.ports().grpc) and HTTP on \(HelperConfiguration.ports().http)")
-    }
-}
-
-/// Inline notices above the list: busy ports (S-001), a restarted receiver (S-008).
-struct Banners: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if !model.receiver.busyPorts.isEmpty {
-                Banner(text: busyText, symbol: "exclamationmark.triangle.fill") {
-                    Button("Try Again") { model.retryPorts() }
-                }
-            }
-            if model.receiverRestarted {
-                Banner(text: "The receiver stopped and was restarted. Spans sent in the last few seconds may be missing.",
-                       symbol: "arrow.clockwise.circle.fill") {
-                    Button("Close", systemImage: "xmark") { model.receiverRestarted = false }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.borderless)
-                }
-            }
-            if let message = model.helperMessage {
-                Banner(text: message, symbol: "exclamationmark.triangle.fill") {
-                    Button("Close", systemImage: "xmark") { model.helperMessage = nil }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.borderless)
-                }
-            }
-        }
-    }
-
-    private var busyText: String {
-        let busy = model.receiver.busyPorts
-        if busy.count == 2 {
-            return "Ports \(busy[0].port ?? 0) and \(busy[1].port ?? 0) are in use by other apps. Quit them, then click Try Again."
-        }
-        let port = busy[0]
-        let owner = port.owner.map { "by \($0)" } ?? "by another app"
-        return "Port \(port.port ?? 0) is in use \(owner). Quit that app, then click Try Again."
-    }
-}
-
-struct Banner<Action: View>: View {
-    let text: String
-    let symbol: String
-    @ViewBuilder let action: Action
-
-    var body: some View {
-        HStack(spacing: Space.sm) {
-            Label(text, systemImage: symbol)
-                .symbolRenderingMode(.multicolor)
-            Spacer(minLength: Space.sm)
-            action
-        }
-        .padding(.horizontal, Space.md)
-        .padding(.vertical, Space.sm)
-        .background(.bar)
-        .overlay(alignment: .bottom) { Divider() }
-        .accessibilityElement(children: .contain)
     }
 }
 

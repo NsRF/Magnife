@@ -36,7 +36,7 @@ enum SnapshotPage: String, CaseIterable {
         case .emptyState, .traceList, .logs, .commandK, .menuBar, .settings:
             break
         case .traceDetail, .spanDetail:
-            // The trace with the exception (fixture trace 2).
+            // The newest trace with an Error span (the seed set's exception).
             model.selectedTraceID = model.traces.first { $0.status == .error }?.traceID
         case .filterBar:
             model.sidebar = .service("checkout-api")
@@ -47,8 +47,9 @@ enum SnapshotPage: String, CaseIterable {
 
 /// Screenshot mode for agents.
 ///   APP_STORE=/tmp/Magnife-test.sqlite APP_HELPER=none APP_SNAPSHOT=/tmp/Magnife-shots ~/Applications/Magnife.app/Contents/MacOS/Magnife
-/// writes <page>-light.png and <page>-dark.png for every SnapshotPage, and
-/// 09-settings-<tab>-light.png and -dark.png for every Settings tab, then quits.
+/// writes <page>-light.png and <page>-dark.png for every SnapshotPage,
+/// 02-trace-list-busy (the busy-port banner),
+/// and 09-settings-<tab>-light.png and -dark.png for every Settings tab, then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
 /// APP_SNAPSHOT_PAGES=02-trace-list,09-settings limits the pages.
 /// Add APP_ACCENT=<id> to see the pages in another accent.
@@ -84,6 +85,7 @@ enum Snapshot {
                     await page.prepare(model)
                     try? await Task.sleep(for: .seconds(0.8))
                     capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
+                    if page == .traceList { await captureReceiverStates(model, dir: dir, mode: mode) }
                 }
             }
             if pages.contains(.settings) {
@@ -106,6 +108,23 @@ enum Snapshot {
             for window in NSApp.windows { if let sheet = window.attachedSheet { window.endSheet(sheet) } }
             NSApp.terminate(nil)
         }
+    }
+
+    /// The S-001 banner: 02-trace-list-busy (one port held by otelcol-contrib).
+    /// APP_HELPER=none has no helper, so these replay its "ports" lines.
+    private static func captureReceiverStates(_ model: AppModel, dir: String, mode: String) async {
+        let page = SnapshotPage.traceList.rawValue
+        let grpc = PortStatus(addr: "127.0.0.1:4317", state: .listening)
+        let http = PortStatus(addr: "127.0.0.1:4318", state: .listening)
+        var busyHTTP = http
+        busyHTTP.state = .busy
+        busyHTTP.owner = "otelcol-contrib"
+        for (name, ports) in [("busy", ReceiverPorts(grpc: grpc, http: busyHTTP))] {
+            model.handle(.helper(.ports(ports)))
+            try? await Task.sleep(for: .seconds(0.8))
+            capture(to: "\(dir)/\(page)-\(name)-\(mode).png")
+        }
+        model.showReceiverListening()
     }
 
     /// Captures the real window with screencapture, so glass, sidebars, and

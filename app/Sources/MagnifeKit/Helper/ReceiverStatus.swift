@@ -8,6 +8,9 @@ public enum ReceiverStatus: Sendable, Equatable {
     /// The helper could not run at all.
     case stopped(String)
 
+    /// Starting shows nothing until it has taken this long (S-001).
+    public static let quietStart: TimeInterval = 0.5
+
     /// "Receiving on 4317 and 4318", "Receiving on 4318 only", "Not receiving".
     public var text: String {
         switch self {
@@ -27,6 +30,13 @@ public enum ReceiverStatus: Sendable, Equatable {
         }
     }
 
+    /// The toolbar's text after the receiver has been starting for `elapsed`
+    /// seconds: nothing while a start is still quick, then `text`.
+    public func statusText(startingFor elapsed: TimeInterval) -> String? {
+        if self == .starting && elapsed < Self.quietStart { return nil }
+        return text
+    }
+
     /// True when at least one port listens.
     public var isReceiving: Bool {
         if case .ports(let ports) = self { return ports.grpc.isListening || ports.http.isListening }
@@ -37,5 +47,38 @@ public enum ReceiverStatus: Sendable, Equatable {
     public var busyPorts: [PortStatus] {
         guard case .ports(let ports) = self else { return [] }
         return [ports.grpc, ports.http].filter { !$0.isListening }
+    }
+
+    /// The S-001 / S-002 banner, or nil while no port is busy.
+    public var busyBanner: String? {
+        let busy = busyPorts
+        switch busy.count {
+        case 0:
+            return nil
+        case 1:
+            let owner = busy[0].owner.flatMap { $0.isEmpty ? nil : $0 } ?? "another app"
+            return "Port \(Self.number(busy[0])) is in use by \(owner). Quit that app, then click Try Again."
+        default:
+            return "Ports \(Self.number(busy[0])) and \(Self.number(busy[1])) are in use by other apps. Quit them, then click Try Again."
+        }
+    }
+
+    /// The status tooltip, with the ports the helper reported, else the configured ones.
+    public func tooltip(grpcPort: Int, httpPort: Int) -> String {
+        var grpc = grpcPort, http = httpPort
+        if case .ports(let ports) = self {
+            grpc = ports.grpc.port ?? grpcPort
+            http = ports.http.port ?? httpPort
+        }
+        return "Magnife accepts OTLP over gRPC on \(grpc) and HTTP on \(http)"
+    }
+
+    /// The banner for the helper's "error" line (docs/ux.md, App-wide states).
+    public static func problem(_ message: String) -> String {
+        "The receiver reported a problem: \(message)"
+    }
+
+    private static func number(_ port: PortStatus) -> String {
+        port.port.map(String.init) ?? port.addr
     }
 }

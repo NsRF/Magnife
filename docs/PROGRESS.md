@@ -17,6 +17,8 @@ Running log of the overnight MVP build (started 2026-11-02). Newest entries at t
   - Lifecycle with the real helper: helper listening 0.44 s after launch on 127.0.0.1 only; quit → helper gone in 0.15 s; `kill -9` app → helper gone in 0.017 s.
   - `docs/ux.md`: app-wide structure, menus, keyboard map, query language, UX blocks S-009–S-032; new glossary terms.
 - **Commits:** the repo's commits are signed through 1Password (`commit.gpgsign=true`, `op-ssh-sign`), which cannot sign while you are away ("1Password: agent returned an error"). Turning signing off was refused by the safety classifier, correctly. So the night's work is recorded as checkpoints with `scripts/night-checkpoint.sh` (a tree object + patch + Conventional Commit message per story in `.night/`), and `scripts/replay-night-commits.sh` turns them into real signed commits in one go. Tested the replay in a scratch clone.
+- Seed data now comes through the real pipeline: `app/tools/seed.zsh` starts the bundled helper standalone (`--no-stdin`, ports 0) on a fresh /tmp db, runs `scripts/send-sample-traces` (seed set, mixed protocols), waits until the batch lines add up (37 spans, 18 logs), keeps the helper running while the app reads, then stops it. `snap.sh` and `selftest.sh` source it; `tools/make-fixture-db.sh` removed (no unit test or page needs it; the empty state uses a second helper with nothing sent). Self-test reader checks rewritten for the seed set.
+- S-001 done: toolbar status hides for the first 0.5 s, then "Starting receiver…"; busy-port banner "Port N is in use by <owner>. Quit that app, then click Try Again." (owner from the helper, else "another app") with Try Again (stdin `retry`); helper `error` lines show "The receiver reported a problem: …" with Try Again; texts in `ReceiverStatus` (MagnifeKit), views in `ReceiverViews.swift`, receiver lifecycle in `AppModel+Receiver.swift`, self-test checks in `SelfTest+Receiver.swift` with the real helper on free ports (HTTP 200 for /v1/traces and /v1/logs within 1 s of start, lsof shows 127.0.0.1 only, non-loopback refused, HTTP busy + Try Again, *:port busy not bound alongside, quiet start). Unit tests 68 (+6 ReceiverStatusTests), self-test 54/54, snapshots `/tmp/Magnife-shots/02-trace-list-{light,dark}.png`, `02-trace-list-busy-{light,dark}.png`; grid checks PASS. [unit] criteria are the Go tests `TestHTTPEncodingsStoreSameRows`, `TestPortsThenBatchLines`, `TestWriterBatchesBySizeAndTime` and Swift `HelperSupervisorTests`.
 
 ## Decisions
 
@@ -39,6 +41,10 @@ Running log of the overnight MVP build (started 2026-11-02). Newest entries at t
 17. **Duration format:** "850 µs", "4.6 ms", "240 ms", "1.24 s", "12.4 s", "2 min 5 s".
 18. **Settings keeps the template's Appearance tab** (accent picker, "System" default) next to General and Notifications.
 19. **Commits are checkpoints until you replay them** (see Log). One checkpoint per story, Conventional Commit messages.
+20. **Seed data through the real helper** (STORIES "Seed data"): snapshots and the self-test seed /tmp databases with `tools/seed.zsh`; the helper uses port 0 and reports the real port in its `ports` line, so seeding never touches 4317/4318 or collides with other runs. The seed set is deterministic (fixed ids, times relative to now), so self-test checks name exact routes and counts.
+21. **Busy-port banner states in snapshots** are replayed `ports` lines (APP_HELPER=none has no helper); the real behavior is proven by the self-test with real port holders (a socket on 127.0.0.1 and one on 0.0.0.0). The owner the self-test sees is "Magnife" (it holds the ports itself).
+22. **Receiver status position:** docs/ux.md asks for the leading edge of the detail column. SwiftUI on macOS 26 puts a detail-column `ToolbarItem` at the trailing edge (a following `ToolbarSpacer(.flexible)` does not move it; `.navigation` moves it to the window's leading edge, before the title). Kept trailing in the detail column for now; revisit when S-003 adds the Copy Environment Variables and Search buttons next to it.
+23. **Helper `error` lines** show the app-wide banner "The receiver reported a problem: <message>" with Try Again, which sends `retry` and clears it; a helper that cannot launch at all keeps its own banner with a close button (Try Again could not help).
 
 ## Verified [U] items
 
@@ -50,6 +56,9 @@ Running log of the overnight MVP build (started 2026-11-02). Newest entries at t
 | Helper outlives the app and blocks the ports after Sparkle relaunch | platform.md | **Partly verified:** quit → helper gone in 0.15 s, `kill -9` → 0.017 s (stdin EOF). Sparkle itself not tested (no appcast). |
 
 ## Problems
+
+- A stale load-test helper from an earlier agent (`sleep 100000 | …/scratchpad/mi --db /tmp/mi-load/m.sqlite --grpc 127.0.0.1:44317 --http 127.0.0.1:44318`, pid 9478, started ~02:05) still holds 44317/44318. Not started by this agent, so left running; seeding uses port 0 and is unaffected.
+- Snapshots show gray traffic lights (window not key) while another app is frontmost; contents are unaffected.
 
 ## Blocked
 

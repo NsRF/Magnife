@@ -33,11 +33,16 @@ final class AppModel {
     private(set) var storeState: StoreState = .opening
     private(set) var reader: TelemetryReader?
 
-    private(set) var receiver: ReceiverStatus = .starting
+    var receiver: ReceiverStatus = .starting
+    /// True once the receiver has been starting for half a second (S-001):
+    /// before that the toolbar shows nothing.
+    var quietStartOver = false
     /// The helper crashed and was restarted (S-008 banner). Clears on the next trace.
     var receiverRestarted = false
-    /// The helper's last "error" line, or why it could not start.
+    /// Why the helper could not start (banner with a close button).
     var helperMessage: String?
+    /// The helper's last "error" line (banner with Try Again).
+    var helperProblem: String?
 
     private(set) var services: [ServiceSummary] = []
     private(set) var traces: [TraceSummary] = []
@@ -75,7 +80,8 @@ final class AppModel {
         }
     }
 
-    private var supervisor: HelperSupervisor?
+    var supervisor: HelperSupervisor?
+    var quietStartTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
     private var refreshAgain = false
     private var openTask: Task<Void, Never>?
@@ -93,9 +99,7 @@ final class AppModel {
         sidebar?.serviceName ?? "All Services"
     }
 
-    // MARK: Lifecycle
-
-    /// Opens the database and starts the helper (unless APP_HELPER=none).
+    /// Starts the clock for the Time column and opens the database.
     func start() {
         Task { await openStore() }
         Task { [weak self] in
@@ -104,76 +108,7 @@ final class AppModel {
                 self?.now = Date()
             }
         }
-        guard let executable = Self.helperExecutable() else { return }
-        if !StoreLocation.isOverridden() {
-            // The helper creates the file; the folder may not exist on first launch.
-            try? FileManager.default.createDirectory(at: storeURL.deletingLastPathComponent(),
-                                                     withIntermediateDirectories: true)
-        }
-        let ports = HelperConfiguration.ports()
-        let configuration = HelperConfiguration(executableURL: executable, databaseURL: storeURL,
-                                                grpcPort: ports.grpc, httpPort: ports.http,
-                                                retentionSeconds: retentionSeconds)
-        let supervisor = HelperSupervisor(configuration: configuration)
-        self.supervisor = supervisor
-        Task { [weak self] in
-            for await event in supervisor.events { self?.handle(event) }
-        }
-        supervisor.start()
-    }
-
-    /// Blocks until the helper exited (applicationWillTerminate).
-    func stopHelper() {
-        supervisor?.stopAndWait()
-    }
-
-    /// nil when APP_HELPER=none; a path in APP_HELPER; else the bundled helper.
-    static func helperExecutable(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL? {
-        switch environment["APP_HELPER"] {
-        case "none": nil
-        case let path? where !path.isEmpty: URL(fileURLWithPath: path)
-        default: HelperConfiguration.bundledExecutable()
-        }
-    }
-
-    /// Asks the helper to bind busy ports again (Try Again).
-    func retryPorts() {
-        try? supervisor?.send(.retry)
-    }
-
-    // MARK: Helper events
-
-    func handle(_ event: SupervisorEvent) {
-        switch event {
-        case .started(_, let restart):
-            if restart { receiverRestarted = true }
-        case .helper(.ports(let ports)):
-            receiver = .ports(ports)
-            // The helper sends "ports" after the schema is ready.
-            if reader == nil { Task { await openStore() } }
-        case .helper(.batch(let batch)):
-            if reader == nil {
-                Task { await openStore() }
-            } else {
-                requestRefresh()
-            }
-            if receiverRestarted && !batch.traces.isEmpty { receiverRestarted = false }
-        case .helper(.pruned):
-            requestRefresh()
-        case .helper(.error(let message)):
-            helperMessage = message
-        case .helper(.unknown):
-            break
-        case .malformedLine(let line):
-            FileHandle.standardError.write(Data("magnife: ignored helper line: \(line)\n".utf8))
-        case .crashed:
-            receiver = .starting
-        case .restartScheduled, .stopped:
-            break
-        case .launchFailed(let message):
-            receiver = .stopped(message)
-            helperMessage = "The receiver could not start. \(message)"
-        }
+        startReceiver()
     }
 
     // MARK: Reading
@@ -285,12 +220,5 @@ final class AppModel {
             let spans = (try? await reader.spans(traceID: id)) ?? []
             if selectedTraceID == id { selectedSpans = spans }
         }
-    }
-
-    /// Snapshot pages show the receiver as it looks when both ports listen.
-    func showReceiverListening() {
-        let ports = HelperConfiguration.ports()
-        receiver = .ports(ReceiverPorts(grpc: PortStatus(addr: "127.0.0.1:\(ports.grpc)", state: .listening),
-                                        http: PortStatus(addr: "127.0.0.1:\(ports.http)", state: .listening)))
     }
 }

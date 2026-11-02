@@ -33,7 +33,7 @@ UX:
 - States: starting shows nothing unless it takes over half a second, then "Starting receiver…"; error banner "Port 4318 is in use by otelcol-contrib. Quit that app, then click Try Again." (process name when it can be found, otherwise "by another app"); done is the status text
 - Words: "Receiving on 4317 and 4318", "Try Again"; status tooltip "Magnife accepts OTLP over gRPC on 4317 and HTTP on 4318"
 - Access: status and banner are read by VoiceOver with the same words; Try Again is reachable with Tab; the banner pairs an icon with text, not color alone
-Status: todo
+Status: done
 
 ### S-002 Receive traces over OTLP/gRPC
 As the user, I point a gRPC exporter at `localhost:4317` and it works.

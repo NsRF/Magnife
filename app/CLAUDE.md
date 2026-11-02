@@ -46,10 +46,15 @@ this app starts the helper and reads its database. No server, no accounts.
   helper into `Contents/Helpers/`, signs inside out (helper, then app; never
   `--deep`), and installs `~/Applications/Magnife.app`.
 - `Icon/AppIcon.icon` the app icon, an Icon Composer file (JSON plus SVG layers). `build.sh` compiles it with `tools/make_icon.sh`; `tools/icon_review.sh` renders every look into one PNG.
-- `tools/make-fixture-db.sh` builds a realistic database in /tmp with sqlite3
-  and `docs/schema.sql` (3 services, 10 traces with an exception, slow SQL,
-  N+1, a failed HTTP call, logs). The app never writes, so seed data comes
-  from here (later from the real helper and a sample sender).
+- `tools/seed.zsh` seeds test databases through the real pipeline
+  (docs/STORIES.md, "Seed data"): it starts the bundled helper standalone
+  (`--no-stdin`, ports 0) on a fresh /tmp database, runs
+  `scripts/send-sample-traces` against it (3 services, 5 traces: healthy,
+  N+1, slow SQL, HTTP 500 with an exception, an exception; 18 logs, 8 with
+  no trace id), waits until the batch lines add up, and keeps the helper
+  running while the app reads (the read-only reader needs the `-wal` file),
+  then stops it. `snap.sh` and `selftest.sh` source it. The app never writes,
+  so every value on screen comes from telemetry the helper received.
 - `../docs/` the brief, glossary, stories, research, and progress log.
 
 ## Launch modes
@@ -65,12 +70,14 @@ this app starts the helper and reads its database. No server, no accounts.
 - Build and install: `./build.sh`. Add `--open` to restart the app with the new build. The build shows warnings; fix them.
   `--open` runs the real helper against the real database; use the scripts below for tests.
 - Unit tests: `swift test --scratch-path ~/Library/Developer/Magnife/test-build`.
-- Self-test (the app's real functions on the fixture, plus the supervisor on
-  `FakeHelper`): `tools/selftest.sh`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
+- Self-test (the app's real functions on the seeded store, the supervisor on
+  `FakeHelper`, and the receiver checks with the real bundled helper on free
+  ports, in `SelfTest+Receiver.swift`): `tools/selftest.sh`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots and look at them: `tools/snap.sh`.
   It writes `/tmp/Magnife-shots/<page>-light.png` and `-dark.png` for every
   `SnapshotPage` (the pages in `docs/STORIES.md`), and
-  `09-settings-<tab>-light.png` / `-dark.png`, then quits.
+  `09-settings-<tab>-light.png` / `-dark.png`, then quits. `02-trace-list-busy`
+  shows the busy-port banner (replayed "ports" line, since APP_HELPER=none).
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Never test against the real database in `~/Library/Application Support/Magnife/`.
