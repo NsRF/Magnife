@@ -94,6 +94,18 @@ func (t *Trace) log(span *ptrace.Span, svc *Service, sc Scope, sev plog.Severity
 	return l
 }
 
+// logInTrace adds a log that carries the trace id and spanID (empty for
+// none) without a span of this batch: a log written outside any span, or by
+// a span that was never exported.
+func (t *Trace) logInTrace(spanID pcommon.SpanID, svc *Service, sc Scope, sev plog.SeverityNumber, atMs float64,
+	body string, attrs map[string]any) plog.LogRecord {
+	l := t.log(nil, svc, sc, sev, atMs, body, attrs)
+	l.SetTraceID(t.ID)
+	l.SetSpanID(spanID)
+	l.SetFlags(plog.DefaultLogRecordFlags.WithIsSampled(true))
+	return l
+}
+
 func setError(s ptrace.Span, msg string) {
 	s.Status().SetCode(ptrace.StatusCodeError)
 	s.Status().SetMessage(msg)
@@ -326,6 +338,10 @@ func http500(t *Trace) {
 	cause := body.PutEmptyMap("err")
 	cause.PutStr("type", "HTTPError")
 	cause.PutStr("message", "Response code 500 (Internal Server Error)")
+	// Trace Logs (S-012): a log with the trace id but no span id, and one
+	// from an orders span that was never exported.
+	t.logInTrace(pcommon.NewSpanIDEmpty(), Web, scopeNodePino, sevInfo, 63.5, "response sent", map[string]any{"status": 500})
+	t.logInTrace(t.g.SpanID(), Orders, scopeGoSlog, sevInfo, 40, "payment webhook queued", map[string]any{"order_id": 1042})
 }
 
 func jobException(t *Trace) {

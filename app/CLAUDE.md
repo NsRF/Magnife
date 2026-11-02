@@ -76,6 +76,15 @@ this app starts the helper and reads its database. No server, no accounts.
   change `traces.updated_seq`, so each refresh that is not paused reads
   `TelemetryReader.logStamp` and re-reads the span when it changed
   (`AppModel.refreshOpenTraceLogs`). Views in `SpanDetailLogs.swift`.
+- Trace Logs (S-012): the span detail has a Span | Trace Logs picker
+  (`SpanDetailTab`, View ⌥⌘1 / ⌥⌘2, remembered). `TelemetryReader.traceLogs`
+  reads every log of the open trace (span id or not) into `TraceLogs`;
+  `AppModel+TraceLogs.swift` loads it when a trace opens and when the log
+  stamp changes. Selecting a row (`selectTraceLog`) opens the span's
+  collapsed ancestors (`Waterfall.ancestors(of:)`) and selects it; the
+  Span column is `TraceLogSpan` ("—", the name, "Span not received").
+  The table is a SwiftUI `Table` in `TraceLogsView.swift`; its column
+  ideals must fit the 560 pt detail column.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -96,7 +105,7 @@ this app starts the helper and reads its database. No server, no accounts.
   (docs/STORIES.md, "Seed data"): it starts the bundled helper standalone
   (`--no-stdin`, ports 0) on a fresh /tmp database, runs
   `scripts/send-sample-traces` against it (3 services, 5 traces: healthy,
-  N+1, slow SQL, HTTP 500 with an exception, an exception; 18 logs, 8 with
+  N+1, slow SQL, HTTP 500 with an exception, an exception; 20 logs, 8 with
   no trace id), waits until the batch lines add up, and keeps the helper
   running while the app reads (the read-only reader needs the `-wal` file),
   then stops it. `snap.sh` and `selftest.sh` source it. The app never writes,
@@ -126,7 +135,7 @@ this app starts the helper and reads its database. No server, no accounts.
   runs them alone; `APP_SELFTEST_ONLY=sidebar` the S-009 checks, `=pause` the S-010 ones.
   `APP_SELFTEST_ONLY=waterfall tools/selftest.sh` runs only the reader, model
   and waterfall checks (`APP_SELFTEST_ONLY=span-detail`: the span detail,
-  exception and span log checks); the waterfall checks time 1,000/5,000/30,000-span
+  exception, span log and Trace Logs checks, incl. a 10,000-log trace timed as an INFO line); the waterfall checks time 1,000/5,000/30,000-span
   traces (INFO lines) and write `/tmp/Magnife-shots/03-trace-detail-30000-*.png`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots and look at them: `tools/snap.sh`.
   It writes `/tmp/Magnife-shots/<page>-light.png` and `-dark.png` for every
@@ -141,7 +150,8 @@ this app starts the helper and reads its database. No server, no accounts.
   POST /payments span (Exception first), `04-span-detail-events` the gRPC
   server span scrolled to Events, `04-span-detail-long-value` a statement
   cut with "Show All", `04-span-detail-copied` Copy Stack Trace's "Copied",
-  `04-span-detail-logs` the Logs section with a log's attributes open, `04-span-detail-log-json` a pretty-printed JSON body.
+  `04-span-detail-logs` the Logs section with a log's attributes open, `04-span-detail-log-json` a pretty-printed JSON body,
+  `03-trace-detail-trace-logs` Trace Logs with a log (and so its span) selected.
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Both scripts pass an empty "NSSplitView Subview Frames …" default, so the

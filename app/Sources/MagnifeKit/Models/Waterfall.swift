@@ -152,6 +152,19 @@ public struct Waterfall: Sendable {
 
     public func node(_ spanID: String) -> Node? { indexByID[spanID].map { nodes[$0] } }
 
+    /// The span ids above a span, its parent first: what must be open for
+    /// its row to show (S-012). Empty for a root or an unknown span.
+    public func ancestors(of spanID: String) -> [String] {
+        var out: [String] = []
+        var index = indexByID[spanID]
+        // At most one step per node, whatever the parents say.
+        while let current = index, let parent = nodes[current].parent, out.count < nodes.count {
+            out.append(nodes[parent].span.spanID)
+            index = parent
+        }
+        return out
+    }
+
     /// The span the waterfall selects when a trace opens: the first root that
     /// has no parent at all, else the first root.
     public var rootSpanID: String? {

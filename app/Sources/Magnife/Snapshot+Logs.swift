@@ -25,4 +25,18 @@ extension Snapshot {
         capture(to: "\(dir)/\(SnapshotPage.spanDetail.rawValue)-log-json-\(mode).png")
         model.spanDetailScrollAnchor = .top
     }
+
+    /// 03-trace-detail-trace-logs: the HTTP 500 trace on Trace Logs, the
+    /// INSERT Payments log selected and so its span in the waterfall (S-012);
+    /// one log has no span ID ("—"), one names a span not received.
+    static func captureTraceLogs(_ model: AppModel, dir: String, mode: String) async {
+        model.showSpanDetailTab(.traceLogs)
+        for _ in 0..<40 where model.traceLogs.lines.count < 5 { try? await Task.sleep(for: .milliseconds(50)) }
+        let saved = model.traceLogs.lines.first { $0.record.body == "Payment for order 1042 was not saved" }
+        model.selectTraceLog(saved?.id)
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(SnapshotPage.traceDetail.rawValue)-trace-logs-\(mode).png")
+        model.selectTraceLog(nil)
+        model.showSpanDetailTab(.span)
+    }
 }

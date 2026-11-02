@@ -99,6 +99,16 @@ final class AppModel {
     @ObservationIgnored var spanDetailTask: Task<Void, Never>?
     /// The open trace's logs when last checked; a new one re-reads the span detail (S-011).
     @ObservationIgnored var openTraceLogStamp: LogStamp?
+    /// Every log of the open trace (S-012), and the selected one.
+    var traceLogs = TraceLogs()
+    var selectedTraceLogID: LogLine.ID? {
+        didSet { MenuState.shared.update(hasSelectedLog: selectedTraceLogID != nil) }
+    }
+    @ObservationIgnored var traceLogsTask: Task<Void, Never>?
+    /// The span detail's tab, Span or Trace Logs; remembered across launches.
+    var spanDetailTab: SpanDetailTab = .stored {
+        didSet { if !StoreLocation.isOverridden() { UserDefaults.standard.set(spanDetailTab.rawValue, forKey: SpanDetailTab.defaultsKey) } }
+    }
     /// The exception whose Copy Stack Trace reads "Copied" for 2 seconds (S-007), by index.
     var copiedStackTrace: Int?
     @ObservationIgnored var stackTraceCopiedTask: Task<Void, Never>?

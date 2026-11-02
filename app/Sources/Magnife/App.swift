@@ -43,12 +43,21 @@ struct MagnifeApp: App {
                     .disabled(!menu.hasWaterfall)
                 Button("Copy Stack Trace") { delegate.model.copyStackTrace() }
                     .disabled(!menu.hasStackTrace)
+                Button("Copy Body") { delegate.model.copySelectedLogBody() }
+                    .disabled(!menu.hasSelectedLog)
                 Button("Copy Environment Variables") { delegate.model.copyEnvironmentVariables() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
             }
             CommandGroup(before: .sidebar) {
                 Button(menu.showsSpanDetail ? "Hide Span Detail" : "Show Span Detail") { delegate.model.toggleSpanDetail() }
                     .keyboardShortcut("i", modifiers: [.command, .control])
+                // The span detail's tabs (docs/ux.md, View menu).
+                Button(SpanDetailTab.span.title) { delegate.model.showSpanDetailTab(.span) }
+                    .keyboardShortcut("1", modifiers: [.command, .option])
+                    .disabled(!menu.hasWaterfall)
+                Button(SpanDetailTab.traceLogs.title) { delegate.model.showSpanDetailTab(.traceLogs) }
+                    .keyboardShortcut("2", modifiers: [.command, .option])
+                    .disabled(!menu.hasWaterfall)
                 Divider()
             }
             CommandMenu("Trace") {

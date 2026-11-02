@@ -1,10 +1,58 @@
 import MagnifeKit
 import SwiftUI
 
-/// The lower pane of the detail column (S-006, S-007, S-011): the selected span's name,
-/// kind, duration and status, then its sections in the order of design
-/// decision 5. Empty sections are left out.
+/// The lower pane of the detail column: the Span | Trace Logs picker at
+/// its top (docs/ux.md, Window), then the tab.
 struct SpanDetailPane: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SpanDetailTabBar()
+            Divider()
+            switch model.spanDetailTab {
+            case .span: SpanTab()
+            case .traceLogs: TraceLogsView()
+            }
+        }
+    }
+}
+
+/// The picker and, on Trace Logs, the pane header "24 logs".
+struct SpanDetailTabBar: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: Space.sm) {
+            Picker("Span Detail", selection: Binding(get: { model.spanDetailTab },
+                                                     set: { model.showSpanDetailTab($0) })) {
+                ForEach(SpanDetailTab.allCases) { tab in
+                    Text(tab.title).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .help("Span (⌥⌘1) or Trace Logs (⌥⌘2)")
+            .gridProbe("span-detail-picker", area: "span-detail-tabs")
+            Spacer(minLength: Space.sm)
+            if model.spanDetailTab == .traceLogs, !model.traceLogs.isEmpty {
+                Text(TraceLogs.countTitle(model.traceLogs.lines.count))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        }
+        .padding(.horizontal, Space.lg)
+        .padding(.vertical, Space.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .gridArea("span-detail-tabs", inset: Space.lg)
+    }
+}
+
+/// The Span tab (S-006, S-007, S-011): the selected span's name, kind,
+/// duration and status, then its sections in the order of design decision
+/// 5. Empty sections are left out.
+struct SpanTab: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {

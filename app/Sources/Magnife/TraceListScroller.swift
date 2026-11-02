@@ -166,6 +166,13 @@ final class MenuState: ObservableObject {
         if self.hasStackTrace != hasStackTrace { self.hasStackTrace = hasStackTrace }
     }
 
+    /// Edit > Copy Body is enabled while a Trace Logs row is selected (S-012).
+    @Published private(set) var hasSelectedLog = false
+
+    func update(hasSelectedLog: Bool) {
+        if self.hasSelectedLog != hasSelectedLog { self.hasSelectedLog = hasSelectedLog }
+    }
+
     /// View > Show Span Detail reads "Hide Span Detail" while the pane shows.
     @Published private(set) var showsSpanDetail = true
 

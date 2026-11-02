@@ -15,6 +15,7 @@ extension AppModel {
         collapsedSpans = []
         selectedSpanID = nil
         openTraceLogStamp = nil
+        loadTraceLogs()
         guard let id = selectedTraceID, let reader else {
             openTrace = nil
             return

@@ -45,6 +45,7 @@ enum SelfTest {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
                 await checkSpanLogs(model)
+                await checkTraceLogs(model)
             } else {
                 await checkEnvironment(model)
                 await checkTraceList(model)
@@ -54,6 +55,7 @@ enum SelfTest {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
                 await checkSpanLogs(model)
+                await checkTraceLogs(model)
                 await checkSupervisor()
                 await checkReceiver()
                 checkApp()
@@ -106,7 +108,9 @@ enum SelfTest {
                   DurationFormat.string(nanoseconds: slowTrace?.durationNs ?? 0) == "884 ms")
 
             let traceLogs = try await reader.logs(traceID: failed?.traceID ?? "")
-            check("logs of the HTTP 500 trace", traceLogs.count == 3, "\(traceLogs.count)")
+            // On spans, one with no span id, one from a span never received (S-012 seed).
+            check("logs of the HTTP 500 trace", traceLogs.count == 5 && traceLogs.filter { $0.spanID == nil }.count == 1,
+                  "\(traceLogs.count)")
             let errors = try await reader.latestLogs(level: .error)
             check("the Error level filter", errors.count == 3 && errors.allSatisfy { $0.level == .error }, "\(errors.count)")
             let all = try await reader.latestLogs()

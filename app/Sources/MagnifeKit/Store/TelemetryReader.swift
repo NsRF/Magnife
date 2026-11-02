@@ -184,6 +184,16 @@ public final class TelemetryReader: Sendable {
         }
     }
 
+    /// Trace Logs (S-012): every log of the trace in time order, those
+    /// without a span id included, ready to show.
+    @concurrent
+    public func traceLogs(traceID: String) async throws -> TraceLogs {
+        let records = try await pool.read {
+            try LogRecord.fetchAll($0, sql: TelemetrySQL.logsOfTrace, arguments: [traceID])
+        }
+        return TraceLogs(traceID: traceID, records: records)
+    }
+
     /// Logs written during one span, in time order.
     @concurrent
     public func logs(traceID: String, spanID: String) async throws -> [LogRecord] {

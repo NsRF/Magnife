@@ -186,7 +186,7 @@ Depends: S-011
 Acceptance:
 - [unit] Logs matching the trace id are shown even when the span id is missing.
 - [self] Selecting a log line selects its span in the waterfall.
-Status: todo
+Status: done
 
 ### S-013 Browse all logs in the Logs tab
 As the user, I switch to the Logs tab and see every log, newest first, live.
@@ -376,7 +376,7 @@ Status: todo
 Snapshots use a fixture of OTLP payloads replayed into the helper, so every value comes from telemetry the app receives:
 - Services: `checkout-api` (.NET), `orders` (Go), `web` (Node).
 - Traces: one healthy request, one with an exception and stack trace, one with a slow SQL span, one with an N+1 (8 identical statements), one with an HTTP 500 call.
-- Logs at Debug, Info, Warn and Error, most linked to spans, a few with no trace id.
+- Logs at Debug, Info, Warn and Error, most linked to spans, a few with no trace id; the HTTP 500 trace also has one with no span id, one from a span never sent, and one with a structured (JSON) body.
 - One saved filter, "Checkout errors", created through S-021.
 
 ## Dropped

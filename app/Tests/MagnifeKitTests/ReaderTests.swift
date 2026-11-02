@@ -142,6 +142,19 @@ struct ReaderTests {
         #expect(detail.logs.map(\.levelWord) == ["DEBUG", "ERROR", "WARN"])
     }
 
+    @Test("Trace Logs reads every log of the trace, span id or not, with the stamp a refresh compares (S-012)")
+    func traceLogs() async throws {
+        let (dir, writer, reader) = try await makeStore()
+        defer { dir.remove() }
+        let logs = try await reader.traceLogs(traceID: traceID(3))
+        #expect(logs.traceID == traceID(3))
+        #expect(logs.lines.map(\.record.body) == ["query failed", "trace-only"])
+        #expect(logs.lines.map(\.record.spanID) == ["00f067aa0ba90001", nil])
+        #expect(logs.stamp == (try await reader.logStamp(traceID: traceID(3))))
+        #expect(try await reader.traceLogs(traceID: traceID(1)).isEmpty)
+        _ = writer
+    }
+
     @Test("the log stamp counts a trace's logs and changes when one joins")
     func logStamp() async throws {
         let (dir, writer, reader) = try await makeStore()
