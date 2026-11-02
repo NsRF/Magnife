@@ -4,10 +4,11 @@ import MagnifeKit
 /// Snapshot states for the detector stories (S-023+).
 extension Snapshot {
     /// 03-trace-detail-slow-sql: the slow report query's trace, its strip
-    /// line clicked, so the span is selected and its detail opens on Findings.
+    /// line clicked, so the span is selected and its detail opens on Findings;
+    /// 03-trace-detail-n-plus-one: the 8 repeated order_items queries (S-024).
     static func captureFindings(_ model: AppModel, dir: String, mode: String) async {
         let page = SnapshotPage.traceDetail.rawValue
-        for (name, route) in [("slow-sql", "GET /admin/reports")] {
+        for (name, route) in [("slow-sql", "GET /admin/reports"), ("n-plus-one", "GET /account/orders")] {
             await openFirstFinding(model, route: route)
             capture(to: "\(dir)/\(page)-\(name)-\(mode).png")
         }

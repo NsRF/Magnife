@@ -304,7 +304,7 @@ Depends: S-023
 Acceptance:
 - [unit] The same normalized `db.statement` (literals removed) 5 or more times in one trace (decided by the agent) gives one N+1 finding listing all those spans.
 - [snap] The finding names the statement and the count.
-Status: todo
+Status: done
 
 ### S-025 See failed HTTP calls flagged
 As the user, I see which HTTP calls in a trace failed.

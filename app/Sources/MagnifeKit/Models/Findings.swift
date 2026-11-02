@@ -61,6 +61,7 @@ public struct DetectorSpan: Sendable, Hashable, FetchableRecord {
 /// icon and name on screen, never a service color.
 public enum FindingKind: Int, Sendable, CaseIterable, Comparable, Identifiable {
     case slowSQL
+    case nPlusOne
 
     public var id: Int { rawValue }
     public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
@@ -69,6 +70,7 @@ public enum FindingKind: Int, Sendable, CaseIterable, Comparable, Identifiable {
     public var title: String {
         switch self {
         case .slowSQL: "Slow SQL"
+        case .nPlusOne: "N+1"
         }
     }
 
@@ -76,6 +78,7 @@ public enum FindingKind: Int, Sendable, CaseIterable, Comparable, Identifiable {
     public var symbol: String {
         switch self {
         case .slowSQL: "cylinder"
+        case .nPlusOne: "repeat"
         }
     }
 }
@@ -86,10 +89,12 @@ public struct Finding: Sendable, Hashable, Identifiable {
     public var kind: FindingKind
     public var spanIDs: [String]
     public var startNs: Int64
-    /// Slow SQL: the query's duration.
+    /// Slow SQL: the query's duration; N+1: the repeated spans' total.
     public var durationNs: Int64
-    /// Slow SQL: the statement as stored.
+    /// Slow SQL: the statement as stored; N+1: the normalized statement.
     public var statement: String?
+    /// N+1: how many times the statement ran (the spans' count).
+    public var count: Int = 1
     public var dbSystem: String?
     public var spanName: String
 
@@ -102,6 +107,8 @@ public struct Finding: Sendable, Hashable, Identifiable {
         case .slowSQL:
             [kind.title, DurationFormat.string(nanoseconds: durationNs), Self.oneLine(statement ?? spanName)]
                 .joined(separator: " · ")
+        case .nPlusOne:
+            [kind.title, "\(count.formatted()) times", Self.oneLine(statement ?? spanName)].joined(separator: " · ")
         }
     }
 
@@ -113,6 +120,8 @@ public struct Finding: Sendable, Hashable, Identifiable {
             let threshold = DurationFormat.string(nanoseconds: Detectors.slowSQLThresholdNs)
             let query = statement == nil ? "This \(dbSystem ?? "database") query" : "This query"
             return "\(query) took \(took). Queries over \(threshold) are flagged."
+        case .nPlusOne:
+            return "This statement ran \(count.formatted()) times in this trace."
         }
     }
 
@@ -123,11 +132,17 @@ public struct Finding: Sendable, Hashable, Identifiable {
     public var accessibilityLabel: String {
         switch kind {
         case .slowSQL: "Select span: \(kind.title), \(DurationFormat.spoken(nanoseconds: durationNs))"
+        case .nPlusOne: "Select span: \(kind.title), \(count.formatted()) times"
         }
     }
 
-    /// What the waterfall row adds for VoiceOver for this span: "Slow SQL".
-    public func spokenMark(for spanID: String) -> String { kind.title }
+    /// What the waterfall row adds for VoiceOver for this span: "Slow SQL", "N+1, 1 of 8".
+    public func spokenMark(for spanID: String) -> String {
+        switch kind {
+        case .slowSQL: kind.title
+        case .nPlusOne: "\(kind.title), \((spanIDs.firstIndex(of: spanID) ?? 0) + 1) of \(count)"
+        }
+    }
 
     /// A statement on one line, its runs of white space as one space, and
     /// at most 300 characters: the strip line shows one line.
@@ -173,7 +188,8 @@ public struct TraceFindings: Sendable, Hashable {
     public var summary: FindingSummary {
         var counts: [FindingKind: Int] = [:]
         for finding in findings { counts[finding.kind, default: 0] += 1 }
-        return FindingSummary(counts: counts)
+        let repeats = findings.filter { $0.kind == .nPlusOne }.map(\.count).max() ?? 0
+        return FindingSummary(counts: counts, mostRepeats: repeats)
     }
 
     /// The strip shows this many lines, then "Show All Findings (7)" (docs/ux.md, S-023 States).
@@ -192,8 +208,13 @@ public struct TraceFindings: Sendable, Hashable {
 /// A trace row's badges: the kinds found and how many of each.
 public struct FindingSummary: Sendable, Hashable {
     public var counts: [FindingKind: Int]
+    /// N+1: the most times one statement ran, for the tooltip.
+    public var mostRepeats: Int
 
-    public init(counts: [FindingKind: Int] = [:]) { self.counts = counts.filter { $0.value > 0 } }
+    public init(counts: [FindingKind: Int] = [:], mostRepeats: Int = 0) {
+        self.counts = counts.filter { $0.value > 0 }
+        self.mostRepeats = mostRepeats
+    }
 
     public var kinds: [FindingKind] { counts.keys.sorted() }
     public var isEmpty: Bool { counts.isEmpty }
@@ -205,6 +226,9 @@ public struct FindingSummary: Sendable, Hashable {
         switch kind {
         case .slowSQL:
             return "\(kind.title): \(count == 1 ? "1 query" : "\(count.formatted()) queries") over \(threshold)"
+        case .nPlusOne:
+            return count == 1 ? "\(kind.title): a statement ran \(mostRepeats.formatted()) times"
+                : "\(kind.title): \(count.formatted()) statements ran \(Detectors.nPlusOneMinimum) or more times"
         }
     }
 
@@ -219,10 +243,12 @@ public struct FindingSummary: Sendable, Hashable {
 public enum Detectors {
     /// A database span that took longer than this is Slow SQL (docs/GLOSSARY.md: over 100 ms).
     public static let slowSQLThresholdNs: Int64 = 100_000_000
+    /// The same normalized statement this many times in one trace is N+1 (docs/GLOSSARY.md: 5 or more).
+    public static let nPlusOneMinimum = 5
 
     /// Every finding in one trace's spans.
     public static func findings(in spans: [DetectorSpan]) -> TraceFindings {
-        TraceFindings(slowSQL(spans))
+        TraceFindings(slowSQL(spans) + nPlusOne(spans))
     }
 
     /// Findings of several traces at once, by trace id: the trace list's badges.
@@ -237,6 +263,35 @@ public enum Detectors {
             let statement = span.dbStatement.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
             return Finding(kind: .slowSQL, spanIDs: [span.spanID], startNs: span.startNs, durationNs: span.durationNs,
                            statement: statement, dbSystem: span.dbSystem, spanName: span.name)
+        }
+    }
+}
+
+extension Detectors {
+    /// N+1: the same normalized `db_statement` (literals removed) 5 or more
+    /// times in one trace gives one finding for all those spans, first by
+    /// start. Each distinct statement is normalized once.
+    public static func nPlusOne(_ spans: [DetectorSpan]) -> [Finding] {
+        var shapes: [String: String] = [:]
+        var groups: [String: [DetectorSpan]] = [:]
+        for span in spans {
+            guard let statement = span.dbStatement, !statement.isEmpty else { continue }
+            let shape: String
+            if let known = shapes[statement] {
+                shape = known
+            } else {
+                shape = SQLNormalizer.normalize(statement)
+                shapes[statement] = shape
+            }
+            guard !shape.isEmpty else { continue }
+            groups[shape, default: []].append(span)
+        }
+        return groups.compactMap { shape, group in
+            guard group.count >= nPlusOneMinimum else { return nil }
+            let ordered = group.sorted { ($0.startNs, $0.spanID) < ($1.startNs, $1.spanID) }
+            return Finding(kind: .nPlusOne, spanIDs: ordered.map(\.spanID), startNs: ordered[0].startNs,
+                           durationNs: ordered.reduce(0) { $0 + $1.durationNs }, statement: shape, count: ordered.count,
+                           dbSystem: ordered[0].dbSystem, spanName: ordered[0].name)
         }
     }
 }

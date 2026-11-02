@@ -75,6 +75,70 @@ struct FindingTests {
         #expect(found["t2"]?.isEmpty == true)
     }
 
+    // MARK: N+1 (S-024)
+
+    private func items(_ count: Int, from start: Int64 = 0, ms: Int64 = 7) -> [DetectorSpan] {
+        (0..<count).map { n in
+            db("i\(n)", ms * Self.ms, statement: "SELECT * FROM order_items WHERE order_id = \(1042 + n)",
+               start: start + Int64(n) * 10)
+        }
+    }
+
+    @Test("N+1: the same normalized statement 5 or more times in a trace, and only then",
+          arguments: [(4, false), (5, true), (8, true), (40, true)])
+    func nPlusOneThreshold(count: Int, flagged: Bool) {
+        let found = Detectors.findings(in: items(count))
+        #expect(found.findings.filter { $0.kind == .nPlusOne }.count == (flagged ? 1 : 0))
+    }
+
+    @Test("N+1 gives one finding listing every repeated span, first by start")
+    func nPlusOneSpans() throws {
+        let spans = items(8).reversed() + [db("other", 6 * Self.ms, statement: "SELECT id FROM orders WHERE customer_id = 77")]
+        let found = Detectors.findings(in: Array(spans))
+        let finding = try #require(found.findings.first { $0.kind == .nPlusOne })
+        #expect(found.findings.count == 1)
+        #expect(finding.spanIDs == (0..<8).map { "i\($0)" })
+        #expect(finding.count == 8)
+        #expect(found.kinds(forSpan: "i3") == [.nPlusOne])
+        #expect(found.kinds(forSpan: "other").isEmpty)
+    }
+
+    @Test("N+1 words: strip line, span detail, VoiceOver, tooltip")
+    func nPlusOneWords() throws {
+        let found = Detectors.findings(in: items(8))
+        let finding = try #require(found.findings.first)
+        #expect(finding.line == "N+1 · 8 times · SELECT * FROM order_items WHERE order_id = ?")
+        #expect(finding.detailText == "This statement ran 8 times in this trace.")
+        #expect(finding.shownStatement == "SELECT * FROM order_items WHERE order_id = ?")
+        #expect(finding.accessibilityLabel == "Select span: N+1, 8 times")
+        #expect(finding.spokenMark(for: "i0") == "N+1, 1 of 8")
+        #expect(finding.spokenMark(for: "i2") == "N+1, 3 of 8")
+        #expect(found.summary.help(.nPlusOne) == "N+1: a statement ran 8 times")
+        #expect(found.summary.spoken == "findings: N+1")
+    }
+
+    @Test("two repeated statements give two findings; a span can be Slow SQL and N+1 at once")
+    func nPlusOneTwice() {
+        let users = (0..<5).map { n in
+            db("u\(n)", n == 0 ? 150 * Self.ms : 3 * Self.ms, statement: "SELECT * FROM users WHERE id = '\(n)'",
+               start: 1_000 + Int64(n))
+        }
+        let found = Detectors.findings(in: items(6) + users)
+        #expect(found.findings.map(\.kind) == [.slowSQL, .nPlusOne, .nPlusOne])
+        #expect(found.kinds(forSpan: "u0") == [.slowSQL, .nPlusOne])
+        #expect(found.summary.counts == [.slowSQL: 1, .nPlusOne: 2])
+        #expect(found.summary.help(.nPlusOne) == "N+1: 2 statements ran 5 or more times")
+        #expect(found.summary.spoken == "findings: Slow SQL, N+1")
+    }
+
+    @Test("spans without a statement never make an N+1; different tables never group")
+    func nPlusOneNegatives() {
+        #expect(Detectors.findings(in: (0..<9).map { db("n\($0)", Self.ms, statement: nil) }).isEmpty)
+        #expect(Detectors.findings(in: (0..<9).map { db("e\($0)", Self.ms, statement: "") }).isEmpty)
+        let tables = (0..<9).map { db("t\($0)", Self.ms, statement: "SELECT * FROM t\($0) WHERE id = 1") }
+        #expect(Detectors.findings(in: tables).isEmpty)
+    }
+
     // MARK: Strip
 
     @Test("the strip shows 3 lines, then Show All Findings (7)")

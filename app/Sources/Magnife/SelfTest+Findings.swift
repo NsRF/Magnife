@@ -1,7 +1,7 @@
 import AppKit
 import MagnifeKit
 
-/// The detectors in the real app (S-023+): the seed set's findings in the
+/// The detectors in the real app (S-023, S-024+): the seed set's findings in the
 /// reader, the list's badges, the waterfall's icons, the strip and the span
 /// detail; a trace that gains a finding while it is open; and the detectors'
 /// cost on 12,000 and 300,000 spans and on the 100,000-span store.
@@ -12,6 +12,7 @@ extension SelfTest {
         await model.reload()
         await checkSeedFindings(model)
         await checkFindingViews(model)
+        await checkNPlusOne(model)
         await checkLiveFinding(model)
         await checkDetectorCost()
         model.selectedTraceID = nil
@@ -90,6 +91,46 @@ extension SelfTest {
         check("S-023: the span detail lists the finding",
               model.openTraceFindings.findings(forSpan: model.selectedSpanID ?? "").map(\.detailText)
                 == ["This query took 851 ms. Queries over 100 ms are flagged."])
+    }
+
+    /// S-024: the seed set's 8 identical SELECTs under the orders server span.
+    private static func checkNPlusOne(_ model: AppModel) async {
+        guard let reader = model.reader, let trace = await findingTrace(model, route: "GET /account/orders") else {
+            return check("S-024: the N+1 seed trace is stored", false)
+        }
+        let findings = (try? await reader.traceFindings(traceID: trace.traceID)) ?? TraceFindings()
+        let finding = findings.findings.first
+        check("S-024: one N+1 finding for the 8 order_items queries, and nothing else",
+              findings.findings.map(\.kind) == [.nPlusOne] && finding?.count == 8 && finding?.spanIDs.count == 8,
+              "\(findings.findings.map(\.line))")
+        check("S-024: it names the normalized statement and the count",
+              finding?.line == "N+1 · 8 times · SELECT * FROM order_items WHERE order_id = ?", finding?.line ?? "none")
+        let summary = (try? await reader.findingSummaries(traceIDs: [trace.traceID]))?[trace.traceID]
+        check("S-024: the row's badge and tooltip", summary?.kinds == [.nPlusOne]
+              && summary?.help(.nPlusOne) == "N+1: a statement ran 8 times")
+
+        model.selectedTraceID = nil
+        model.selectedTraceID = trace.traceID
+        guard let finding, await waitUntil(3, { isShown(model) && !model.openTraceFindings.isEmpty }),
+              let outline = model.waterfallOutline else {
+            return check("S-024: the N+1 trace opens with its finding", false)
+        }
+        var marked: [String] = []
+        var labels: [String] = []
+        for row in 0..<outline.numberOfRows {
+            guard let item = outline.item(atRow: row) as? SpanItem,
+                  let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SpanNameCell,
+                  cell.shownFindings == [.nPlusOne] else { continue }
+            marked.append(model.waterfall.nodes[item.index].span.spanID)
+            labels.append(cell.accessibilityLabel() ?? "")
+        }
+        check("S-024: every repeated span shows the N+1 icon", marked.sorted() == finding.spanIDs.sorted(), "\(marked.count) rows")
+        check("S-024: VoiceOver reads \"N+1, 1 of 8\" on the first",
+              labels.first?.hasSuffix(", N+1, 1 of 8") == true && labels.last?.hasSuffix(", N+1, 8 of 8") == true,
+              labels.first ?? "none")
+        model.selectFinding(finding)
+        let opened = await waitUntil(2) { model.spanDetail?.span.spanID == finding.spanIDs.first }
+        check("S-024: the strip line selects the first of those spans", opened && model.selectedSpanID == finding.spanIDs.first)
     }
 
     /// A trace still receiving spans gains its badge in place (docs/ux.md, S-023 States).
@@ -184,7 +225,7 @@ enum DetectorLoad {
             case 0:
                 return DetectorSpan(traceID: trace, spanID: "s\(n)", name: "SELECT items", startNs: Int64(n),
                                     durationNs: n % 40 == 0 ? 150_000_000 : 2_000_000, dbSystem: "postgresql",
-                                    dbStatement: "SELECT id, name FROM items WHERE order_id = \(n % 97) AND status = 'open'")
+                                    dbStatement: "SELECT id, name FROM items WHERE order_id = \(n) AND status = 'open'")
             case 1:
                 return DetectorSpan(traceID: trace, spanID: "s\(n)", name: "GET", startNs: Int64(n), durationNs: 1_000_000,
                                     httpMethod: "GET", httpStatusCode: n % 50 == 1 ? 503 : 200, httpURL: "http://api/items/\(n)")

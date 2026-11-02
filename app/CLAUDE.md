@@ -166,7 +166,8 @@ this app starts the helper and reads its database. No server, no accounts.
   `FindingViews.swift`: `RouteCell` badges (icon alone unless the whole route
   fits beside the word), `FindingsStrip` under the waterfall header
   (`selectFinding`), `FindingList` first in the span detail; the waterfall
-  row's orange icons are `SpanNameCell.marks`. `APP_SELFTEST_ONLY=findings`
+  row's orange icons are `SpanNameCell.marks`. N+1 groups statements by
+  `SQLNormalizer.normalize` (MagnifeKit, table-tested in `SQLNormalizerTests`). `APP_SELFTEST_ONLY=findings`
   runs the checks and the cost INFO lines.
 - Test runs and the user's defaults: AppKit saves window frames and column
   widths in the app's domain by itself; snapshot and self-test runs copy
@@ -257,7 +258,7 @@ this app starts the helper and reads its database. No server, no accounts.
   window's columns start at their ideal widths, and the run puts the user's
   layout keys back when it ends (`AppDefaults.restoreLayout`).
   `03-trace-detail-waterfall-focus` and `-span-focus` show the keyboard focus (S-022).
-  `03-trace-detail-slow-sql` shows a strip line clicked (S-023) and
+  `03-trace-detail-slow-sql` and `-n-plus-one` show a strip line clicked (S-023, S-024) and
   `02-trace-list-findings-wide` the badges' words in a widened Route column.
 - Never test against the real database in `~/Library/Application Support/Magnife/`.
 - Then check the grid: `tools/grid-lint.sh` and `swift tools/check-layout.swift /tmp/Magnife-shots/*-layout.json`. Both print PASS.
