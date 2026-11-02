@@ -330,7 +330,7 @@ Screens: 08-menu-bar, 03-trace-detail
 Depends: S-026
 Acceptance:
 - [self] Clicking brings the window forward with the trace selected and its first failed span open.
-Status: todo
+Status: done
 
 ### S-028 Get notified when a trace fails
 As the user, I get a native notification when a trace with an error arrives, and clicking it opens the trace.

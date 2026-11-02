@@ -95,7 +95,7 @@ enum SnapshotPage: String, CaseIterable {
 /// 07-filter-bar (Error on) and -no-matches (OK on, a hidden trace still in the detail column) (S-018),
 /// 02-trace-list-saved-filter, -edited and -rename, 07-filter-bar-save and -save-duplicate (S-021),
 /// 03-trace-detail-waterfall-focus and -span-focus (S-022), 03-trace-detail-slow-sql and 02-trace-list-findings-wide (S-023),
-/// 08-menu-bar (the menu bar extra's menu), -icon and -empty (S-026),
+/// 08-menu-bar (the menu bar extra's menu), -icon and -empty (S-026), 03-trace-detail-from-menu (S-027),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab,
 /// and 09-settings-general-delete (S-016's dialog), then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).

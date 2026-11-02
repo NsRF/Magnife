@@ -3,7 +3,7 @@ import GRDB
 import Testing
 @testable import MagnifeKit
 
-/// The menu bar extra's Recent Errors (S-026).
+/// The menu bar extra's Recent Errors (S-026) and the span a failed trace opens on (S-027).
 @Suite("Recent Errors", .serialized)
 struct RecentErrorsTests {
     static let base: Int64 = 1_730_000_000_000_000_000
@@ -94,5 +94,27 @@ struct RecentErrorsTests {
         #expect(again.newCount == 2 && again.lastSeq == 9)
         #expect(try await reader.recentErrors(limit: 2, changedAfter: 9).traces.map(\.route) == ["GET /8", "GET /6"])
         _ = writer
+    }
+
+    @Test("a failed trace opens on its earliest-starting Error span")
+    func firstErrorSpan() async {
+        let spans = [
+            WaterfallSpan(spanID: "root", name: "POST /checkout", startNs: 0, durationNs: 100, status: .error, serviceName: "web"),
+            WaterfallSpan(spanID: "a", parentSpanID: "root", name: "a", startNs: 10, durationNs: 10, serviceName: "web"),
+            WaterfallSpan(spanID: "late", parentSpanID: "root", name: "late", startNs: 60, durationNs: 10, status: .error,
+                          serviceName: "orders"),
+            WaterfallSpan(spanID: "early", parentSpanID: "a", name: "early", startNs: 12, durationNs: 2, status: .error,
+                          serviceName: "orders"),
+        ]
+        // The root's status is the trace's; its own Error starts first here.
+        #expect(await Waterfall.build(spans).firstErrorSpanID == "root")
+        var children = spans
+        children[0].status = .ok
+        #expect(await Waterfall.build(children).firstErrorSpanID == "early")
+        children[3].startNs = 60
+        // A tie goes to the first in tree order: "late" is the root's second child, "early" is under "a".
+        let tied = await Waterfall.build(children)
+        #expect(tied.firstErrorSpanID == tied.nodes.first { $0.span.startNs == 60 && $0.span.status == .error }?.span.spanID)
+        #expect(await Waterfall.build(Array(children.prefix(2))).firstErrorSpanID == nil)
     }
 }

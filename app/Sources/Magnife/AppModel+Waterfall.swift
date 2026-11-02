@@ -97,6 +97,12 @@ extension AppModel {
             pendingSpan = nil
             selectSpanOpeningParents(pending.spanID)
         }
+        // A Recent Errors item (S-027): its earliest Error span.
+        // Another trace opening first drops it.
+        if opening, let pending = pendingFailedTrace {
+            pendingFailedTrace = nil
+            if pending == selectedTraceID { showFirstErrorSpan() }
+        }
     }
 
     /// The trace's row, its tree, its findings and the spans to collapse in it, off the main actor.
@@ -129,6 +135,7 @@ extension AppModel {
         waterfallTask?.cancel()
         isOpeningTrace = false
         prunedTraceID = id
+        if pendingFailedTrace == id { pendingFailedTrace = nil }
         openTrace = nil
         waterfall = Waterfall()
         openTraceFindings = TraceFindings()

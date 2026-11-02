@@ -290,6 +290,9 @@ final class AppModel {
     /// The span Open Trace selects once that trace's waterfall is built
     /// (nil span: the root, which opening selects anyway).
     @ObservationIgnored var pendingSpan: (traceID: String, spanID: String?)?
+    /// The trace whose earliest Error span opens once its waterfall is built
+    /// (S-027, a Recent Errors item).
+    @ObservationIgnored var pendingFailedTrace: String?
     /// The menu bar extra's Recent Errors and the icon's count (S-026). Not
     /// observed: its seqs change with every batch; the menu and the icon
     /// read the two copies below, set only when what they show changes.

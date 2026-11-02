@@ -22,8 +22,7 @@ struct MenuBarMenu: View {
                 ForEach(model.recentErrorTraces) { trace in
                     Button(RecentErrors.itemTitle(trace, now: model.recentErrorsOpenedAt)) {
                         MainWindow.bringForward(openWindow)
-                        // Open Trace, as from Search (S-017).
-                        model.openSearchResult(trace.traceID)
+                        model.openFailedTrace(trace.traceID)
                     }
                 }
             }

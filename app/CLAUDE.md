@@ -180,6 +180,10 @@ this app starts the helper and reads its database. No server, no accounts.
   update, and never let `isInserted` write back (FIXLOG: both looped the scene
   at 100% CPU). `MenuBarTracking` sees the menu open (`NSMenu`
   didBeginTracking, then the "Recent Errors" header once SwiftUI filled it).
+  A Recent Errors item (S-027) calls `MainWindow.bringForward` and
+  `openFailedTrace`: the trace through `pendingFailedTrace` (like
+  `pendingSpan`), then `Waterfall.firstErrorSpanID` selected, Span tab, the
+  focus in the waterfall once its outline is in a visible window.
   `MenuBarProbe` clicks the real status item for the self-test
   (`APP_SELFTEST_ONLY=menu-bar`) and snapshots (`08-menu-bar`, `-icon`,
   `-empty`, region captures with the glass).

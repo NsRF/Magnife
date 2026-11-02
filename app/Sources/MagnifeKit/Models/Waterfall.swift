@@ -172,6 +172,16 @@ public struct Waterfall: Sendable {
         return root.map { nodes[$0].span.spanID }
     }
 
+    /// The span a failed trace opens on (S-027): the earliest-starting span
+    /// with status Error, the first in tree order on a tie; nil without one.
+    public var firstErrorSpanID: String? {
+        var best: Node?
+        for node in nodes where node.span.status == .error {
+            if best.map({ node.span.startNs < $0.span.startNs }) ?? true { best = node }
+        }
+        return best?.span.spanID
+    }
+
     /// The service of a node's parent, nil at the root.
     public func parentService(of index: Int) -> String? {
         nodes[index].parent.map { nodes[$0].span.serviceName }

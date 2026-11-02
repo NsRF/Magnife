@@ -7,7 +7,8 @@ extension Snapshot {
     /// 08-menu-bar: the menu open with the seed set's traces with errors;
     /// 08-menu-bar-icon: the status item, red with the count since the menu
     /// was last opened; 08-menu-bar-empty: "No traces with errors" and the
-    /// template icon (the schema-only store).
+    /// template icon (the schema-only store); 03-trace-detail-from-menu: a
+    /// Recent Errors item chosen, the window brought forward (S-027).
     static func captureMenuBar(_ model: AppModel, dir: String, mode: String) async {
         let page = SnapshotPage.menuBar.rawValue
         // Every trace with an error counts as new: the count starts before the seed set.
@@ -18,6 +19,23 @@ extension Snapshot {
         guard let menu = await MenuBarProbe.open() else { return print("SNAPSHOT no menu bar extra menu") }
         captureMenu(to: "\(dir)/\(page)-\(mode).png")
         await MenuBarProbe.close(menu)
+
+        // S-027: the HTTP 500 trace's item, as a click on it runs it.
+        if let menu = await MenuBarProbe.open() {
+            let index = menu.items.firstIndex { $0.title.hasPrefix("POST /checkout/pay") }
+            await MenuBarProbe.close(menu)
+            if let index {
+                menu.performActionForItem(at: index)
+                for _ in 0..<60 where model.spanDetail == nil || model.selectedSpanID != model.waterfall.firstErrorSpanID {
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                try? await Task.sleep(for: .seconds(0.8))
+                capture(to: "\(dir)/\(SnapshotPage.traceDetail.rawValue)-from-menu-\(mode).png")
+            } else {
+                print("SNAPSHOT no POST /checkout/pay item")
+            }
+        }
+        model.selectedTraceID = nil
 
         await model.useStore(at: SnapshotPage.emptyStore(next: model.storeURL))
         try? await Task.sleep(for: .seconds(0.5))

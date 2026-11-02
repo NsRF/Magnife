@@ -1,10 +1,10 @@
 import AppKit
 import MagnifeKit
 
-/// S-026: the real menu bar extra, opened from code, its items and icon,
-/// the count of traces with errors (with traces sent to the seed helper
-/// while paused), and a Recent Errors item opening its trace in a main
-/// window that was closed.
+/// S-026 and S-027: the real menu bar extra, opened from code, its items
+/// and icon, the count of traces with errors (with traces sent to the seed
+/// helper while paused), and a Recent Errors item opening its trace in a
+/// main window that was closed.
 extension SelfTest {
     static func checkMenuBar(_ model: AppModel) async {
         guard let reader = model.reader else { return check("the menu bar checks have a store", false) }
@@ -118,22 +118,62 @@ extension SelfTest {
         check("Resume in the menu resumes it", await waitUntil(3) { !model.isPaused })
     }
 
-    /// A Recent Errors item with the main window closed: it comes back with the trace open.
+    /// S-027: a Recent Errors item with the main window closed.
     private static func checkOpenFailedTrace(_ model: AppModel) async {
         model.selectedTraceID = nil
         for window in NSApp.windows where window.canBecomeMain { window.close() }
         _ = await waitUntil(2) { MainWindow.window == nil }
-        guard let menu = await MenuBarProbe.open() else { return check("the menu opens", false) }
+        guard let menu = await MenuBarProbe.open() else { return check("the menu opens for S-027", false) }
         // The newest: earlier checks sent traces with errors after the seed set.
         let trace = model.recentErrors.traces.first
         let index = menu.items.firstIndex { item in trace.map { item.title.hasPrefix("\($0.route) · \($0.rootService) · ") } == true }
         await MenuBarProbe.close(menu)
         guard let index, let trace else { return check("Recent Errors has an item for its newest trace", false) }
+        let started = ContinuousClock.now
         menu.performActionForItem(at: index)
-        let shown = await waitUntil(5) { model.selectedTraceID == trace.traceID && !model.waterfall.isEmpty }
+        let shown = await waitUntil(5) {
+            model.selectedTraceID == trace.traceID && !model.waterfall.isEmpty && model.selectedSpanID != nil
+                && model.spanDetail?.span.spanID == model.selectedSpanID
+                && model.waterfallOutline.map { $0.window?.firstResponder === $0 } == true
+        }
+        print("INFO Recent Errors item to the focused Error span: \(started.duration(to: .now)); app active "
+              + "\(NSApp.isActive), window key \(MainWindow.window?.isKeyWindow ?? false), frontmost "
+              + "\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none")")
         check("choosing a trace brings a closed main window back", MainWindow.window?.isVisible == true)
         check("the trace is selected and open in the detail column", shown && model.openTrace?.traceID == trace.traceID,
               "\(model.selectedTraceID ?? "nil")")
+        check("its earliest-starting Error span is selected",
+              model.selectedSpanID != nil && model.selectedSpanID == model.waterfall.firstErrorSpanID
+                && model.waterfall.node(model.selectedSpanID ?? "")?.span.status == .error)
+        check("the span detail shows on Span", model.showsSpanDetail && model.spanDetailTab == .span)
+        check("the focus is in the waterfall on that span",
+              model.waterfallOutline.map { $0.window?.firstResponder === $0 } == true)
+        check("the list selects the trace", model.traces.contains { $0.id == trace.traceID })
+
+        // The exception scenario's trace: its Error span carries the exception, shown in the span detail.
+        if let other = model.recentErrors.traces.first(where: { $0.route == "inventory.reconcile" }) {
+            model.openFailedTrace(other.traceID)
+            let ok = await waitUntil(3) {
+                model.selectedSpanID == model.waterfall.firstErrorSpanID && model.selectedSpanID != nil
+                    && model.spanDetail?.span.spanID == model.selectedSpanID
+            }
+            check("a failed span with an exception opens on Exception",
+                  ok && model.spanDetail?.sections.first == .exception,
+                  "\(model.spanDetail?.sections.map(\.rawValue) ?? [])")
+        }
+
+        // Hidden by the filters: no selection in the list, the trace still in the detail column.
+        model.traceStatuses = [.ok]
+        _ = await waitUntil(3) { !model.isLoadingScope }
+        model.openFailedTrace(trace.traceID)
+        let hidden = await waitUntil(3) { model.openTrace?.traceID == trace.traceID && !model.waterfall.isEmpty }
+        check("a trace the filters hide still opens, with no row selected",
+              hidden && !model.traces.contains { $0.id == trace.traceID })
+        model.applyTraceFilter(.cleared)
+
+        // Pruned since the menu opened.
+        model.openFailedTrace(String(repeating: "f", count: 32))
+        check("a trace no longer stored says so", await waitUntil(3) { model.showsTraceNoLongerStored })
         model.selectedTraceID = nil
     }
 
