@@ -191,3 +191,17 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: Search's panel and the sheet held the focus; when they went away AppKit gave it back to the window, not to a column, and nothing asked for it.
 - Fix: `openSearchResult` focuses the trace list after revealing the trace, and the sheet's `onDismiss` does the same once AppKit has ended the sheet, both only when nothing else has the focus. Self-test checks for both.
 - Rule: anything that takes the focus and goes away (panel, sheet, popover) hands it to a column, or the keyboard user is stranded.
+
+## Resume read every row of a long pause and could lose the selection (S-010, M2 review)
+
+- Symptom: after a long pause under traffic, Resume read every trace that arrived (60,000 after 10 minutes at 100/s) into the list in one query and diff; and with traffic flowing, a refresh during Resume could put back a 200-row page, so a selected trace further down left the list and the list scrolled to the top.
+- Cause: the Resume limit was `traces.count + newTraceCount` with no ceiling, even with nothing selected; the larger limit applied to the Resume read only, while `pausedSeq` was already nil and other refreshes read one page.
+- Fix: `TraceList.resumeLimit(selectedRow:newCount:)` (unit-tested) reads down to the selected row plus a page, at most 5,000 rows, one page without a selection; `resumeRows` makes every page read until the reveal ends use it. The same for the Logs list.
+- Rule: a read sized by "how much arrived" has a ceiling, and a one-off larger read holds until the step that needs it is finished.
+
+## Pausing in the Traces view froze the Logs list at an old visit (S-010, M2 review)
+
+- Symptom: Logs viewed at 09:00, Traces at 11:00, Pause, then Logs: the 09:00 rows with "Paused. 40,000 new logs."
+- Cause: the Logs list is read only while it shows, but `logsLoaded` stayed true after leaving it, so `pauseLogs` paused at the old rows' newest id.
+- Fix: pausing while Logs is not showing empties the Logs list and pauses at `reader.lastLogID()`.
+- Rule: state that is only refreshed while visible is stale when hidden; never act on it from elsewhere.

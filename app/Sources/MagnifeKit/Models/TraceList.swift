@@ -100,6 +100,19 @@ public enum TraceList {
         return "Paused.\(count) Magnife is still receiving."
     }
 
+    /// The most rows Resume reads to keep a selection deep in the list in it.
+    public static let resumeMaxRows = 5_000
+
+    /// How many rows Resume reads (S-010): down to the selected row, which
+    /// sits at most `newCount` rows lower than it did (new rows go above it;
+    /// a trace's start only moves earlier), plus a page for rows the count
+    /// missed, up to `resumeMaxRows`. With no selection in the list, one page.
+    /// Used for the Logs list too.
+    public static func resumeLimit(selectedRow: Int?, newCount: Int, pageSize: Int = pageSize) -> Int {
+        guard let selectedRow else { return pageSize }
+        return min(resumeMaxRows, max(pageSize, selectedRow + 1 + newCount + pageSize))
+    }
+
     /// The toolbar button and Trace menu item: "Pause" or "Resume".
     public static func pauseTitle(isPaused: Bool) -> String { isPaused ? "Resume" : "Pause" }
 

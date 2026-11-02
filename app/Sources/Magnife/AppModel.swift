@@ -138,6 +138,9 @@ final class AppModel {
             updateNewRowsMenu()
         }
     }
+    /// While Resume is in flight, every page read of the trace list asks for
+    /// this many rows, so a refresh in between cannot drop the selection (S-010).
+    @ObservationIgnored var resumeRows: Int?
     @ObservationIgnored var isLoadingMore = false
     /// Reports scrolling in the trace list's table.
     @ObservationIgnored lazy var listScroller: TraceListScroller = {
@@ -246,6 +249,8 @@ final class AppModel {
     var logsLoaded = false
     /// While paused, the log id the Logs list paused at (S-010).
     var logPausedID: Int64?
+    /// The Logs list's `resumeRows`.
+    @ObservationIgnored var resumeLogRows: Int?
     @ObservationIgnored var isLoadingMoreLogs = false
     @ObservationIgnored lazy var logScroller: TraceListScroller = {
         let scroller = TraceListScroller()

@@ -12,8 +12,10 @@ extension AppModel {
     /// At the top: the newest page replaces the rows. Held: only the rows
     /// shown are updated in place, and new traces are counted. What a read
     /// may change is `TraceListState.applying`'s to decide.
-    /// `limit` is larger after Resume, so the selected trace stays in the list (S-010).
-    func reloadList(_ reader: TelemetryReader, limit: Int = TraceList.pageSize) async throws {
+    /// Until Resume has revealed the selection, every page read asks for
+    /// `resumeRows`, so the selected trace stays in the list (S-010).
+    func reloadList(_ reader: TelemetryReader) async throws {
+        let limit = resumeRows ?? TraceList.pageSize
         let state = listState
         let read: TraceListRead
         if state.readsHeld {

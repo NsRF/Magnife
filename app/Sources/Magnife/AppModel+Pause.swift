@@ -22,20 +22,26 @@ extension AppModel {
         AccessibilityNotification.Announcement("Paused").post()
     }
 
-    /// Inserts what arrived while paused, reading enough rows that the
-    /// selected trace stays in the list, then brings it into view.
+    /// Inserts what arrived while paused, reading down to the selected trace
+    /// (at most `TraceList.resumeMaxRows` rows; one page with no selection),
+    /// then brings it into view. A trace deeper than that stays selected and
+    /// open in the detail column, and the list shows its newest page.
     func resume() {
         guard isPaused else { return }
-        let limit = max(TraceList.pageSize, traces.count + newTraceCount)
+        let selectedRow = selectedTraceID.flatMap { id in traces.firstIndex { $0.id == id } }
+        let limit = TraceList.resumeLimit(selectedRow: selectedRow, newCount: newTraceCount)
+        // Refreshes before the reveal read as many rows, so a one-page read cannot drop the selection.
+        resumeRows = limit
         pausedSeq = nil
         // Resume inserts even when scrolled away; the reveal below decides
         // whether the list then holds still where the selection is.
         isListHeld = false
         AccessibilityNotification.Announcement("Resumed").post()
         Task {
+            defer { if resumeRows == limit { resumeRows = nil } }
             guard let reader else { return }
             do {
-                try await reloadList(reader, limit: limit)
+                try await reloadList(reader)
                 try await refreshOpenTrace(reader)
                 try await refreshOpenTraceLogs(reader)
             } catch {

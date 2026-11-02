@@ -65,9 +65,10 @@ extension AppModel {
     }
 
     /// At the top: the newest page replaces the rows. Held or paused: the
-    /// rows stay and the logs that arrived are counted. `limit` is larger
-    /// after Resume, so the selected log stays in the list.
-    func reloadLogs(_ reader: TelemetryReader, limit: Int = LogList.pageSize) async throws {
+    /// rows stay and the logs that arrived are counted. Until Resume has
+    /// revealed the selection, page reads ask for `resumeLogRows`.
+    func reloadLogs(_ reader: TelemetryReader) async throws {
+        let limit = resumeLogRows ?? LogList.pageSize
         let state = logListState
         let read: LogListRead
         if state.readsHeld {
@@ -164,6 +165,9 @@ extension AppModel {
     /// were read at, or, never read, at the newest log stored now.
     func pauseLogs() {
         guard logPausedID == nil else { return }
+        // The Logs list is read only while it shows: rows from an earlier
+        // visit are stale, so pausing elsewhere starts from the newest log.
+        if contentMode != .logs { resetLogList() }
         if logsLoaded {
             logPausedID = logListState.paused(latestID: 0).pausedID
         } else if let reader {
@@ -179,12 +183,15 @@ extension AppModel {
     /// Resume: the logs that arrived are inserted; the selected log stays in
     /// the list and is brought into view.
     func resumeLogs() async {
-        let limit = max(LogList.pageSize, logs.count + newLogCount)
+        let selectedRow = selectedLogID.flatMap { id in logs.firstIndex { $0.id == id } }
+        let limit = TraceList.resumeLimit(selectedRow: selectedRow, newCount: newLogCount, pageSize: LogList.pageSize)
         logPausedID = nil
         isLogListHeld = false
         guard contentMode == .logs, let reader else { return }
+        resumeLogRows = limit
+        defer { if resumeLogRows == limit { resumeLogRows = nil } }
         do {
-            try await reloadLogs(reader, limit: limit)
+            try await reloadLogs(reader)
         } catch {
             FileHandle.standardError.write(Data("magnife: read failed: \(error)\n".utf8))
         }

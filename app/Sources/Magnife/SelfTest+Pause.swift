@@ -38,6 +38,11 @@ extension SelfTest {
                 && model.subtitle.hasPrefix("Paused · "), model.subtitle)
         let rows = model.traces
         let openTrace = model.openTrace
+        // The Logs list is not showing: it pauses at the newest log stored, not at rows from an earlier visit.
+        let lastLog = (try? await reader.lastLogID()) ?? -1
+        check("pausing in the Traces view pauses the Logs list at the newest log",
+              await waitUntil(2) { model.logPausedID == lastLog } && model.logs.isEmpty,
+              "paused at \(model.logPausedID ?? -1), newest \(lastLog), \(model.logs.count) rows")
 
         // A span from a new service joins the selected trace, and new traces arrive.
         let now = UInt64(Date().timeIntervalSince1970 * 1e9)
@@ -84,7 +89,11 @@ extension SelfTest {
               model.isPaused && model.traces.map(\.id) == rows.map(\.id) && model.newTraceCount == arrived)
         if model.selectedTraceID == nil { model.selectedTraceID = selected }
 
+        let resumeLimit = TraceList.resumeLimit(selectedRow: model.traces.firstIndex { $0.id == selected },
+                                                newCount: model.newTraceCount)
         model.togglePause()
+        // A refresh while Resume reads (traffic keeps coming) reads as many rows.
+        await model.reload()
         let newest = try? await reader.latestTraces(limit: 1).first
         let resumed = await waitUntil(3) {
             !model.isPaused && model.traces.first?.id == newest?.id && model.traces.contains { $0.id == selected }
@@ -94,6 +103,8 @@ extension SelfTest {
               resumed && model.selectedTraceID == selected && model.traces.count >= rows.count + arrived
                 && row >= 0 && !MenuState.shared.isPaused && !model.subtitle.hasPrefix("Paused"),
               "\(model.traces.count) rows, selected at row \(row)")
+        check("Resume reads down to the selected trace, not every row stored",
+              model.traces.count <= resumeLimit && model.traces.count > row, "\(model.traces.count) rows, limit \(resumeLimit)")
         let inView = await waitUntil(2) { model.listScroller.isRowVisible(row) }
         check("the selected trace is in view after Resume", inView,
               "offset \(model.listScroller.offset), first row \(model.listScroller.firstVisibleRow ?? -1), row \(row)")
@@ -102,8 +113,20 @@ extension SelfTest {
         check("the waterfall catches up after Resume", await waitUntil(3) { model.waterfall.count == spanCount + 1 },
               "\(model.waterfall.count) spans")
 
+        check("a refresh during Resume kept the selected trace in the list",
+              model.traces.contains { $0.id == selected } && model.resumeRows == nil)
+
+        // Nothing selected: Resume reads one page, however many arrived.
         model.selectedTraceID = nil
         model.showNewestTraces()
+        await model.reload()
+        model.togglePause()
+        _ = await send(spans: 440)
+        await model.reload()
+        model.togglePause()
+        _ = await waitUntil(3) { !model.isPaused && model.resumeRows == nil && model.newTraceCount == 0 }
+        check("with nothing selected, Resume reads one page", model.traces.count == TraceList.pageSize,
+              "\(model.traces.count) rows")
         await model.reload()
     }
 }

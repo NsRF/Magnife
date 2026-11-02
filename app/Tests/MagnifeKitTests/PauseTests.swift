@@ -75,6 +75,17 @@ struct PauseTests {
         #expect(next.baseSeq == 9 && next.newCount == 0 && !next.isPaused)
     }
 
+    @Test("Resume reads down to the selected row only, with a ceiling", arguments: [
+        (nil, 60_000, TraceList.pageSize),       // nothing selected: one page, however many arrived
+        (0, 0, 1 + TraceList.pageSize),
+        (10, 25, 10 + 1 + 25 + TraceList.pageSize),
+        (350, 400, 350 + 1 + 400 + TraceList.pageSize),
+        (50, 60_000, TraceList.resumeMaxRows),   // 10 minutes at 100 traces/s
+    ] as [(Int?, Int, Int)])
+    func resumeLimit(selectedRow: Int?, newCount: Int, expected: Int) {
+        #expect(TraceList.resumeLimit(selectedRow: selectedRow, newCount: newCount) == expected)
+    }
+
     @Test("the reader reads a scope as of the pause point, and counts what was created after it")
     func reader() async throws {
         let (dir, writer, reader) = try await makeStore()
