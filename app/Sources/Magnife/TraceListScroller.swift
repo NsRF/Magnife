@@ -79,6 +79,19 @@ final class TraceListScroller {
         return rect.minY >= bounds.minY - topY - 1 && rect.maxY <= bounds.maxY + 1
     }
 
+    /// After a read changed the rows (Resume, Open Trace, Search): waits, up
+    /// to a second, until the table shows `rows()` rows, since a row index
+    /// means nothing before that (FIXLOG); then brings `row()` into view, or
+    /// scrolls to the top when it is nil. Returns whether the list is away
+    /// from the top afterwards, so it holds still there.
+    func reveal(row: () -> Int?, once rows: () -> Int) async -> Bool {
+        for _ in 0..<50 where rowCount != rows() {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        if let row = row() { reveal(row: row) } else { scrollToTop() }
+        return isAwayFromTop
+    }
+
     /// Scrolls the row to the middle of the list when it does not show (Resume, S-010).
     func reveal(row: Int) {
         guard !isRowVisible(row), let scrollView, let rect = frame(ofRow: row) else { return }

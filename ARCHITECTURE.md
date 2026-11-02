@@ -46,4 +46,9 @@ open trace).
 - The database file: `APP_STORE` (tests and snapshots use /tmp).
 - Ports: `APP_GRPC_PORT`, `APP_HTTP_PORT`.
 
-Reviews: `docs/architecture-review-2026-11-02.md`.
+Both live lists (traces, logs) report and set their scroll position through
+`TraceListScroller`; revealing a row after a read (Resume, Open Trace, Search) is
+its `reveal(row:once:)`, which waits for the table to show the model's rows.
+
+Reviews: `docs/architecture-review-2026-11-02.md` (M1),
+`docs/architecture-review-2026-11-02-m2.md` (M2).

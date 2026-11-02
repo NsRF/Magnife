@@ -60,16 +60,9 @@ extension AppModel {
     /// Scrolls the selected trace into view once the table shows the new
     /// rows, or to the top when nothing is selected.
     func revealSelectedTrace() async {
-        let scroller = listScroller
-        for _ in 0..<50 where scroller.rowCount != traces.count {
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        if let id = selectedTraceID, let row = traces.firstIndex(where: { $0.id == id }) {
-            scroller.reveal(row: row)
-        } else {
-            scroller.scrollToTop()
-        }
-        listScrolled(awayFromTop: scroller.isAwayFromTop)
+        let away = await listScroller.reveal(row: { selectedTraceID.flatMap { id in traces.firstIndex { $0.id == id } } },
+                                             once: { traces.count })
+        listScrolled(awayFromTop: away)
     }
 
     /// Snapshot pages show the bar without waiting for traces to arrive.

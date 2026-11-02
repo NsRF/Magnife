@@ -195,16 +195,9 @@ extension AppModel {
         } catch {
             FileHandle.standardError.write(Data("magnife: read failed: \(error)\n".utf8))
         }
-        let scroller = logScroller
-        for _ in 0..<50 where scroller.rowCount != logs.count {
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        if let id = selectedLogID, let row = logs.firstIndex(where: { $0.id == id }) {
-            scroller.reveal(row: row)
-        } else {
-            scroller.scrollToTop()
-        }
-        logListScrolled(awayFromTop: scroller.isAwayFromTop)
+        let away = await logScroller.reveal(row: { selectedLogID.flatMap { id in logs.firstIndex { $0.id == id } } },
+                                            once: { logs.count })
+        logListScrolled(awayFromTop: away)
     }
 
     // MARK: Selection and Open Trace
