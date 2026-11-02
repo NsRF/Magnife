@@ -274,7 +274,7 @@ Depends: S-020
 Acceptance:
 - [snap] Saved filters appear in the sidebar under the services.
 - [self] Saved filters survive a restart; renaming and deleting work.
-Status: todo
+Status: done
 
 ### S-022 Move through traces and spans with the keyboard
 As the user, I use arrow keys, Return and Esc to move between the list, waterfall and span detail.

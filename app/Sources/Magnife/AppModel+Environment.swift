@@ -20,7 +20,7 @@ extension AppModel {
 
     /// The trace list's S-003 empty state: no traces in All Services.
     var showsEmptyState: Bool {
-        knowsStoredTraces && traces.isEmpty && !isLoadingScope && sidebar?.serviceName == nil
+        knowsStoredTraces && traces.isEmpty && !isLoadingScope && scopeService == nil
     }
 
     /// False until the list knows whether the database holds traces: while it

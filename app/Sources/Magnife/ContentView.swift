@@ -26,6 +26,11 @@ struct ContentView: View {
         }
         // Search (S-017) floats over every column.
         .overlay { SearchOverlay() }
+        .sheet(isPresented: Binding(get: { model.showsSaveFilterSheet }, set: { if !$0 { model.cancelSaveFilter() } })) {
+            SaveFilterSheet()
+                .environment(model)
+                .themed()
+        }
         .noInitialFocus()
         .task {
             SelfTest.runIfRequested(model: model)
@@ -106,6 +111,7 @@ struct DetailColumn: View {
 
 struct Sidebar: View {
     @Environment(AppModel.self) private var model
+    @FocusState private var focused: Bool
 
     var body: some View {
         @Bindable var model = model
@@ -118,7 +124,17 @@ struct Sidebar: View {
                         .tag(SidebarSelection.service(service.name))
                 }
             }
-            // Saved Filters (S-020) is hidden while there are none.
+            // Saved Filters (S-021) is hidden while there are none.
+            SavedFiltersSection()
+        }
+        .focused($focused)
+        // Delete Filter (⌘⌫) only while the sidebar has the focus.
+        .onChange(of: focused) { _, isFocused in model.sidebarHasFocus = isFocused }
+        // Return on a saved filter edits its name in place (docs/ux.md, Keyboard map).
+        .onKeyPress(.return) {
+            guard model.renamingFilterID == nil, model.selectedSavedFilter != nil else { return .ignored }
+            model.beginRenamingFilter()
+            return .handled
         }
     }
 }

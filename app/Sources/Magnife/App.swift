@@ -36,7 +36,22 @@ struct MagnifeApp: App {
             SidebarCommands()
             ToolbarCommands()
             // One window: its selection lives in AppModel. Clicking the Dock icon reopens it.
-            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .newItem) {
+                // Saved filters (S-021, docs/ux.md File menu).
+                Button(menu.savedFilters.saveTitle) { delegate.model.saveFilter() }
+                    .keyboardShortcut("s", modifiers: .command)
+                    .disabled(!menu.savedFilters.canSave)
+                Button("Save Filter As…") { delegate.model.saveFilterAs() }
+                    .keyboardShortcut("s", modifiers: [.command, .shift])
+                    .disabled(!menu.savedFilters.canSaveAs)
+                Button("Rename Filter…") { delegate.model.beginRenamingFilter() }
+                    .disabled(!menu.savedFilters.hasSelected)
+                // Only while the sidebar has the focus, so ⌘⌫ still edits text fields.
+                Button("Delete Filter") { delegate.model.deleteFilter(undoManager: NSApp.mainWindow?.undoManager) }
+                    .keyboardShortcut(.delete, modifiers: .command)
+                    .disabled(!menu.savedFilters.canDelete)
+                Divider()
+            }
             CommandGroup(after: .pasteboard) {
                 Divider()
                 Button("Copy Span ID") { delegate.model.copySpanID() }

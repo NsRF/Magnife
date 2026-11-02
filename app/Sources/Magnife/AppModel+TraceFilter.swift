@@ -8,12 +8,13 @@ import MagnifeKit
 extension AppModel {
     /// What the trace list shows: the sidebar's scope and the filter bar's filters.
     var traceFilter: TraceFilter {
-        TraceFilter(service: sidebar?.serviceName, statuses: traceStatuses, slowerThanNs: traceSlowerThanNs,
+        TraceFilter(service: scopeService, statuses: traceStatuses, slowerThanNs: traceSlowerThanNs,
                     conditions: traceConditions)
     }
 
     /// A filter changed: the list starts empty and is read again (as a scope change).
     func traceFilterChanged() {
+        guard !holdsFilterChanges else { return }
         resetTraceList()
         updateFilterMenu()
         refreshNow()
@@ -28,6 +29,17 @@ extension AppModel {
     /// Sets every filter at once (Search's Apply as Filter, a saved filter):
     /// the sidebar takes the service, the bar the rest.
     func applyTraceFilter(_ filter: TraceFilter) {
+        let before = (filter: traceFilter, sidebar: sidebar)
+        holdsFilterChanges = true
+        setBarFilters(filter)
+        holdsFilterChanges = false
+        sidebar = filter.service.map { .service($0) } ?? .allTraces
+        // A new scope read the list again already; the same scope with other filters reads it now.
+        if sidebar == before.sidebar && traceFilter != before.filter { traceFilterChanged() }
+    }
+
+    /// The filter bar's part of a filter: chips, "Slower than", condition rows.
+    func setBarFilters(_ filter: TraceFilter) {
         traceStatuses = filter.statuses
         slowerThanTask?.cancel()
         traceSlowerThanNs = filter.slowerThanNs
@@ -36,23 +48,48 @@ extension AppModel {
         conditionRows = ConditionDraft.rows(for: filter.conditions)
         conditionTask?.cancel()
         traceConditions = filter.conditions
-        sidebar = filter.service.map { .service($0) } ?? .allTraces
+    }
+
+    /// The scope's service: the sidebar's, or the selected saved filter's.
+    var scopeService: String? {
+        sidebar?.savedFilterID != nil ? savedFilterService : sidebar?.serviceName
+    }
+
+    /// The Service pop-ups: a service row in the sidebar, or, while a saved
+    /// filter is selected, its scope (which then reads "Edited").
+    func setScopeService(_ name: String?) {
+        if sidebar?.savedFilterID != nil {
+            savedFilterService = name
+        } else {
+            sidebar = name.map { .service($0) } ?? .allTraces
+        }
     }
 
     /// Clear Filters in the Traces view: every status, any duration, no
     /// condition, All Services. Undo ("Undo Clear Filters") puts them back.
     func clearTraceFilters(undoManager: UndoManager?) {
         let before = traceFilter
+        let scope = sidebar
         guard before.isActive else { return }
         applyTraceFilter(.cleared)
         undoManager?.registerUndo(withTarget: self) { model in
-            MainActor.assumeIsolated { model.restoreTraceFilter(before, undoManager: undoManager) }
+            MainActor.assumeIsolated { model.restoreTraceFilter(before, scope: scope, undoManager: undoManager) }
         }
         undoManager?.setActionName("Clear Filters")
     }
 
-    private func restoreTraceFilter(_ filter: TraceFilter, undoManager: UndoManager?) {
-        applyTraceFilter(filter)
+    private func restoreTraceFilter(_ filter: TraceFilter, scope: SidebarSelection?, undoManager: UndoManager?) {
+        if let id = scope?.savedFilterID, savedFilters[id] != nil {
+            // Back on the saved filter, with the filters it had then (edited or not).
+            sidebar = scope
+            holdsFilterChanges = true
+            setBarFilters(filter)
+            savedFilterService = filter.service
+            holdsFilterChanges = false
+            traceFilterChanged()
+        } else {
+            applyTraceFilter(filter)
+        }
         // Redo clears them again.
         undoManager?.registerUndo(withTarget: self) { model in
             MainActor.assumeIsolated { model.clearTraceFilters(undoManager: undoManager) }

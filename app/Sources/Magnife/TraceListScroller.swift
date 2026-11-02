@@ -198,6 +198,20 @@ final class MenuState: ObservableObject {
         if self.canOpenTrace != canOpenTrace { self.canOpenTrace = canOpenTrace }
     }
 
+    /// File > Save Filter…, Save Filter As…, Rename Filter… and Delete Filter (S-021).
+    struct SavedFilterItems: Equatable {
+        var canSave = false
+        var saveTitle = "Save Filter…"
+        var canSaveAs = false
+        var hasSelected = false
+        var canDelete = false
+    }
+    @Published private(set) var savedFilters = SavedFilterItems()
+
+    func update(savedFilters: SavedFilterItems) {
+        if self.savedFilters != savedFilters { self.savedFilters = savedFilters }
+    }
+
     /// View > Show Span Detail reads "Hide Span Detail" while the pane shows.
     @Published private(set) var showsSpanDetail = true
 

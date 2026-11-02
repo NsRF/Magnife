@@ -6,9 +6,16 @@ import MagnifeKit
 enum SidebarSelection: Hashable {
     case allTraces
     case service(String)
+    /// A saved filter (S-021): its scope and filters, by id.
+    case savedFilter(SavedFilter.ID)
 
     var serviceName: String? {
         if case .service(let name) = self { return name }
+        return nil
+    }
+
+    var savedFilterID: SavedFilter.ID? {
+        if case .savedFilter(let id) = self { return id }
         return nil
     }
 }
@@ -262,11 +269,43 @@ final class AppModel {
     var sidebar: SidebarSelection? = .allTraces {
         didSet {
             guard sidebar != oldValue else { return }
+            // A saved filter brings back its scope and filters, in the Traces view (docs/ux.md).
+            if let id = sidebar?.savedFilterID, let saved = savedFilters[id] { loadSavedFilter(saved) }
             resetTraceList()
             resetLogList()
             updateFilterMenu()
             refreshNow()
         }
+    }
+    /// The saved filters in the sidebar (S-021), in the order created; kept
+    /// in UserDefaults (AppDefaults.shared), never in the database.
+    var savedFilters: SavedFilters = .stored(in: AppDefaults.shared) {
+        didSet {
+            guard savedFilters != oldValue else { return }
+            savedFilters.store(in: AppDefaults.shared)
+            updateFilterMenu()
+        }
+    }
+    /// While a saved filter is selected, the service its scope has now
+    /// (the Service pop-up changes it, and the title then reads "— Edited").
+    var savedFilterService: String? {
+        didSet {
+            guard savedFilterService != oldValue, sidebar?.savedFilterID != nil, !holdsFilterChanges else { return }
+            resetLogList()
+            traceFilterChanged()
+        }
+    }
+    /// True while several filters change as one: one read follows, not one per filter.
+    @ObservationIgnored var holdsFilterChanges = false
+    /// The Save Filter sheet (S-021): shown, and the name typed.
+    var showsSaveFilterSheet = false
+    var saveFilterName = ""
+    /// The saved filter whose name is being edited in place in the sidebar.
+    var renamingFilterID: SavedFilter.ID?
+    /// The sidebar has the keyboard focus: Delete Filter (⌘⌫) works only then,
+    /// so ⌘⌫ still edits text fields.
+    var sidebarHasFocus = false {
+        didSet { if sidebarHasFocus != oldValue { updateFilterMenu() } }
     }
     /// True between a scope change and its first read, so the empty state waits.
     var isLoadingScope = false
@@ -323,9 +362,11 @@ final class AppModel {
         traces.first { $0.id == selectedTraceID }
     }
 
-    /// The window's title: the sidebar scope (docs/ux.md, Window).
+    /// The window's title: the sidebar scope (docs/ux.md, Window), or the
+    /// saved filter's name, "Checkout errors — Edited" once its filters changed.
     var title: String {
-        sidebar?.serviceName ?? "All Services"
+        if let saved = selectedSavedFilter { return saved.title(edited: isSavedFilterEdited) }
+        return sidebar?.serviceName ?? "All Services"
     }
 
     /// The window's subtitle: the count in the list, "1,204 traces" or

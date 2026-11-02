@@ -96,7 +96,7 @@ struct TraceListView: View {
                     } actions: {
                         ClearTraceFiltersButton()
                     }
-                } else if let service = model.sidebar?.serviceName {
+                } else if let service = model.scopeService {
                     ContentUnavailableView("No Traces from \(service)", systemImage: "line.3.horizontal.decrease",
                                            description: Text("Traces with a span from \(service) appear here."))
                 } else {

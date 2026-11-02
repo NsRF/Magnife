@@ -47,6 +47,8 @@ enum SelfTest {
             } else if only == "search" {
                 await checkSearch(model)
                 await checkTraceFilters(model)
+            } else if only == "saved-filters" {
+                await checkSavedFilters(model)
             } else if only == "retention" {
                 await checkRetention(model)
             } else if only == "span-detail" {
@@ -59,6 +61,7 @@ enum SelfTest {
                 // Before the live list checks send more traces: it counts the seed set's.
                 await checkSearch(model)
                 await checkTraceFilters(model)
+                await checkSavedFilters(model)
                 await checkTraceList(model)
                 await checkSidebar()
                 await checkPause(model)

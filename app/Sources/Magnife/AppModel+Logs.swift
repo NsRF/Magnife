@@ -54,7 +54,7 @@ extension AppModel {
         refreshNow()
     }
 
-    var logFilter: LogFilter { LogFilter(service: sidebar?.serviceName, levels: logLevels, bodyContains: logBodyFilter) }
+    var logFilter: LogFilter { LogFilter(service: scopeService, levels: logLevels, bodyContains: logBodyFilter) }
 
     /// The list's rows and ids as one value, for `LogListState.applying`.
     var logListState: LogListState {
@@ -312,7 +312,7 @@ extension AppModel {
     var hasLogBarFilters: Bool { !logLevels.isEmpty || !logBodyText.trimmingCharacters(in: .whitespaces).isEmpty }
 
     /// Clear Filters has something to clear: a level, a body or a service.
-    var hasLogFilters: Bool { hasLogBarFilters || sidebar?.serviceName != nil }
+    var hasLogFilters: Bool { hasLogBarFilters || scopeService != nil }
 
     /// View > Show Filter Bar (⌘F) and the Filter button. Shown from the
     /// menu, the "Body contains" field takes the focus.
@@ -365,5 +365,6 @@ extension AppModel {
         case .traces:
             MenuState.shared.update(filterBar: showsTraceFilterBar ? .shown : .hidden, hasFilters: hasTraceFilters)
         }
+        updateSavedFilterMenu()
     }
 }

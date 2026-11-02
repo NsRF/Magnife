@@ -88,7 +88,7 @@ struct LogListView: View {
                 } actions: {
                     ClearLogFiltersButton()
                 }
-            } else if let service = model.sidebar?.serviceName {
+            } else if let service = model.scopeService {
                 ContentUnavailableView(LogList.emptyTitle(service: service), systemImage: "line.3.horizontal.decrease",
                                        description: Text(LogList.emptyDescription(service: service)))
             } else {

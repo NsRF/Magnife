@@ -3,8 +3,8 @@ import MagnifeKit
 import SwiftUI
 
 /// The Traces filter bar (S-018 to S-020, design decision 1), over the
-/// trace list: Service pop-up · status chips · "Slower than" · Clear
-/// Filters · close, then the condition rows (TraceConditionRows.swift). Esc or the close button hides
+/// trace list: Service pop-up · status chips · "Slower than" · Save
+/// Filter… · Clear Filters · close, then the condition rows (TraceConditionRows.swift). Esc or the close button hides
 /// it; the filters stay on.
 struct TraceFilterBar: View {
     @Environment(AppModel.self) private var model
@@ -57,6 +57,9 @@ struct TraceFilterBar: View {
 
     private var trailing: some View {
         HStack(spacing: Space.sm) {
+            Button(model.saveFilterTitle) { model.saveFilter() }
+                .disabled(!model.canSaveFilter)
+                .help("Keep these filters in the sidebar (⌘S)")
             Button("Clear Filters") { model.clearTraceFilters(undoManager: undoManager) }
                 .disabled(!model.hasTraceFilters)
             FilterBarCloseButton { model.hideTraceFilterBar() }
@@ -177,8 +180,8 @@ struct ServiceScopePicker: View {
     let help: String
 
     var body: some View {
-        Picker("Service", selection: Binding(get: { model.sidebar?.serviceName ?? "" },
-                                             set: { model.sidebar = $0.isEmpty ? .allTraces : .service($0) })) {
+        Picker("Service", selection: Binding(get: { model.scopeService ?? "" },
+                                             set: { model.setScopeService($0.isEmpty ? nil : $0) })) {
             Text("All Services").tag("")
             ForEach(model.services) { service in
                 Text(service.name).tag(service.name)

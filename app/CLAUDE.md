@@ -138,6 +138,15 @@ this app starts the helper and reads its database. No server, no accounts.
   `attribute_keys` via `ConditionKeySuggestion`; AppKit key field in
   `TraceConditionRows.swift`);
   `showsTraceFilterBar`, `toggleFilterBar` acts on the current view). Esc on a focused Table needs `.onKeyPress(.escape)`.
+- Saved filters (S-021): `SavedFilters` (MagnifeKit, unit-tested: names,
+  rename, delete and undo place, `isEdited`, defaults round trip) keeps
+  name + query in `AppDefaults.shared` (the user's defaults, or the
+  `com.nasserfarhat.magnife.tests` suite in snapshot, self-test and
+  APP_STORE runs). `SidebarSelection.savedFilter(id)`; while one is
+  selected its service is `savedFilterService`, and `scopeService` is what
+  every scoped read uses (never `sidebar?.serviceName`). Views in
+  `SavedFilterViews.swift`, model in `AppModel+SavedFilters.swift`;
+  `APP_SELFTEST_ONLY=saved-filters` runs its checks.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -213,7 +222,9 @@ this app starts the helper and reads its database. No server, no accounts.
   `05-logs-filtered` (ERROR and WARN on), `05-logs-filter-hidden`, `05-logs-no-matches`,
   `06-command-k` (Search for "checkout") with `-empty`, `-suggestions`, `-tokens`, `-no-match`,
   `07-filter-bar` (Error on), `07-filter-bar-no-matches`, `-duration`, `-duration-error`,
-  `-suggestions` (key completion), `-condition` (two rows applied).
+  `-suggestions` (key completion), `-condition` (two rows applied),
+  `-save` and `-save-duplicate` (the Save Filter sheet); `02-trace-list-saved-filter`,
+  `-saved-filter-edited` and `-saved-filter-rename` (S-021).
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Both scripts pass an empty "NSSplitView Subview Frames …" default, so the
