@@ -187,6 +187,22 @@ struct ReaderTests {
         #expect(services.map(\.errorCount) == [2, 1, 0])
     }
 
+    @Test("pruned data leaves the sidebar's services and the key suggestions")
+    func prunedServicesAndKeys() async throws {
+        let (dir, writer, reader) = try await makeStore()
+        defer { dir.remove() }
+        // The helper keeps a row for every service and key it ever saw.
+        try await writer.write { db in
+            try db.execute(sql: "INSERT INTO services VALUES ('gone', 1, 2), ('logs-only', 1, 2)")
+            try insertLog(db, timeNs: Self.base, severity: 9, service: "logs-only", body: "kept", trace: nil)
+            try db.execute(sql: "INSERT INTO attribute_keys VALUES ('old.key', 1, 5), ('new.key', 1, 50)")
+        }
+        #expect(try await reader.services().map(\.name) == ["checkout-api", "logs-only", "orders", "web"])
+        #expect(try await reader.attributeKeys(seenSinceNs: 10).map(\.key) == ["new.key"])
+        #expect(try await reader.attributeKeys(source: .span, seenSinceNs: 5).map(\.key) == ["new.key", "old.key"])
+        #expect(Retention.cutoffNs(seconds: 60, now: Date(timeIntervalSince1970: 100)) == 40_000_000_000)
+    }
+
     @Test("last seq, traces since a seq, attribute keys")
     func meta() async throws {
         let (dir, writer, reader) = try await makeStore()

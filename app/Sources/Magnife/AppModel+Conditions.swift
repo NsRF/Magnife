@@ -99,8 +99,9 @@ extension AppModel {
     /// Span and resource keys received so far (log keys are not trace filters).
     func loadConditionKeys() {
         guard let reader else { return }
+        let cutoff = Retention.cutoffNs(seconds: retentionSeconds)
         Task { [weak self] in
-            let keys = (try? await reader.attributeKeys()) ?? []
+            let keys = (try? await reader.attributeKeys(seenSinceNs: cutoff)) ?? []
             guard let self, keys != self.conditionKeys else { return }
             self.conditionKeys = keys
         }

@@ -37,9 +37,10 @@ extension AppModel {
         searchSelection = 0
         showsSearch = true
         runSearch()
+        let cutoff = Retention.cutoffNs(seconds: retentionSeconds)
         Task { [weak self] in
             guard let reader = self?.reader else { return }
-            let keys = (try? await reader.attributeKeys()) ?? []
+            let keys = (try? await reader.attributeKeys(seenSinceNs: cutoff)) ?? []
             self?.searchAttributeKeys = Array(Set(keys.map(\.key))).sorted()
         }
     }

@@ -213,6 +213,17 @@ extension SelfTest {
         check("a longer period applies at once, with no dialog", longer && week == 604_800, "\(String(describing: week))")
         check("and deletes nothing", !model.traces.isEmpty)
 
+        // A crash restart launches with the period chosen since, not the launch one.
+        if let pid = helper.helperPID {
+            kill(pid, SIGKILL)
+            _ = await waitUntil(5) { helper.helperPID != nil && helper.helperPID != pid && helper.receiver.isReceiving }
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        let restarted = await applied(604_800)
+        check("a helper restarted after a crash keeps the chosen period (meta.retention_s)",
+              restarted == 604_800 && helper.supervisor?.launchArguments.suffix(1) == ["604800"],
+              "\(String(describing: restarted))")
+
         helper.requestRetention(3_600)
         check("a shorter period asks first", helper.pendingRetention == 3_600 && helper.retentionSeconds == 604_800)
         helper.cancelRetention()

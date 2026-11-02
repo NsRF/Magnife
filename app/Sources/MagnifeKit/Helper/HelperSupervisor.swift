@@ -39,10 +39,13 @@ public final class HelperSupervisor: @unchecked Sendable {
     private var backoff: RestartBackoff
     private var wanted = false
     private var restartWork: DispatchWorkItem?
+    /// The retention every launch passes, the configuration's until setRetention.
+    private var retentionSeconds: Int
 
     public init(configuration: HelperConfiguration) {
         self.configuration = configuration
         backoff = configuration.backoff
+        retentionSeconds = configuration.retentionSeconds
         (events, continuation) = AsyncStream.makeStream(of: SupervisorEvent.self)
         // Writing to a helper that just died must fail with an error, not kill the app.
         signal(SIGPIPE, SIG_IGN)
@@ -78,6 +81,27 @@ public final class HelperSupervisor: @unchecked Sendable {
             }
         }
         try result.get()
+    }
+
+    /// Changes the retention: sent to a running helper at once, and passed
+    /// as --retention to every later launch, so a restart after a crash or a
+    /// change made while the helper is down keeps the chosen period (S-016).
+    public func setRetention(seconds: Int) {
+        queue.sync {
+            retentionSeconds = seconds
+            try? stdin?.write(contentsOf: Data((HelperCommand.retention(seconds: seconds).line + "\n").utf8))
+        }
+    }
+
+    /// The arguments the next launch passes.
+    public var launchArguments: [String] {
+        queue.sync { launchConfiguration.arguments }
+    }
+
+    private var launchConfiguration: HelperConfiguration {
+        var current = configuration
+        current.retentionSeconds = retentionSeconds
+        return current
     }
 
     /// Closes stdin, waits up to `stopTimeout` for the helper to exit, then
@@ -118,7 +142,7 @@ public final class HelperSupervisor: @unchecked Sendable {
         guard wanted, process == nil else { return }
         let child = Process()
         child.executableURL = configuration.executableURL
-        child.arguments = configuration.arguments
+        child.arguments = launchConfiguration.arguments
         child.environment = ProcessInfo.processInfo.environment.merging(configuration.environment) { $1 }
         let input = Pipe()
         let output = Pipe()

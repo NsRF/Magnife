@@ -12,6 +12,12 @@ public enum Retention {
     /// that watch pruning happen (the self-test's short retention).
     public static let environmentKey = "APP_RETENTION_SECONDS"
 
+    /// The wall-clock cutoff in Unix nanoseconds: data received before it is
+    /// pruned (attribute keys last seen before it leave the suggestions).
+    public static func cutoffNs(seconds: Int, now: Date = Date()) -> Int64 {
+        Int64((now.timeIntervalSince1970 - Double(seconds)) * 1e9)
+    }
+
     /// The Settings pop-up's choices, shortest first.
     public static let choices = [3_600, 21_600, 86_400, 259_200, 604_800]
 

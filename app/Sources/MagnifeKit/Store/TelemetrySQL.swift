@@ -234,12 +234,16 @@ enum TelemetrySQL {
                (SELECT COUNT(DISTINCT trace_id) FROM spans
                  WHERE spans.service_name = services.name AND spans.status_code = 2) AS error_count
         FROM services
+        WHERE EXISTS (SELECT 1 FROM spans WHERE spans.service_name = services.name)
+           OR EXISTS (SELECT 1 FROM logs WHERE logs.service_name = services.name)
         ORDER BY name COLLATE NOCASE
         """
 
     static let lastSeq = "SELECT value FROM meta WHERE key = 'last_seq'"
 
+    /// Keys last seen at or after ?1 (the retention's cutoff, so pruned keys
+    /// leave the suggestions; the helper keeps every key it ever saw).
     static func attributeKeys(source: Bool) -> String {
-        "SELECT key, source, last_seen_ns FROM attribute_keys \(source ? "WHERE source = ?" : "") ORDER BY key, source"
+        "SELECT key, source, last_seen_ns FROM attribute_keys WHERE last_seen_ns >= ?\(source ? " AND source = ?" : "") ORDER BY key, source"
     }
 }

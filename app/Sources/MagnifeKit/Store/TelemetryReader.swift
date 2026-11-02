@@ -445,10 +445,12 @@ public final class TelemetryReader: Sendable {
         Int64(try String.fetchOne(db, sql: TelemetrySQL.lastSeq) ?? "") ?? 0
     }
 
+    /// The keys seen since `seenSinceNs` (wall clock ns; pass the retention's
+    /// cutoff so keys of pruned data are left out), of one source or all.
     @concurrent
-    public func attributeKeys(source: AttributeSource? = nil) async throws -> [AttributeKey] {
+    public func attributeKeys(source: AttributeSource? = nil, seenSinceNs: Int64 = 0) async throws -> [AttributeKey] {
         let sql = TelemetrySQL.attributeKeys(source: source != nil)
-        let arguments: StatementArguments = source.map { [$0.rawValue] } ?? []
+        let arguments: StatementArguments = source.map { [seenSinceNs, $0.rawValue] } ?? [seenSinceNs]
         return try await pool.read { try AttributeKey.fetchAll($0, sql: sql, arguments: arguments) }
     }
 }

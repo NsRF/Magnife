@@ -121,6 +121,30 @@ struct HelperSupervisorTests {
         await supervisor.stop()
     }
 
+    @Test("a restart after a crash keeps the retention set since launch")
+    func restartKeepsRetention() async throws {
+        let dir = try TempDir("supervisor-retention")
+        defer { dir.remove() }
+        let supervisor = HelperSupervisor(configuration: try configuration(dir))
+        var events = supervisor.events.makeAsyncIterator()
+        supervisor.start()
+        _ = await next(&events) { if case .helper(.ports) = $0 { true } else { false } }
+        supervisor.setRetention(seconds: 604_800)
+        #expect(await next(&events) { if case .helper(.error) = $0 { true } else { false } }
+                    == .helper(.error(message: "retention 604800")))
+        #expect(supervisor.launchArguments.suffix(2) == ["--retention", "604800"])
+
+        kill(try #require(supervisor.pid), SIGKILL)
+        _ = await next(&events) { if case .crashed = $0 { true } else { false } }
+        // Set while the helper is down: the next launch passes it.
+        supervisor.setRetention(seconds: 21_600)
+        _ = await next(&events) { if case .started = $0 { true } else { false } }
+        let argv = await next(&events) { if case .helper(.error) = $0 { true } else { false } }
+        guard case .helper(.error(let message)) = argv else { Issue.record("no args"); return }
+        #expect(message.hasSuffix("--retention 21600"))
+        await supervisor.stop()
+    }
+
     @Test("stop closes stdin and the helper exits on EOF")
     func stopOnEOF() async throws {
         let dir = try TempDir("supervisor-eof")

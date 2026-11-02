@@ -170,3 +170,17 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: AppKit saves "NSWindow Frame main-AppWindow-1" and "NSSplitView Subview Frames …" in the app's own defaults domain by itself. The scripts' empty split-frames argument only changed what a run read at launch; every resize in a test run (and in the self-test's second Magnife) wrote the real domain.
 - Fix: snapshot and self-test runs (`AppDefaults.isTestRun`) copy the layout keys into the `com.nasserfarhat.magnife.tests` suite in `applicationWillFinishLaunching`, before the window exists, and put them back exactly in `applicationWillTerminate`; a copy left by a crashed run is restored by the next test run. App-owned keys of test runs (saved filters) live in that suite too. The real app's layout keys were reset once (backup in the session scratchpad), so a normal launch opens at 1280 × 760 with the columns at 210 / 520 / the rest.
 - Rule: a test run never writes the user's defaults domain; anything AppKit saves there by itself is copied aside at launch and restored at exit.
+
+## A restarted helper went back to the launch retention (S-016, M2 review)
+
+- Symptom: launched with 24 hours, set to 7 days in Settings; after a helper crash and restart, the helper pruned everything older than 24 hours within a minute. A change made while the helper was down was dropped without a word.
+- Cause: `HelperSupervisor` kept the `HelperConfiguration` built at launch, with `--retention`, and reused it for every restart; the app sent `retention <s>` once with `try?`, which failed while the helper was down, and sent nothing on `.started(restart: true)`.
+- Fix: `HelperSupervisor.setRetention(seconds:)` keeps the value for every later launch and writes `retention <s>` to a running helper; `AppModel.retentionSeconds` calls it. Unit test (FakeHelper echoes its argv after a SIGKILL restart) and a self-test check with the real helper (`meta.retention_s` after a kill -9 restart).
+- Rule: state the app changes after launch never lives only in launch arguments; anything a restart must keep is owned by the supervisor.
+
+## Services whose data was pruned stayed in the sidebar (S-015, M2 review)
+
+- Symptom: a service that stopped sending more than the retention ago stayed in the sidebar with no count, selecting it showed "No Traces from X", and its old keys still came up as condition suggestions.
+- Cause: the helper keeps a row per service and per key ever seen (the contract's meaning), and the reader listed every row.
+- Fix: `servicesWithErrors` lists a service only while a span or log of it is stored; `attributeKeys(seenSinceNs:)` leaves out keys last seen before the retention's cutoff. Unit test `prunedServicesAndKeys`.
+- Rule: a list read from a "ever seen" table filters by what is still stored.
