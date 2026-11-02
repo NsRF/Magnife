@@ -250,6 +250,12 @@ final class AppModel {
         }
     }
 
+    /// A shorter period waiting for its "Delete Data Older Than …?" dialog (S-016).
+    var pendingRetention: Int?
+    /// The database files' size on disk, for Settings > General (S-016); nil until first read.
+    var databaseSize: Int64?
+    @ObservationIgnored var databaseSizeTask: Task<Void, Never>?
+
     var supervisor: HelperSupervisor?
     /// Sees every helper event before the model handles it (self-test timing).
     @ObservationIgnored var onHelperEvent: ((SupervisorEvent) -> Void)?
@@ -383,6 +389,7 @@ final class AppModel {
             resetLogList()
             return
         }
+        refreshDatabaseSize()
         do {
             try await reloadList(reader)
             // The Logs list is read while it shows; switching to it reads it at once.

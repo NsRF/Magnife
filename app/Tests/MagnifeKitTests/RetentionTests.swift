@@ -138,4 +138,45 @@ struct RetentionTests {
         }
         #expect(try await reader.retentionSeconds() == 3_600)
     }
+
+    // MARK: Changing it (S-016)
+
+    @Test("a shorter period asks first; a longer one or the same applies at once")
+    func asksFirst() {
+        #expect(Retention.asksFirst(from: 86_400, to: 3_600))
+        #expect(!Retention.asksFirst(from: 86_400, to: 604_800))
+        #expect(!Retention.asksFirst(from: 86_400, to: 86_400))
+    }
+
+    @Test("the dialog's words", arguments: [(3_600, "Delete Data Older Than 1 Hour?",
+                                             "Traces and logs older than 1 hour are deleted now. You can't undo this action."),
+                                            (21_600, "Delete Data Older Than 6 Hours?",
+                                             "Traces and logs older than 6 hours are deleted now. You can't undo this action."),
+                                            (259_200, "Delete Data Older Than 3 Days?",
+                                             "Traces and logs older than 3 days are deleted now. You can't undo this action.")])
+    func dialog(seconds: Int, title: String, message: String) {
+        #expect(Retention.confirmTitle(seconds: seconds) == title)
+        #expect(Retention.confirmMessage(seconds: seconds) == message)
+        #expect(Retention.label == "Keep traces and logs for")
+        #expect(Retention.footnote == "Older traces and logs are deleted automatically.")
+    }
+
+    @Test("database size is the database plus its WAL, in Finder's units")
+    func databaseSize() throws {
+        let dir = try TempDir("retention-size")
+        defer { dir.remove() }
+        let db = dir.file("magnife.sqlite")
+        #expect(DatabaseSize.bytes(of: db) == 0)
+        try Data(count: 120_000).write(to: db)
+        try Data(count: 62_000).write(to: URL(fileURLWithPath: db.path + "-wal"))
+        try Data(count: 32_768).write(to: URL(fileURLWithPath: db.path + "-shm"))
+        #expect(DatabaseSize.bytes(of: db) == 182_000)
+        #expect(DatabaseSize.text(182_000_000) == "182 MB")
+        #expect(DatabaseSize.spoken(182_000_000) == "182 megabytes")
+        #expect(DatabaseSize.text(0) == "0 bytes")
+        #expect(DatabaseSize.spoken(4_000) == "4 kilobytes")
+        // "1.5 GB" or "1,5 GB", as the locale writes it: the number is the same in both.
+        #expect(DatabaseSize.spoken(1_500_000_000)
+                == DatabaseSize.text(1_500_000_000).replacingOccurrences(of: "GB", with: "gigabytes"))
+    }
 }

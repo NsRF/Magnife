@@ -225,7 +225,7 @@ Depends: S-015
 Acceptance:
 - [snap] Settings shows the retention choice and the current database size.
 - [self] Shortening retention prunes right away; the list updates.
-Status: todo
+Status: done
 
 ## M4 Speed
 

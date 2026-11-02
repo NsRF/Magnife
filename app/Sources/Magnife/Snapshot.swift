@@ -83,7 +83,8 @@ enum SnapshotPage: String, CaseIterable {
 /// 02-trace-list-paused (S-010), 04-span-detail-logs and -log-json (S-011),
 /// 03-trace-detail-trace-logs (S-012), 03-trace-detail-no-longer-stored (S-015), 05-logs-no-trace, -new-logs, -paused and -empty (S-013),
 /// 05-logs-filtered, -filter-hidden and -no-matches (S-014),
-/// and 09-settings-<tab>-light.png and -dark.png for every Settings tab, then quits.
+/// and 09-settings-<tab>-light.png and -dark.png for every Settings tab,
+/// and 09-settings-general-delete (S-016's dialog), then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
 /// APP_SNAPSHOT_PAGES=02-trace-list,09-settings limits the pages.
 /// Add APP_ACCENT=<id> to see the pages in another accent.
@@ -150,6 +151,7 @@ enum Snapshot {
                         try? await Task.sleep(for: .seconds(0.8))
                         let settings = NSApp.windows.first { $0.isVisible && $0 !== main && !$0.isSheet }
                         capture(to: "\(dir)/\(SnapshotPage.settings.rawValue)-\(tab.rawValue)-\(mode).png", window: settings)
+                        if tab == .general, let settings { await captureRetentionDialog(model, settings: settings, dir: dir, mode: mode) }
                     }
                 }
             }

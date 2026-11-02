@@ -110,8 +110,12 @@ this app starts the helper and reads its database. No server, no accounts.
   Held lists drop pruned rows (`HeldTraces.removed`, `HeldLogs.removed`),
   paused ones keep them; a selected trace that is gone (`reader.trace` nil)
   shows `TraceNoLongerStored` (`AppModel.traceNoLongerStored`,
-  `prunedTraceID`). `APP_SELFTEST_ONLY=retention` runs the end-to-end checks
-  with the real helper at a 3 s retention.
+  `prunedTraceID`). Settings > General's pop-up (S-016, `RetentionSettings`)
+  calls `requestRetention`: longer applies at once, shorter waits for the
+  "Delete Data Older Than …?" alert (`pendingRetention`); "Database size" is
+  `DatabaseSize.bytes` (database plus WAL), `AppModel.databaseSize`.
+  `APP_SELFTEST_ONLY=retention` runs the end-to-end checks with the real
+  helper (S-015 at a 3 s retention, then S-016's change flow).
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -168,7 +172,8 @@ this app starts the helper and reads its database. No server, no accounts.
 - After every UI change, take snapshots and look at them: `tools/snap.sh`.
   It writes `/tmp/Magnife-shots/<page>-light.png` and `-dark.png` for every
   `SnapshotPage` (the pages in `docs/STORIES.md`), and
-  `09-settings-<tab>-light.png` / `-dark.png`, then quits. `02-trace-list-busy`
+  `09-settings-<tab>-light.png` / `-dark.png` (and `09-settings-general-delete`,
+  the S-016 dialog), then quits. `02-trace-list-busy`
   and `02-trace-list-not-receiving` show the busy-port banners (replayed
   "ports" lines, since APP_HELPER=none), `02-trace-list-restarted` the S-008
   banner. `01-empty-state-copied` shows the

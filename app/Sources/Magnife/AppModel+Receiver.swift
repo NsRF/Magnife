@@ -85,6 +85,7 @@ extension AppModel {
             // Pruned rows leave the lists and the sidebar counts drop (S-015);
             // a selected trace that was deleted shows "Trace No Longer Stored".
             requestRefresh()
+            refreshDatabaseSize()
         case .helper(.error(let message)):
             helperProblem = ReceiverStatus.problem(message)
         case .helper(.unknown):

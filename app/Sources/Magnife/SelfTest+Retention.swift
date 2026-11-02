@@ -58,6 +58,7 @@ extension SelfTest {
         model.selectedTraceID = nil
         model.showContentMode(.traces)
         await model.useStore(at: model.storeURL)
+        await checkRetentionChange(model)
         try? FileManager.default.removeItem(at: retentionRoot)
     }
 
@@ -164,5 +165,84 @@ extension SelfTest {
               "\(Int(stall * 1000)) ms")
         let rows = (try? await model.reader?.traceCount()) ?? 0
         check("the store keeps only the last few seconds", rows > 0 && rows < 4_000 * 9, "\(rows) traces")
+    }
+
+    // MARK: S-016
+
+    /// Settings > General's pop-up through the model the window binds to:
+    /// a longer period applies at once, a shorter one waits for Delete,
+    /// Cancel changes nothing, and Delete prunes right away.
+    static func checkRetentionChange(_ model: AppModel) async {
+        let root = retentionRoot.appending(path: "change")
+        try? FileManager.default.removeItem(at: root)
+        guard let helperURL = AppModel.helperExecutable(environment: [:]),
+              let sender = ProcessInfo.processInfo.environment["APP_SAMPLE_SENDER"].map(URL.init(fileURLWithPath:)) else {
+            return check("the bundled helper and the sample sender exist (tools/selftest.sh)", false)
+        }
+        let store = root.appending(path: "magnife.sqlite")
+        let helper = AppModel(storeURL: store)
+        helper.retentionSeconds = Retention.defaultSeconds
+        let ports = (grpc: freePort(), http: freePort())
+        helper.startReceiver(executable: helperURL, ports: ports)
+        _ = await waitUntil(5) { helper.receiver.isReceiving && helper.storeState == .ready }
+        // The window's list reads the same file.
+        await model.useStore(at: store)
+        model.sidebar = .allTraces
+        model.showContentMode(.traces)
+        helper.onHelperEvent = { [weak model] event in
+            if case .helper(.batch) = event { model?.handle(event) }
+            if case .helper(.pruned) = event { model?.handle(event) }
+        }
+        let sent = await run(sender, ["--protocol", "http-protobuf", "--scenarios", "healthy,http-500,logs",
+                                      "--grpc", "127.0.0.1:\(ports.grpc)", "--http", "127.0.0.1:\(ports.http)"])
+        let listed = await waitUntil(3) { model.traces.count >= 2 && helper.traces.count >= 2 }
+        check("the list has traces before the change", sent.status == 0 && listed, "\(model.traces.count)")
+        func applied(_ expected: Int) async -> Int? {
+            var value: Int?
+            for _ in 0..<40 {
+                value = try? await helper.reader?.retentionSeconds()
+                if value == expected { break }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            return value
+        }
+
+        helper.requestRetention(604_800)
+        let longer = await waitUntil(2, every: .milliseconds(50)) { helper.pendingRetention == nil && helper.retentionSeconds == 604_800 }
+        let week = await applied(604_800)
+        check("a longer period applies at once, with no dialog", longer && week == 604_800, "\(String(describing: week))")
+        check("and deletes nothing", !model.traces.isEmpty)
+
+        helper.requestRetention(3_600)
+        check("a shorter period asks first", helper.pendingRetention == 3_600 && helper.retentionSeconds == 604_800)
+        helper.cancelRetention()
+        try? await Task.sleep(for: .milliseconds(500))
+        let kept = try? await helper.reader?.retentionSeconds()
+        check("Cancel keeps the previous choice and tells the helper nothing",
+              helper.pendingRetention == nil && helper.retentionSeconds == 604_800 && kept == 604_800)
+
+        // A period shorter than the data's age (the test hook's seconds) so Delete has something to delete.
+        try? await Task.sleep(for: .seconds(1.2))
+        let sizeBefore = DatabaseSize.bytes(of: store)
+        helper.requestRetention(1)
+        check("shortening to 1 second asks first too", helper.pendingRetention == 1)
+        let confirmed = Date()
+        helper.confirmRetention()
+        let emptied = await waitUntil(3) { model.traces.isEmpty && helper.traces.isEmpty }
+        let elapsed = Date().timeIntervalSince(confirmed)
+        print("INFO Delete emptied the list in \(Int(elapsed * 1000)) ms")
+        check("Delete prunes right away and the list updates (under 800 ms, before any pruning tick)",
+              emptied && elapsed < 0.8, "\(Int(elapsed * 1000)) ms, \(model.traces.count) rows")
+        let second = await applied(1)
+        check("the helper applied the new period", second == 1)
+        _ = await waitUntil(2) { helper.databaseSize == DatabaseSize.bytes(of: store) }
+        check("Database size is read again after the pruning (database plus WAL)",
+              helper.databaseSize == DatabaseSize.bytes(of: store) && (helper.databaseSize ?? 0) > 0,
+              "\(helper.databaseSize ?? -1) vs \(DatabaseSize.bytes(of: store)), before \(sizeBefore)")
+
+        helper.onHelperEvent = nil
+        await helper.stopHelperAndWait()
+        await model.useStore(at: model.storeURL)
+        try? FileManager.default.removeItem(at: root)
     }
 }

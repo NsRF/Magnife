@@ -54,28 +54,16 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// The receiver's ports and how long data is kept. S-016 adds the database size.
+/// The receiver's ports, how long data is kept, and the database size (S-016).
 struct GeneralSettings: View {
     @Environment(AppModel.self) private var model
 
-    private static let retentions: [(String, Int)] = [
-        ("1 hour", 3_600), ("6 hours", 21_600), ("24 hours", 86_400), ("3 days", 259_200), ("7 days", 604_800),
-    ]
-
     var body: some View {
-        @Bindable var model = model
         Section("Receiver") {
             LabeledContent("gRPC", value: "127.0.0.1:\(HelperConfiguration.ports().grpc)")
             LabeledContent("HTTP", value: "127.0.0.1:\(HelperConfiguration.ports().http)")
             LabeledContent("Status", value: model.receiver.text)
         }
-        Section("Data") {
-            Picker(selection: $model.retentionSeconds) {
-                ForEach(Self.retentions, id: \.1) { Text($0.0).tag($0.1) }
-            } label: {
-                Text("Keep traces and logs for")
-                Text("Older traces and logs are deleted automatically.")
-            }
-        }
+        RetentionSettings()
     }
 }
