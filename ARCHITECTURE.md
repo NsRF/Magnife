@@ -12,10 +12,12 @@ apps ──OTLP──> ingest/ (Go helper, magnife-ingest) ──writes──> m
 
 ## Targets and layers
 
-- `ingest/` (Go): `cmd/magnife-ingest` (flags, stdin, stdout), `internal/receiver`
-  (OTLP/gRPC and OTLP/HTTP on 127.0.0.1, busy-port check), `internal/convert`
+- `ingest/` (Go): `cmd/magnife-ingest` (flags), `internal/helper` (the stdin and
+  stdout protocol), `internal/receiver` (OTLP/gRPC and OTLP/HTTP on 127.0.0.1),
+  `internal/ports` (busy-port check and owner), `internal/convert`
   (pdata to rows and JSON), `internal/store` (batch writer, persistent WAL, pruning,
-  embeds a byte-identical copy of `docs/schema.sql`).
+  embeds a byte-identical copy of `docs/schema.sql`); `cmd/send-sample-traces` and
+  `internal/sample` are the test sender.
 - `app/Sources/MagnifeKit` (Swift library, no SwiftUI): records and the rules on
   them (`Waterfall`, `SpanDetail`, `TraceList`, `TraceListState`), the read-only
   `TelemetryReader` with all SQL in `TelemetrySQL`, the helper protocol and
