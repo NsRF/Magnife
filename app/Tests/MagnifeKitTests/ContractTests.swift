@@ -82,6 +82,14 @@ struct ContractTests {
         return (dir, writer, try await TelemetryReader.open(at: url))
     }
 
+    @Test("the contract says the writer keeps its -wal, which a read-only reader needs (S-008)")
+    func persistentWAL() {
+        // A writer without it leaves no -wal on exit, and a relaunched app reads
+        // nothing until the helper is up (WALReadonlyTests, LifecycleTests).
+        #expect(Schema.sql.contains("SQLITE_FCNTL_PERSIST_WAL"))
+        #expect(Schema.sql.contains("-wal and -shm files stay after the helper exits"))
+    }
+
     @Test("traces: columns, order, cursor, service scope, counts")
     func traces() async throws {
         let (dir, writer, reader) = try await makeStore()

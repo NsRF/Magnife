@@ -114,3 +114,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: every event row was laid out at once (a plain VStack), each long value was laid out twice (shown, and a hidden full copy to decide "Show All"), and `SpanDetail.sections`, `attributes`, `events` and `exceptions` were computed properties that sorted again on every access during a view update.
 - Fix: the events list is a LazyVStack; a value over 4,000 UTF-8 bytes counts as cut without measuring and shows only its start while collapsed (the whole value when expanded); `SpanDetail` orders its lists once in `init`, where the reader builds it off the main actor. Measured: 700 ms to about 20 ms (self-test INFO line, check "a 500 KB value and 2,000 events open without a hang"); the 500 KB value alone went to 26 ms with the prefix measure.
 - Rule: a detail view lays out only what is on screen and never measures more text than it can show.
+
+## The dark receiver-banner snapshots showed a made-up state with a real helper (S-001 / S-008 snapshot tool, M1 end-to-end check)
+
+- Symptom: in a snapshot run against a real helper with a port held by another app, `02-trace-list-dark.png` read "Receiving on 45317 and 45318" with no banner, while the light one showed the real busy banner.
+- Cause: after replaying the busy and not-receiving "ports" lines, `captureReceiverStates` set the receiver to "listening on both ports" instead of putting back the state it found.
+- Fix: it keeps the receiver state it found and restores it after the replayed banners and the restart banner.
+- Rule: a snapshot step that fakes a state restores the state it found, never a default.

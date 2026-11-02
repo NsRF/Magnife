@@ -40,12 +40,20 @@
 --   * After inserting spans, the helper recomputes the traces row of every
 --     trace touched by the batch from its spans (rules on the traces table).
 --   * Pruning deletes a trace, its spans and its logs together.
+--   * Persistent WAL: every connection sets SQLITE_FCNTL_PERSIST_WAL, so the
+--     -wal and -shm files stay after the helper exits. A read-only reader
+--     cannot open a WAL database whose -wal file is missing (SQLITE_CANTOPEN),
+--     and the app reads the stored traces at launch, before the helper is up
+--     (S-008). Pinned by TestCloseKeepsWALForReadOnlyReaders (Go) and
+--     WALReadonlyTests / LifecycleTests (Swift).
 --
 -- Reader rules (Swift)
 --   * Open read-only (GRDB DatabasePool, readonly). Never write, never run
 --     migrations, never checkpoint.
 --   * Refuse to read a file whose user_version is not the one the app knows,
 --     and say so in the window.
+--   * A file without its -wal (written by a helper without persistent WAL)
+--     cannot be opened until the helper runs: it is "not ready", never empty.
 
 PRAGMA user_version = 1;
 

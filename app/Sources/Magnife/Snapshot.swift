@@ -143,6 +143,8 @@ enum Snapshot {
     /// APP_HELPER=none has no helper, so these replay its "ports" lines.
     private static func captureReceiverStates(_ model: AppModel, dir: String, mode: String) async {
         let page = SnapshotPage.traceList.rawValue
+        // A run with a real helper (APP_HELPER set) gets its real state back afterwards.
+        let real = model.receiver
         let grpc = PortStatus(addr: "127.0.0.1:4317", state: .listening)
         let http = PortStatus(addr: "127.0.0.1:4318", state: .listening)
         var busyHTTP = http
@@ -157,12 +159,13 @@ enum Snapshot {
             try? await Task.sleep(for: .seconds(0.8))
             capture(to: "\(dir)/\(page)-\(name)-\(mode).png")
         }
-        model.showReceiverListening()
+        model.receiver = real
         // 02-trace-list-restarted: the S-008 banner, as after a helper crash and restart.
         model.handle(.started(pid: 0, restart: true))
         try? await Task.sleep(for: .seconds(0.8))
         capture(to: "\(dir)/\(page)-restarted-\(mode).png")
         model.receiverRestarted = false
+        model.receiver = real
     }
 
     /// 01-empty-state-copied: the button reads "Copied" and "Waiting for the
