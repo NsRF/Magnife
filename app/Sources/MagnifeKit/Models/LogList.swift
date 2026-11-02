@@ -147,10 +147,13 @@ public struct LogPage: Sendable, Equatable {
 /// arrived after its base id.
 public struct HeldLogs: Sendable, Equatable {
     public var newCount: Int
+    /// Shown rows pruned since (S-015).
+    public var removed: [Int64]
     public var lastSeq: Int64
 
-    public init(newCount: Int, lastSeq: Int64) {
+    public init(newCount: Int, removed: [Int64] = [], lastSeq: Int64) {
         self.newCount = newCount
+        self.removed = removed
         self.lastSeq = lastSeq
     }
 }
@@ -249,6 +252,14 @@ public struct LogListState: Sendable, Equatable {
             next.isLoaded = true
         case .held(let held, _, let base):
             guard isHeld || isPaused, base == baseID else { return nil }
+            // Pruned rows leave a held list (S-015); a paused one keeps them, as the trace list does.
+            if !isPaused, !held.removed.isEmpty {
+                let gone = Set(held.removed)
+                next.items.removeAll { gone.contains($0.id) }
+                let removed = items.count - next.items.count
+                next.logCount = max(0, logCount - removed)
+                next.scopeCount = max(0, scopeCount - removed)
+            }
             next.appliedSeq = held.lastSeq
             next.newCount = held.newCount
         }

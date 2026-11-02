@@ -44,7 +44,8 @@ type Writer struct {
 }
 
 // NewWriter returns a writer with the contract's defaults: a batch every
-// 50 ms or 2,000 records, pruning every 60 s.
+// 50 ms or 2,000 records, pruning every 60 s (or every retention period
+// when that is shorter; see PruneInterval).
 func NewWriter(s *Store, retentionS int64, ev Events) *Writer {
 	return &Writer{
 		MaxRecords: 2000,
@@ -118,6 +119,16 @@ func (w *Writer) Close() {
 	<-w.done
 }
 
+// PruneInterval is how often the writer prunes: every `every`, or every
+// retention period when that is shorter, so data never outlives a short
+// retention (a test hook's few seconds) by a whole minute.
+func PruneInterval(every time.Duration, retentionS int64) time.Duration {
+	if retentionS > 0 && retentionS < int64(every/time.Second) {
+		return time.Duration(retentionS) * time.Second
+	}
+	return every
+}
+
 // Cutoff is the receive time before which data older than retentionS is
 // pruned. A retention too long for int64 nanoseconds (about 292 years)
 // prunes nothing instead of overflowing into a cutoff in the future.
@@ -189,7 +200,7 @@ func (w *Writer) run() {
 		}
 	}
 
-	pruneTick := time.NewTicker(w.PruneEvery)
+	pruneTick := time.NewTicker(PruneInterval(w.PruneEvery, w.retentionS))
 	defer pruneTick.Stop()
 	var (
 		pruning     bool
@@ -231,6 +242,7 @@ func (w *Writer) run() {
 				flush()
 			case f := <-w.ctl:
 				f()
+				pruneTick.Reset(PruneInterval(w.PruneEvery, w.retentionS))
 				startPrune()
 			case <-pruneTick.C:
 				startPrune()
@@ -248,6 +260,7 @@ func (w *Writer) run() {
 			flush()
 		case f := <-w.ctl:
 			f()
+			pruneTick.Reset(PruneInterval(w.PruneEvery, w.retentionS))
 			startPrune()
 		case <-pruneTick.C:
 			startPrune()

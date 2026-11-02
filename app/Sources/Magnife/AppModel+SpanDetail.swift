@@ -42,7 +42,7 @@ extension AppModel {
     /// the selected span again, so its Logs section takes it in time order
     /// (S-011), and the trace's logs (S-012).
     func refreshOpenTraceLogs(_ reader: TelemetryReader) async throws {
-        guard let traceID = selectedTraceID else { return }
+        guard let traceID = selectedTraceID, prunedTraceID != traceID else { return }
         let stamp = try await reader.logStamp(traceID: traceID)
         guard selectedTraceID == traceID, stamp != openTraceLogStamp else { return }
         openTraceLogStamp = stamp

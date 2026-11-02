@@ -158,7 +158,9 @@ struct TraceDetail: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        if let trace = model.openTrace ?? model.selectedTrace {
+        if model.showsTraceNoLongerStored {
+            TraceNoLongerStored()
+        } else if let trace = model.openTrace ?? model.selectedTrace {
             // The split hosts each pane in its own NSHostingView, which does not
             // inherit this view's environment: pass the model and the accent again.
             DetailSplit(showsBottom: model.showsSpanDetail,

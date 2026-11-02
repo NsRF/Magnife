@@ -102,6 +102,16 @@ this app starts the helper and reads its database. No server, no accounts.
   and `TelemetryReader.arguments(for:)` must stay in the same order. Any
   change empties the list and reads it again (`logFilterChanged`); Clear
   Filters is undoable. `APP_SELFTEST_ONLY=logs` runs S-013 and S-014 checks.
+- Retention (S-015): `Retention` (MagnifeKit) is the choice (24 hours by
+  default, `retention.seconds` in UserDefaults, `APP_RETENTION_SECONDS` in
+  test runs); `AppModel.retentionSeconds` passes it as `--retention` and
+  sends `retention <s>` on change. The helper prunes every 60 s (or every
+  retention period when shorter) and sends `pruned`; the app refreshes.
+  Held lists drop pruned rows (`HeldTraces.removed`, `HeldLogs.removed`),
+  paused ones keep them; a selected trace that is gone (`reader.trace` nil)
+  shows `TraceNoLongerStored` (`AppModel.traceNoLongerStored`,
+  `prunedTraceID`). `APP_SELFTEST_ONLY=retention` runs the end-to-end checks
+  with the real helper at a 3 s retention.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -136,6 +146,7 @@ this app starts the helper and reads its database. No server, no accounts.
 - `APP_HELPER=none` starts no helper (tests, snapshots, self-test);
   `APP_HELPER=<path>` starts another executable.
 - `APP_GRPC_PORT`, `APP_HTTP_PORT` override 4317 and 4318.
+- `APP_RETENTION_SECONDS=<s>` keeps data that many seconds (test runs only).
 
 ## Build and check
 
@@ -169,6 +180,7 @@ this app starts the helper and reads its database. No server, no accounts.
   cut with "Show All", `04-span-detail-copied` Copy Stack Trace's "Copied",
   `04-span-detail-logs` the Logs section with a log's attributes open, `04-span-detail-log-json` a pretty-printed JSON body,
   `03-trace-detail-trace-logs` Trace Logs with a log (and so its span) selected,
+  `03-trace-detail-no-longer-stored` the S-015 state (set, not pruned),
   `05-logs` the Logs view with the payment log's detail, `05-logs-no-trace`
   a log without a trace id, `05-logs-new-logs`, `05-logs-paused`, `05-logs-empty`,
   `05-logs-filtered` (ERROR and WARN on), `05-logs-filter-hidden`, `05-logs-no-matches`.

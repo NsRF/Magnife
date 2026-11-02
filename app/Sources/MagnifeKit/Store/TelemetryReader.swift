@@ -96,12 +96,15 @@ public final class TelemetryReader: Sendable {
     public func heldTraces(base: Int64, applied: Int64, shown: [String], service: String? = nil) async throws -> HeldTraces {
         let ids = String(decoding: try JSONEncoder().encode(shown), as: UTF8.self)
         let updateArguments: StatementArguments = [ids, applied]
+        let goneArguments: StatementArguments = [ids]
         var countArguments: StatementArguments = [base]
         if let service { countArguments += [service] }
         let scoped = service != nil
-        return try await pool.read { [updateArguments, countArguments] db in
+        return try await pool.read { [updateArguments, goneArguments, countArguments] db in
             HeldTraces(updated: try TraceSummary.fetchAll(db, sql: TelemetrySQL.heldTraceUpdates,
                                                           arguments: updateArguments),
+                       removed: shown.isEmpty ? [] : try String.fetchAll(db, sql: TelemetrySQL.heldTracesGone,
+                                                                         arguments: goneArguments),
                        newCount: try Int.fetchOne(db, sql: TelemetrySQL.tracesCreatedAfter(service: scoped),
                                                   arguments: countArguments) ?? 0,
                        services: try ServiceSummary.fetchAll(db, sql: TelemetrySQL.servicesWithErrors),
@@ -258,13 +261,17 @@ public final class TelemetryReader: Sendable {
         return rows.map(Self.logItem)
     }
 
-    /// While the Logs list holds still: how many logs in scope came after `base`.
+    /// While the Logs list holds still: how many logs in scope came after
+    /// `base`, and which `shown` rows (log ids) were pruned since (S-015).
     @concurrent
-    public func heldLogs(base: Int64, filter: LogFilter = LogFilter()) async throws -> HeldLogs {
+    public func heldLogs(base: Int64, filter: LogFilter = LogFilter(), shown: [Int64] = []) async throws -> HeldLogs {
         let sql = TelemetrySQL.logsAfter(filter: filter)
         let arguments: StatementArguments = [base] + Self.arguments(for: filter)
+        let ids: StatementArguments = [String(decoding: try JSONEncoder().encode(shown), as: UTF8.self)]
         return try await pool.read { db in
-            HeldLogs(newCount: try Int.fetchOne(db, sql: sql, arguments: arguments) ?? 0, lastSeq: try Self.lastSeq(db))
+            HeldLogs(newCount: try Int.fetchOne(db, sql: sql, arguments: arguments) ?? 0,
+                     removed: shown.isEmpty ? [] : try Int64.fetchAll(db, sql: TelemetrySQL.heldLogsGone, arguments: ids),
+                     lastSeq: try Self.lastSeq(db))
         }
     }
 
@@ -324,6 +331,12 @@ public final class TelemetryReader: Sendable {
     @concurrent
     public func lastSeq() async throws -> Int64 {
         try await pool.read { try Self.lastSeq($0) }
+    }
+
+    /// The retention the helper last applied, in seconds (meta.retention_s), nil before it ran.
+    @concurrent
+    public func retentionSeconds() async throws -> Int? {
+        try await pool.read { try String.fetchOne($0, sql: TelemetrySQL.retention).flatMap { Int($0) } }
     }
 
     private static func lastSeq(_ db: Database) throws -> Int64 {

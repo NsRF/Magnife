@@ -44,6 +44,8 @@ enum SelfTest {
             } else if only == "logs" {
                 await checkLogs(model)
                 await checkLogFilters(model)
+            } else if only == "retention" {
+                await checkRetention(model)
             } else if only == "span-detail" {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
@@ -61,6 +63,7 @@ enum SelfTest {
                 await checkTraceLogs(model)
                 await checkLogs(model)
                 await checkLogFilters(model)
+                await checkRetention(model)
                 await checkSupervisor()
                 await checkReceiver()
                 checkApp()

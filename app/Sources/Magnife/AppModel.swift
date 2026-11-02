@@ -86,6 +86,9 @@ final class AppModel {
     var waterfallGeneration = 0
     /// The open trace's row, read with its spans (it may not be in the list).
     var openTrace: TraceSummary?
+    /// The selected trace that retention deleted (S-015): the detail column
+    /// shows "Trace No Longer Stored" while it stays selected.
+    var prunedTraceID: String?
     /// Spans whose subtree is closed in the waterfall, by span id.
     var collapsedSpans: Set<String> = []
     /// The selected waterfall row (the span detail reads it, S-006).
@@ -236,16 +239,20 @@ final class AppModel {
     /// The toolbar's Copy Environment Variables popover.
     var showsEnvironmentPopover = false
     @ObservationIgnored var copiedResetTask: Task<Void, Never>?
-    /// How long the helper keeps data, in seconds (S-015, S-016).
-    var retentionSeconds: Int = UserDefaults.standard.object(forKey: "retention.seconds") as? Int ?? HelperConfiguration.defaultRetention {
+    /// How long the helper keeps data, in seconds (S-015, S-016): 24 hours
+    /// on first launch, APP_RETENTION_SECONDS in test runs. Sent to the
+    /// helper with --retention at launch and `retention <s>` on change.
+    var retentionSeconds: Int = Retention.stored(in: .standard) {
         didSet {
             guard retentionSeconds != oldValue else { return }
-            if !StoreLocation.isOverridden() { UserDefaults.standard.set(retentionSeconds, forKey: "retention.seconds") }
+            if !StoreLocation.isOverridden() { UserDefaults.standard.set(retentionSeconds, forKey: Retention.defaultsKey) }
             try? supervisor?.send(.retention(seconds: retentionSeconds))
         }
     }
 
     var supervisor: HelperSupervisor?
+    /// Sees every helper event before the model handles it (self-test timing).
+    @ObservationIgnored var onHelperEvent: ((SupervisorEvent) -> Void)?
     var quietStartTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
     private var refreshAgain = false

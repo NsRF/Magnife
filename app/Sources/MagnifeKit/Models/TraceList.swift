@@ -29,15 +29,19 @@ public struct TracePage: Sendable, Equatable {
 }
 
 /// What changed while the list holds still: rows that already existed when
-/// it started holding and changed since, and how many traces are new.
+/// it started holding and changed since, shown rows pruned since (S-015),
+/// and how many traces are new.
 public struct HeldTraces: Sendable, Equatable {
     public var updated: [TraceSummary]
+    public var removed: [String]
     public var newCount: Int
     public var services: [ServiceSummary]
     public var lastSeq: Int64
 
-    public init(updated: [TraceSummary], newCount: Int, services: [ServiceSummary], lastSeq: Int64) {
+    public init(updated: [TraceSummary], removed: [String] = [], newCount: Int, services: [ServiceSummary],
+                lastSeq: Int64) {
         self.updated = updated
+        self.removed = removed
         self.newCount = newCount
         self.services = services
         self.lastSeq = lastSeq
@@ -194,8 +198,17 @@ public struct TraceListState: Sendable, Equatable {
         case .held(let held, _, let base):
             // Back at the top, or a newer page arrived while reading: that read decides.
             guard isHeld || isPaused, base == baseSeq else { return nil }
-            // Paused, the rows do not change at all; only the count moves.
-            if !isPaused { next.traces = TraceList.applying(held.updated, to: traces) }
+            // Paused, the rows do not change at all; only the count moves. A paused list
+            // may show pruned rows, which open to "Trace No Longer Stored" (S-015).
+            if !isPaused {
+                next.traces = TraceList.applying(held.updated, to: traces)
+                // Pruned rows leave; they are the oldest, so the rows under the pointer stay put.
+                if !held.removed.isEmpty {
+                    let gone = Set(held.removed)
+                    next.traces.removeAll { gone.contains($0.id) }
+                    next.traceCount = max(0, traceCount - (traces.count - next.traces.count))
+                }
+            }
             next.appliedSeq = held.lastSeq
             next.newCount = held.newCount
         }

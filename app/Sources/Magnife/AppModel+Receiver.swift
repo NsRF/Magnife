@@ -66,6 +66,7 @@ extension AppModel {
     // MARK: Helper events
 
     func handle(_ event: SupervisorEvent) {
+        onHelperEvent?(event)
         switch event {
         case .started(_, let restart):
             if restart { receiverRestarted = true }
@@ -81,6 +82,8 @@ extension AppModel {
             }
             if receiverRestarted && !batch.traces.isEmpty { receiverRestarted = false }
         case .helper(.pruned):
+            // Pruned rows leave the lists and the sidebar counts drop (S-015);
+            // a selected trace that was deleted shows "Trace No Longer Stored".
             requestRefresh()
         case .helper(.error(let message)):
             helperProblem = ReceiverStatus.problem(message)

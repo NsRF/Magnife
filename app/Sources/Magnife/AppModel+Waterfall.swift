@@ -15,6 +15,7 @@ extension AppModel {
         collapsedSpans = []
         selectedSpanID = nil
         openTraceLogStamp = nil
+        prunedTraceID = nil
         loadTraceLogs()
         guard let id = selectedTraceID, let reader else {
             openTrace = nil
@@ -35,6 +36,8 @@ extension AppModel {
             guard let self, !Task.isCancelled, self.selectedTraceID == id else { return }
             self.isOpeningTrace = false
             guard let result else { return }
+            // A paused list can still show a trace that retention deleted (S-015).
+            guard result.trace != nil || !result.tree.isEmpty else { return self.traceNoLongerStored(id) }
             self.show(result.tree, of: result.trace, collapsing: result.collapsed, opening: true)
         }
     }
@@ -44,13 +47,17 @@ extension AppModel {
     /// selection stay as they were; spans that became parents collapse as
     /// they would have if the trace had opened that big.
     func refreshOpenTrace(_ reader: TelemetryReader) async throws {
-        guard let id = selectedTraceID else { return }
+        guard let id = selectedTraceID, prunedTraceID != id else { return }
         guard !waterfall.isEmpty else {
             // While a trace opens, its own read is the fresh one; after a failed one, read again.
             if !isOpeningTrace { startOpening(id, reader: reader) }
             return
         }
-        guard let trace = try await reader.trace(id: id) else { return }
+        guard let trace = try await reader.trace(id: id) else {
+            // Retention deleted it while it was open (S-015).
+            if selectedTraceID == id { traceNoLongerStored(id) }
+            return
+        }
         guard selectedTraceID == id else { return }
         guard trace.updatedSeq != openTrace?.updatedSeq || trace.spanCount != waterfall.count else {
             if openTrace != trace { openTrace = trace }
@@ -105,6 +112,28 @@ extension AppModel {
     }
 
     var hasOpenWaterfall: Bool { !waterfall.isEmpty }
+
+    /// The selected trace is gone (S-015): its waterfall, span detail and
+    /// Trace Logs close, and the detail column says why. The selection stays,
+    /// so the message stays until another trace is chosen.
+    func traceNoLongerStored(_ id: String) {
+        guard selectedTraceID == id else { return }
+        waterfallTask?.cancel()
+        isOpeningTrace = false
+        prunedTraceID = id
+        openTrace = nil
+        waterfall = Waterfall()
+        waterfallGeneration += 1
+        MenuState.shared.update(hasWaterfall: false)
+        collapsedSpans = []
+        selectedSpanID = nil
+        traceLogsTask?.cancel()
+        traceLogs = TraceLogs()
+        selectedTraceLogID = nil
+    }
+
+    /// True while the detail column shows "Trace No Longer Stored".
+    var showsTraceNoLongerStored: Bool { prunedTraceID != nil && prunedTraceID == selectedTraceID }
 
     /// Trace > Expand All Spans.
     func expandAllSpans() {

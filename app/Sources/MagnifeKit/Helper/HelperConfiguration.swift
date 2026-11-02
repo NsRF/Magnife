@@ -5,7 +5,7 @@ public struct HelperConfiguration: Sendable {
     public static let defaultGRPCPort = 4317
     public static let defaultHTTPPort = 4318
     /// 24 hours (S-015).
-    public static let defaultRetention = 86_400
+    public static let defaultRetention = Retention.defaultSeconds
 
     public var executableURL: URL
     public var databaseURL: URL

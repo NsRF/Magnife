@@ -216,7 +216,7 @@ Acceptance:
 - [unit] Data older than the retention period is deleted, traces, spans and logs together.
 - [self] Pruning runs without blocking ingestion or the interface.
 - [unit] A default retention applies on first launch (24 hours, decided by the agent).
-Status: todo
+Status: done
 
 ### S-016 Change the retention period
 As the user, I set how long Magnife keeps data in Settings.

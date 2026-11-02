@@ -45,6 +45,22 @@ enum TelemetrySQL {
         WHERE trace_id IN (SELECT value FROM json_each(?)) AND updated_seq > ?
         """
 
+    /// The shown rows (a JSON array of trace ids) that are no longer stored:
+    /// pruning (S-015) takes them out of a held list. Primary-key lookups.
+    static let heldTracesGone = """
+        SELECT shown.value FROM json_each(?) AS shown
+        WHERE NOT EXISTS (SELECT 1 FROM traces WHERE trace_id = shown.value)
+        """
+
+    /// The shown log rows (a JSON array of log ids) that are no longer stored (S-015).
+    static let heldLogsGone = """
+        SELECT shown.value FROM json_each(?) AS shown
+        WHERE NOT EXISTS (SELECT 1 FROM logs WHERE id = shown.value)
+        """
+
+    /// The retention the helper last applied, in seconds (meta.retention_s).
+    static let retention = "SELECT value FROM meta WHERE key = 'retention_s'"
+
     /// Traces created after seq `base`: the "12 new traces" count (S-004).
     static func tracesCreatedAfter(service: Bool) -> String {
         let scope = service ? " AND \(serviceScope)" : ""

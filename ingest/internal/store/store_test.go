@@ -469,6 +469,36 @@ func TestWriterSetRetentionPrunes(t *testing.T) {
 	}
 }
 
+func TestPruneIntervalFollowsShortRetention(t *testing.T) {
+	for _, c := range []struct {
+		retention int64
+		want      time.Duration
+	}{{86400, time.Minute}, {3600, time.Minute}, {60, time.Minute}, {59, 59 * time.Second}, {2, 2 * time.Second}, {0, time.Minute}} {
+		if got := PruneInterval(time.Minute, c.retention); got != c.want {
+			t.Errorf("retention %d s: %v, want %v", c.retention, got, c.want)
+		}
+	}
+}
+
+func TestWriterPrunesOnItsOwnWithAShortRetention(t *testing.T) {
+	s := openTest(t)
+	now := int64(100_000 * time.Second)
+	s.Now = func() int64 { return now - int64(10*time.Second) }
+	commit(t, s, &Batch{Spans: []Span{span("old", "a", "", "x", 0, 1, 0)}})
+	s.Now = func() int64 { return now }
+	ev := newEvents()
+	// A 1 s retention prunes every second, with no Prune call and no 60 s wait.
+	w := NewWriter(s, 1, ev)
+	w.Start()
+	defer w.Close()
+	ev.wait(t)
+	ev.mu.Lock()
+	defer ev.mu.Unlock()
+	if len(ev.pruned) != 1 || ev.pruned[0] != (PruneResult{Traces: 1, Spans: 1}) {
+		t.Fatalf("pruned: %+v", ev.pruned)
+	}
+}
+
 func TestCutoffNeverOverflows(t *testing.T) {
 	now := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC).UnixNano()
 	if got := Cutoff(now, 3600); got != now-3600*int64(time.Second) {

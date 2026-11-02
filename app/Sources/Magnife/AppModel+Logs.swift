@@ -70,7 +70,8 @@ extension AppModel {
         let state = logListState
         let read: LogListRead
         if state.readsHeld {
-            read = .held(try await reader.heldLogs(base: state.baseID, filter: state.filter),
+            read = .held(try await reader.heldLogs(base: state.baseID, filter: state.filter,
+                                                   shown: state.isPaused ? [] : state.items.map(\.id)),
                          filter: state.filter, base: state.baseID)
         } else {
             read = .page(try await reader.logPage(limit: limit, filter: state.filter, upTo: state.pausedID),
