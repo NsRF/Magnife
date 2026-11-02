@@ -82,6 +82,19 @@ final class AppModel {
         didSet { if traceSlowerThanText != oldValue { applySlowerThanText() } }
     }
     @ObservationIgnored var slowerThanTask: Task<Void, Never>?
+    /// The condition rows as typed (S-020); they become `traceConditions` a
+    /// moment after the last change. One empty row while there are none.
+    var conditionRows: [ConditionDraft] = [ConditionDraft()] {
+        didSet { if conditionRows != oldValue { applyConditionRows() } }
+    }
+    @ObservationIgnored var conditionTask: Task<Void, Never>?
+    /// The row whose key field is being edited, the highlighted suggestion,
+    /// and whether Esc put the suggestions away until the next key.
+    var editingConditionKey: ConditionDraft.ID?
+    var conditionSuggestionIndex = 0
+    var conditionSuggestionsDismissed = false
+    /// Attribute keys received, for the key field's suggestions.
+    var conditionKeys: [AttributeKey] = []
     var traceConditions: [TraceCondition] = [] {
         didSet { if traceConditions.filter(\.isActive) != oldValue.filter(\.isActive) { traceFilterChanged() } }
     }

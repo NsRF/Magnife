@@ -21,6 +21,7 @@ extension Snapshot {
 extension Snapshot {
     /// 07-filter-bar-no-matches: OK on, which no seed trace is; the selected
     /// failed checkout stays in the detail column. -duration and -duration-error: S-019.
+    /// -suggestions and -condition: S-020.
     static func captureFilterBarStates(_ model: AppModel, dir: String, mode: String) async {
         let page = SnapshotPage.filterBar.rawValue
         model.selectedTraceID = model.traces.first { $0.route == "POST /checkout/pay" }?.traceID
@@ -43,6 +44,28 @@ extension Snapshot {
         model.traceSlowerThanText = "200x"
         try? await Task.sleep(for: .seconds(0.8))
         capture(to: "\(dir)/\(page)-duration-error-\(mode).png")
+
+        // 07-filter-bar-suggestions: "ht" typed in a condition's key; 07-filter-bar-condition:
+        // http.route is /checkout/pay and a second row, db.system.name exists (S-020).
+        model.applyTraceFilter(.cleared)
+        model.loadConditionKeys()
+        let first = model.conditionRows[0].id
+        model.conditionKeyEditing(first, true)
+        model.conditionKeyTyped(first, "ht")
+        for _ in 0..<20 where model.conditionSuggestions.isEmpty { try? await Task.sleep(for: .milliseconds(50)) }
+        _ = model.moveConditionSuggestion(by: 3)
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-suggestions-\(mode).png")
+        model.conditionKeyEditing(first, false)
+        model.updateConditionRow(first) { $0.key = "http.route"; $0.op = .is; $0.value = "/checkout/pay" }
+        model.addConditionRow(after: first)
+        if let second = model.conditionRows.last?.id {
+            model.updateConditionRow(second) { $0.key = "db.system.name"; $0.op = .exists }
+        }
+        for _ in 0..<20 where model.traceConditions.filter(\.isActive).count < 2 { try? await Task.sleep(for: .milliseconds(50)) }
+        await model.reload()
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-condition-\(mode).png")
         model.applyTraceFilter(.cleared)
         model.selectedTraceID = nil
     }

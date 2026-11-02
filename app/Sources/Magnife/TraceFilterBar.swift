@@ -4,13 +4,27 @@ import SwiftUI
 
 /// The Traces filter bar (S-018 to S-020, design decision 1), over the
 /// trace list: Service pop-up · status chips · "Slower than" · Clear
-/// Filters · close, then the condition rows. Esc or the close button hides
+/// Filters · close, then the condition rows (TraceConditionRows.swift). Esc or the close button hides
 /// it; the filters stay on.
 struct TraceFilterBar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.undoManager) private var undoManager
 
     var body: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            firstLine
+            TraceConditionRows()
+        }
+        .controlSize(.small)
+        .padding(.horizontal, Space.lg)
+        .padding(.vertical, Space.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .gridArea("trace-filter-bar", inset: Space.lg)
+        .onExitCommand { model.hideTraceFilterBar() }
+        .onAppear { model.loadConditionKeys() }
+    }
+
+    private var firstLine: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: Space.sm) {
                 service
@@ -29,17 +43,11 @@ struct TraceFilterBar: View {
                 // Top-aligned: a wrapped error under the field never moves the chips.
                 HStack(alignment: .top, spacing: Space.sm) {
                     StatusChips()
-                        .gridProbe("trace-status-chips", area: "trace-filter-bar")
                     SlowerThanField()
                 }
+                .gridProbe("trace-status-line", area: "trace-filter-bar")
             }
         }
-        .controlSize(.small)
-        .padding(.horizontal, Space.lg)
-        .padding(.vertical, Space.sm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .gridArea("trace-filter-bar", inset: Space.lg)
-        .onExitCommand { model.hideTraceFilterBar() }
     }
 
     private var service: some View {

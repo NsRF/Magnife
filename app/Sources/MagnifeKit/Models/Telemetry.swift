@@ -347,6 +347,12 @@ public struct AttributeKey: Sendable, Hashable, FetchableRecord {
     public var source: AttributeSource
     public var lastSeenNs: Int64
 
+    public init(key: String, source: AttributeSource, lastSeenNs: Int64 = 0) {
+        self.key = key
+        self.source = source
+        self.lastSeenNs = lastSeenNs
+    }
+
     public init(row: Row) throws {
         key = try row.decode(forColumn: "key")
         source = AttributeSource(rawValue: try row.decode(forColumn: "source")) ?? .span

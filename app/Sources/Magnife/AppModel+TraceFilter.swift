@@ -32,6 +32,9 @@ extension AppModel {
         slowerThanTask?.cancel()
         traceSlowerThanNs = filter.slowerThanNs
         traceSlowerThanText = filter.slowerThanNs.map(DurationInput.normalized) ?? ""
+        conditionTask?.cancel()
+        conditionRows = ConditionDraft.rows(for: filter.conditions)
+        conditionTask?.cancel()
         traceConditions = filter.conditions
         sidebar = filter.service.map { .service($0) } ?? .allTraces
     }

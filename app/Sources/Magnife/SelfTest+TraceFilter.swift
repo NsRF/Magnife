@@ -77,6 +77,71 @@ extension SelfTest {
         model.selectedTraceID = nil
         await model.reload()
         await checkSlowerThan(model, window: window, all: all)
+        await checkConditions(model, window: window, all: all)
+    }
+
+    /// S-020: a condition row typed in the real fields, its key completed from
+    /// the attributes the helper received.
+    private static func checkConditions(_ model: AppModel, window: NSWindow, all: Int) async {
+        await ensureKey(window)
+        model.applyTraceFilter(.cleared)
+        model.showsTraceFilterBar = true
+        try? await Task.sleep(for: .milliseconds(300))
+        check("the bar opens with one empty condition row", model.conditionRows.count == 1 && model.conditionRows[0].key.isEmpty)
+        guard let keyField = field(placeholder: "Attribute", in: window) else {
+            return check("the condition's key field is in the bar", false)
+        }
+        window.makeFirstResponder(keyField)
+        for character in "http.ro" { pressKey(window, String(character), keyCode: 0) }
+        let suggested = await waitUntil(2) { model.conditionSuggestions.contains { $0.title == "http.route — span" } }
+        check("typing a key lists the received keys that match, with their source", suggested
+              && model.conditionSuggestions.first?.key == "http.route", "\(model.conditionSuggestions.map(\.title))")
+        pressKey(window, "\r", keyCode: 36)
+        check("Return picks the suggestion", model.conditionRows[0].key == "http.route" && model.conditionSuggestions.isEmpty)
+        guard let valueField = field(placeholder: "Value", in: window) else {
+            return check("the condition's value field is in the bar", false)
+        }
+        window.makeFirstResponder(valueField)
+        for character in "/checkout/pay" { pressKey(window, String(character), keyCode: 0) }
+        let filtered = await waitUntil(2) { !model.isLoadingScope && model.traceConditions.contains { $0.isActive } && model.traces.count == 1 }
+        check("http.route is /checkout/pay keeps the trace whose root span has it, 100 ms after the last key",
+              filtered && model.traces.first?.route == "POST /checkout/pay" && model.subtitle == TraceList.subtitle(shown: 1, of: all),
+              "\(model.traces.map(\.route)) \(model.subtitle)")
+
+        // A second row matched by other spans of the same trace: all rows must match.
+        model.addConditionRow(after: model.conditionRows[0].id)
+        model.updateConditionRow(model.conditionRows[1].id) { $0.key = "db.system.name"; $0.op = .exists }
+        let both = await waitUntil(2) { !model.isLoadingScope && model.traceConditions.filter(\.isActive).count == 2 }
+        check("a second row on other spans of the trace: both must match", both && model.traces.map(\.route) == ["POST /checkout/pay"])
+        model.updateConditionRow(model.conditionRows[1].id) { $0.key = "host.name"; $0.op = .is; $0.value = "nowhere" }
+        let none = await waitUntil(2) { !model.isLoadingScope && model.traces.isEmpty && model.traceConditions.count == 2 }
+        check("a resource attribute that no trace has leaves none", none && model.traceFilter.narrowsScope)
+        model.updateConditionRow(model.conditionRows[1].id) { $0.key = "never.received"; $0.op = .exists }
+        let unknown = await waitUntil(2) { !model.isLoadingScope && model.traces.isEmpty }
+        check("a key never received still filters (nothing has it)", unknown)
+
+        for _ in 0..<12 { model.addConditionRow(after: model.conditionRows[0].id) }
+        check("at most 10 rows", model.conditionRows.count == ConditionDraft.limit)
+        for row in model.conditionRows.dropFirst() { model.removeConditionRow(row.id) }
+        model.removeConditionRow(model.conditionRows[0].id)
+        let cleared = await waitUntil(2) { !model.isLoadingScope && model.traces.count == all }
+        check("\"−\" on the only row clears it", cleared && model.conditionRows.count == 1 && model.conditionRows[0].key.isEmpty
+              && !model.hasTraceBarFilters)
+        model.hideTraceFilterBar()
+        model.applyTraceFilter(.cleared)
+        await model.reload()
+    }
+
+    /// An AppKit text field of the window by its placeholder.
+    static func field(placeholder: String, in window: NSWindow) -> NSTextField? {
+        func find(_ view: NSView) -> NSTextField? {
+            if let field = view as? NSTextField, field.placeholderString == placeholder || field.placeholderAttributedString?.string == placeholder {
+                return field
+            }
+            for subview in view.subviews { if let found = find(subview) { return found } }
+            return nil
+        }
+        return window.contentView.flatMap(find)
     }
 
     /// S-019: typing in "Slower than" moves the list 100 ms after the last key.

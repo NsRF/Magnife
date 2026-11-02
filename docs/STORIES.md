@@ -265,7 +265,7 @@ Depends: S-018
 Acceptance:
 - [unit] Matches span attributes and resource attributes; a trace matches if any span does.
 - [self] Keys autocomplete from attributes already received.
-Status: todo
+Status: done
 
 ### S-021 Save the current filters to the sidebar
 As the user, I save a set of filters with a name and reopen it from the sidebar.
