@@ -63,7 +63,7 @@ UX:
 - States: empty is the whole story; after copying, "Waiting for the first trace…" under the button; the variables never truncate (horizontal scroll in the code block)
 - Words: title "No Traces Yet", body "Set these environment variables in your app, run it, and its traces appear here.", tabs ".NET", "Go", "Node", "Python", "Java", button "Copy Environment Variables", feedback "Copied"
 - Access: tabs are a segmented control reachable by keyboard; Return on the focused button copies; VoiceOver reads the variables as text and announces "Copied"
-Status: todo
+Status: done
 
 ### S-004 See a new trace appear in the live list
 As the user, I run my app and its traces show up at the top of the list.

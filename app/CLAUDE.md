@@ -79,7 +79,9 @@ this app starts the helper and reads its database. No server, no accounts.
   `SnapshotPage` (the pages in `docs/STORIES.md`), and
   `09-settings-<tab>-light.png` / `-dark.png`, then quits. `02-trace-list-busy`
   and `02-trace-list-not-receiving` show the busy-port banners (replayed
-  "ports" lines, since APP_HELPER=none).
+  "ports" lines, since APP_HELPER=none). `01-empty-state-copied` shows the
+  S-003 copy feedback and `02-trace-list-environment` the toolbar popover
+  (cropped from the window capture).
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Never test against the real database in `~/Library/Application Support/Magnife/`.

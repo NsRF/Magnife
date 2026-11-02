@@ -29,6 +29,7 @@ enum SelfTest {
             await model.openStore()
             await checkReader(model)
             await checkModel(model)
+            await checkEnvironment(model)
             await checkSupervisor()
             await checkReceiver()
             checkApp()

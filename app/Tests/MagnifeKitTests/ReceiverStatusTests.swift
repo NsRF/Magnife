@@ -71,4 +71,13 @@ struct ReceiverStatusTests {
         #expect(ReceiverStatus.problem("open database: disk I/O error")
                 == "The receiver reported a problem: open database: disk I/O error")
     }
+
+    @Test("the environment variables use the HTTP port the helper reported (S-003)")
+    func httpPort() {
+        #expect(ReceiverStatus.starting.httpPort == nil)
+        #expect(ReceiverStatus.stopped("missing").httpPort == nil)
+        let custom = ReceiverStatus.ports(ReceiverPorts(grpc: PortStatus(addr: "127.0.0.1:41017", state: .listening),
+                                                        http: PortStatus(addr: "127.0.0.1:41018", state: .listening)))
+        #expect(custom.httpPort == 41_018)
+    }
 }

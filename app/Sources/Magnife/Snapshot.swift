@@ -85,7 +85,11 @@ enum Snapshot {
                     await page.prepare(model)
                     try? await Task.sleep(for: .seconds(0.8))
                     capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
-                    if page == .traceList { await captureReceiverStates(model, dir: dir, mode: mode) }
+                    if page == .emptyState { await captureCopied(model, dir: dir, mode: mode) }
+                    if page == .traceList {
+                        await captureReceiverStates(model, dir: dir, mode: mode)
+                        await captureEnvironmentPopover(model, dir: dir, mode: mode)
+                    }
                 }
             }
             if pages.contains(.settings) {
@@ -130,6 +134,52 @@ enum Snapshot {
             capture(to: "\(dir)/\(page)-\(name)-\(mode).png")
         }
         model.showReceiverListening()
+    }
+
+    /// 01-empty-state-copied: the button reads "Copied" and "Waiting for the
+    /// first trace…" shows (S-003). Copies to a private pasteboard.
+    private static func captureCopied(_ model: AppModel, dir: String, mode: String) async {
+        model.environmentLanguage = .python
+        model.copyEnvironmentVariables(to: NSPasteboard(name: NSPasteboard.Name("Magnife.snapshot")))
+        try? await Task.sleep(for: .seconds(0.5))
+        capture(to: "\(dir)/\(SnapshotPage.emptyState.rawValue)-copied-\(mode).png")
+        model.environmentLanguage = .defaultLanguage
+        model.environmentCopied = false
+        model.hasCopiedEnvironment = false
+    }
+
+    /// 02-trace-list-environment: the toolbar's Copy Environment Variables
+    /// popover over the list (S-003). The popover is its own window.
+    private static func captureEnvironmentPopover(_ model: AppModel, dir: String, mode: String) async {
+        let main = NSApp.windows.first { $0.canBecomeMain && !$0.isSheet }
+        model.showsEnvironmentPopover = true
+        try? await Task.sleep(for: .seconds(0.8))
+        let popover = NSApp.windows.first { $0.isVisible && $0 !== main && String(describing: type(of: $0)).contains("Popover") }
+        if let popover, let main {
+            // `-l` on a popover window takes its parent too; crop to the popover.
+            let path = "\(dir)/\(SnapshotPage.traceList.rawValue)-environment-\(mode).png"
+            capture(to: path, window: popover)
+            crop(path, to: popover.frame, within: main.frame.union(popover.frame))
+        } else {
+            print("SNAPSHOT no popover window")
+        }
+        model.showsEnvironmentPopover = false
+        try? await Task.sleep(for: .seconds(0.4))
+    }
+
+    /// Cuts `rect` (screen points) out of a capture that covers `bounds`.
+    private static func crop(_ path: String, to rect: NSRect, within bounds: NSRect) {
+        let url = URL(fileURLWithPath: path)
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return }
+        // The capture may not cover the whole union; scale from its real size.
+        let factor = CGFloat(image.width) / bounds.width
+        let cut = CGRect(x: (rect.minX - bounds.minX) * factor, y: (bounds.maxY - rect.maxY) * factor,
+                         width: rect.width * factor, height: rect.height * factor).integral
+        guard let cropped = image.cropping(to: cut),
+              let out = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else { return }
+        CGImageDestinationAddImage(out, cropped, nil)
+        CGImageDestinationFinalize(out)
     }
 
     /// Captures the real window with screencapture, so glass, sidebars, and

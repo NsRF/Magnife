@@ -29,6 +29,7 @@ extension SelfTest {
         let launched = Date()
         model.startReceiver(executable: helper, ports: ports)
         let listening = await waitUntil(3) { model.receiver.isReceiving }
+        let emptyBefore = model.showsEmptyState
         let traces = await post(port: ports.http, path: "/v1/traces", body: ReceiverPayload.trace)
         let logs = await post(port: ports.http, path: "/v1/logs", body: ReceiverPayload.log)
         let elapsed = Date().timeIntervalSince(launched)
@@ -40,6 +41,9 @@ extension SelfTest {
         check("no busy-port banner while both ports listen", model.receiver.busyBanner == nil)
         let shown = await waitUntil(2) { model.traces.contains { $0.route == ReceiverPayload.route } }
         check("the trace posted over HTTP reaches the list", shown, "\(model.traces.map(\.route))")
+        check("the empty state goes away once the first trace arrives (S-003)",
+              emptyBefore && !model.showsEmptyState, "before \(emptyBefore), after \(model.showsEmptyState)")
+        check("the variables name the port the helper reported (S-003)", model.environmentHTTPPort == ports.http)
 
         let sockets = listeningSockets(pid: model.helperPID)
         check("the helper listens only on 127.0.0.1 (no firewall prompt)",

@@ -71,6 +71,18 @@ final class AppModel {
     var settingsTab: SettingsTab = SettingsTab(rawValue: UserDefaults.standard.string(forKey: "settings.tab") ?? "") ?? .general {
         didSet { if !StoreLocation.isOverridden() { UserDefaults.standard.set(settingsTab.rawValue, forKey: "settings.tab") } }
     }
+    /// The language tab of the environment variables (S-003). Test and
+    /// snapshot runs start on .NET and remember nothing.
+    var environmentLanguage: EnvironmentLanguage = StoreLocation.isOverridden() ? .defaultLanguage : .stored(in: .standard) {
+        didSet { if !StoreLocation.isOverridden() { environmentLanguage.store(in: .standard) } }
+    }
+    /// True for 2 seconds after a copy: the button reads "Copied".
+    var environmentCopied = false
+    /// Set by the first copy: the empty state then reads "Waiting for the first trace…".
+    var hasCopiedEnvironment = false
+    /// The toolbar's Copy Environment Variables popover.
+    var showsEnvironmentPopover = false
+    @ObservationIgnored var copiedResetTask: Task<Void, Never>?
     /// How long the helper keeps data, in seconds (S-015, S-016).
     var retentionSeconds: Int = UserDefaults.standard.object(forKey: "retention.seconds") as? Int ?? HelperConfiguration.defaultRetention {
         didSet {

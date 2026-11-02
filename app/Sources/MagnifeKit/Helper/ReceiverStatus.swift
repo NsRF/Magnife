@@ -43,6 +43,12 @@ public enum ReceiverStatus: Sendable, Equatable {
         return false
     }
 
+    /// The HTTP port the helper reported, for the environment variables (S-003).
+    public var httpPort: Int? {
+        if case .ports(let ports) = self { return ports.http.port }
+        return nil
+    }
+
     /// The busy ports, for the S-001 banner.
     public var busyPorts: [PortStatus] {
         guard case .ports(let ports) = self else { return [] }

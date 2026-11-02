@@ -20,6 +20,7 @@ struct ContentView: View {
                     // Receiver status, at the leading edge of the detail column (docs/ux.md, Toolbar).
                     ToolbarItem { ReceiverStatusView() }
                     ToolbarSpacer(.flexible)
+                    ToolbarItem { EnvironmentToolbarButton() }
                 }
         }
         .noInitialFocus()
@@ -88,6 +89,7 @@ struct ServiceRow: View {
 
 struct TraceList: View {
     @Environment(AppModel.self) private var model
+    @State private var listWidth: CGFloat = 0
 
     var body: some View {
         table
@@ -133,6 +135,7 @@ struct TraceList: View {
         }
         .alternatingRowBackgrounds(model.traces.isEmpty ? .disabled : .enabled)
         .overlay { emptyState }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
     }
 
     @ViewBuilder
@@ -147,36 +150,22 @@ struct TraceList: View {
                     ContentUnavailableView("No Traces from \(service)", systemImage: "line.3.horizontal.decrease",
                                            description: Text("Traces with a span from \(service) appear here."))
                 } else {
-                    // S-003 adds the language tabs and Copy Environment Variables here.
+                    // S-003: the language tabs and Copy Environment Variables.
                     ContentUnavailableView {
                         Label("No Traces Yet", systemImage: "point.3.connected.trianglepath.dotted")
                     } description: {
                         Text("Set these environment variables in your app, run it, and its traces appear here.")
                     } actions: {
-                        EnvironmentVariables()
+                        // The actions area offers only the description's width; the
+                        // variables take the column's, up to the popover's width.
+                        EnvironmentSetup(showsWaiting: true)
+                            .frame(width: listWidth > 0
+                                   ? max(0, min(listWidth - 2 * Space.margin, EnvironmentToolbarButton.popoverWidth))
+                                   : nil)
                     }
                 }
             }
         }
-    }
-}
-
-/// The OTLP/HTTP variables that point an app at Magnife, as selectable text.
-struct EnvironmentVariables: View {
-    var body: some View {
-        Text(lines)
-            .font(.body.monospaced())
-            .textSelection(.enabled)
-            .fixedSize()
-            .padding(Space.md)
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
-    }
-
-    private var lines: String {
-        """
-        OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:\(HelperConfiguration.ports().http)
-        OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-        """
     }
 }
 

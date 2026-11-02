@@ -35,6 +35,15 @@ struct MagnifeApp: App {
             ToolbarCommands()
             // One window: its selection lives in AppModel. Clicking the Dock icon reopens it.
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(after: .pasteboard) {
+                Divider()
+                Button("Copy Environment Variables") { delegate.model.copyEnvironmentVariables() }
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
+            }
+            // No help book in v0.1 (docs/ux.md, Help menu).
+            CommandGroup(replacing: .help) {
+                Button("Show Environment Variables") { delegate.model.showEnvironmentVariables() }
+            }
         }
 
         Settings {
