@@ -34,7 +34,9 @@ this app starts the helper and reads its database. No server, no accounts.
   trace. Quit waits for the helper in `applicationWillTerminate`.
 - `AppModel` refreshes on `batch` events: at most one read in flight, 150 ms
   after the first batch. The trace list (`AppModel+TraceList.swift`) reads
-  200-row pages; scrolled away from the top it holds still (rows update in
+  200-row pages, and `TraceListState.applying` (MagnifeKit, unit-tested) decides
+  what each read may change: a read for another scope or older than the rows
+  shown is dropped; scrolled away from the top it holds still (rows update in
   place, new traces are counted for the "N new traces" button) through
   `TraceListScroller`, which watches the table's NSScrollView. A sidebar scope change empties the list before the
   new read: diffing one scope's rows into another's trips AppKit's

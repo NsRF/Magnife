@@ -80,3 +80,88 @@ extension TraceSummary {
 
     public var accessibilityLabel: String { spokenParts.joined(separator: ", ") }
 }
+
+/// What the live list shows, and the rules for what a read does to it
+/// (design decision 6 and S-004): a page at the top replaces the rows; while
+/// the list holds still only the shown rows change, in place, and new
+/// traces are counted; a read for another scope, or older than what is shown,
+/// is dropped, so overlapping reads never put older rows back.
+public struct TraceListState: Sendable, Equatable {
+    /// The sidebar's service, nil for all services.
+    public var scope: String?
+    public var traces: [TraceSummary]
+    /// The seq the shown rows were read at, and the last seq applied to them.
+    public var baseSeq: Int64
+    public var appliedSeq: Int64
+    /// Scrolled away from the top: the rows hold still.
+    public var isHeld: Bool
+    /// Traces newer than the shown rows while the list holds still.
+    public var newCount: Int
+    /// A full page came back, so there may be older rows to read.
+    public var hasMore: Bool
+
+    public init(scope: String? = nil, traces: [TraceSummary] = [], baseSeq: Int64 = 0, appliedSeq: Int64 = 0,
+                isHeld: Bool = false, newCount: Int = 0, hasMore: Bool = false) {
+        self.scope = scope
+        self.traces = traces
+        self.baseSeq = baseSeq
+        self.appliedSeq = appliedSeq
+        self.isHeld = isHeld
+        self.newCount = newCount
+        self.hasMore = hasMore
+    }
+
+    /// True when the next read is a held one: the list holds still and shows rows.
+    public var readsHeld: Bool { isHeld && !traces.isEmpty }
+
+    /// The state after `read`, or nil when the read must be dropped.
+    public func applying(_ read: TraceListRead) -> TraceListState? {
+        guard read.scope == scope, read.lastSeq >= appliedSeq else { return nil }
+        var next = self
+        switch read {
+        case .page(let page, _):
+            // Scrolled away while reading: inserting now would move the rows under the pointer.
+            guard !readsHeld else { return nil }
+            next.traces = page.traces
+            next.hasMore = page.traces.count == TraceList.pageSize
+            next.baseSeq = page.lastSeq
+            next.appliedSeq = page.lastSeq
+            next.newCount = 0
+        case .held(let held, _, let base):
+            // Back at the top, or a newer page arrived while reading: that read decides.
+            guard isHeld, base == baseSeq else { return nil }
+            next.traces = TraceList.applying(held.updated, to: traces)
+            next.appliedSeq = held.lastSeq
+            next.newCount = held.newCount
+        }
+        return next
+    }
+}
+
+/// A read of the live list, with the scope it was made for.
+public enum TraceListRead: Sendable {
+    /// The first page, read at the top.
+    case page(TracePage, scope: String?)
+    /// Changes to the shown rows read while the list held still at `base`.
+    case held(HeldTraces, scope: String?, base: Int64)
+
+    public var scope: String? {
+        switch self {
+        case .page(_, let scope), .held(_, let scope, _): scope
+        }
+    }
+
+    public var lastSeq: Int64 {
+        switch self {
+        case .page(let page, _): page.lastSeq
+        case .held(let held, _, _): held.lastSeq
+        }
+    }
+
+    public var services: [ServiceSummary] {
+        switch self {
+        case .page(let page, _): page.services
+        case .held(let held, _, _): held.services
+        }
+    }
+}

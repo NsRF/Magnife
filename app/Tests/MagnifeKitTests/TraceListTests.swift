@@ -80,6 +80,60 @@ struct TraceListTests {
         #expect(held.updated.contains { $0.traceID == traceID(1) })
     }
 
+    // MARK: TraceListState: what a read does to the list
+
+    private func page(_ ids: [Int], lastSeq: Int64) -> TracePage {
+        TracePage(traces: ids.map { trace($0) }, services: [], lastSeq: lastSeq)
+    }
+
+    @Test("at the top, a page replaces the rows and its seq becomes the base")
+    func statePage() throws {
+        let state = TraceListState(traces: [trace(1)], baseSeq: 1, appliedSeq: 1, newCount: 3)
+        let next = try #require(state.applying(.page(page([3, 2, 1], lastSeq: 3), scope: nil)))
+        #expect(next.traces.map(\.traceID) == [traceID(3), traceID(2), traceID(1)])
+        #expect(next.baseSeq == 3 && next.appliedSeq == 3 && next.newCount == 0 && !next.hasMore)
+        let full = try #require(state.applying(.page(page(Array(1...TraceList.pageSize), lastSeq: 9), scope: nil)))
+        #expect(full.hasMore)
+    }
+
+    @Test("a read older than the rows shown is dropped, so overlapping reads never go back")
+    func stateStale() {
+        let state = TraceListState(traces: [trace(2), trace(1)], baseSeq: 5, appliedSeq: 7)
+        #expect(state.applying(.page(page([1], lastSeq: 6), scope: nil)) == nil)
+        #expect(state.applying(.page(page([3, 2, 1], lastSeq: 7), scope: nil)) != nil)
+        var held = state
+        held.isHeld = true
+        let old = HeldTraces(updated: [], newCount: 1, services: [], lastSeq: 6)
+        #expect(held.applying(.held(old, scope: nil, base: 5)) == nil)
+    }
+
+    @Test("a read for another scope is dropped")
+    func stateScope() {
+        let state = TraceListState(scope: "web", traces: [], baseSeq: 1, appliedSeq: 1)
+        #expect(state.applying(.page(page([1], lastSeq: 2), scope: nil)) == nil)
+        #expect(state.applying(.page(page([2], lastSeq: 2), scope: "web"))?.traces.map(\.traceID) == [traceID(2)])
+    }
+
+    @Test("held still: a page is dropped; changes update shown rows in place and count new traces")
+    func stateHeld() throws {
+        var state = TraceListState(traces: [trace(2), trace(1)], baseSeq: 5, appliedSeq: 5, isHeld: true)
+        #expect(state.readsHeld)
+        #expect(state.applying(.page(page([3, 2, 1], lastSeq: 6), scope: nil)) == nil)
+        var changed = trace(1)
+        changed.spanCount = 9
+        let held = HeldTraces(updated: [changed, trace(7)], newCount: 2, services: [], lastSeq: 8)
+        let next = try #require(state.applying(.held(held, scope: nil, base: 5)))
+        #expect(next.traces.map(\.traceID) == [traceID(2), traceID(1)])
+        #expect(next.traces[1].spanCount == 9 && next.newCount == 2 && next.appliedSeq == 8 && next.baseSeq == 5)
+        // A held read made for another base (a page arrived meanwhile) is dropped.
+        #expect(state.applying(.held(held, scope: nil, base: 4)) == nil)
+        // Back at the top while reading: the held read is dropped, the next page decides.
+        state.isHeld = false
+        #expect(state.applying(.held(held, scope: nil, base: 5)) == nil)
+        // Held with no rows (a scope just changed): the next read is a page.
+        #expect(!TraceListState(isHeld: true).readsHeld)
+    }
+
     @Test("a held row updates in place; new and unshown rows stay out")
     func applying() {
         let shown = (1...3).reversed().map { trace($0) }

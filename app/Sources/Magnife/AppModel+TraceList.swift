@@ -9,37 +9,38 @@ extension AppModel {
     var showsNewTracesButton: Bool { isListHeld && newTraceCount > 0 }
 
     /// At the top: the newest page replaces the rows. Held: only the rows
-    /// shown are updated in place, and new traces are counted.
+    /// shown are updated in place, and new traces are counted. What a read
+    /// may change is `TraceListState.applying`'s to decide.
     func reloadList(_ reader: TelemetryReader) async throws {
-        let service = sidebar?.serviceName
-        if isListHeld && !traces.isEmpty {
-            let base = listBaseSeq
-            let applied = listAppliedSeq
-            let held = try await reader.heldTraces(base: base, applied: applied, shown: traces.map(\.id), service: service)
-            // A scope change, a return to the top, or a newer page while reading reads again itself;
-            // an older read that finishes last never puts older rows back.
-            guard service == sidebar?.serviceName, reader === self.reader, isListHeld, listBaseSeq == base,
-                  held.lastSeq >= listAppliedSeq else { return }
-            services = held.services
-            let rows = TraceList.applying(held.updated, to: traces)
-            if rows != traces { traces = rows }
-            listAppliedSeq = held.lastSeq
-            if newTraceCount != held.newCount { newTraceCount = held.newCount }
+        let state = listState
+        let read: TraceListRead
+        if state.readsHeld {
+            read = .held(try await reader.heldTraces(base: state.baseSeq, applied: state.appliedSeq,
+                                                     shown: state.traces.map(\.id), service: state.scope),
+                         scope: state.scope, base: state.baseSeq)
         } else {
-            let page = try await reader.tracePage(service: service)
-            // Scrolled away while reading: inserting now would move the rows under the pointer.
-            // Two reads can overlap (a batch and a return to the top): the older never wins.
-            guard service == sidebar?.serviceName, reader === self.reader, !isListHeld || traces.isEmpty,
-                  page.lastSeq >= listAppliedSeq else { return }
-            services = page.services
-            // Equal results leave the table alone.
-            if traces != page.traces { traces = page.traces }
-            hasMoreTraces = page.traces.count == TraceList.pageSize
-            listBaseSeq = page.lastSeq
-            listAppliedSeq = page.lastSeq
-            if newTraceCount != 0 { newTraceCount = 0 }
-            isLoadingScope = false
+            read = .page(try await reader.tracePage(service: state.scope), scope: state.scope)
         }
+        // The state may have moved on while reading (a scope change, scrolling, another read).
+        guard reader === self.reader, let next = listState.applying(read) else { return }
+        services = read.services
+        show(next)
+        if case .page = read { isLoadingScope = false }
+    }
+
+    /// The list's rows and seqs as one value, for `TraceListState.applying`.
+    var listState: TraceListState {
+        TraceListState(scope: sidebar?.serviceName, traces: traces, baseSeq: listBaseSeq, appliedSeq: listAppliedSeq,
+                       isHeld: isListHeld, newCount: newTraceCount, hasMore: hasMoreTraces)
+    }
+
+    /// Takes a new list state, setting only what changed, so equal rows leave the table alone.
+    private func show(_ state: TraceListState) {
+        if traces != state.traces { traces = state.traces }
+        listBaseSeq = state.baseSeq
+        listAppliedSeq = state.appliedSeq
+        if newTraceCount != state.newCount { newTraceCount = state.newCount }
+        if hasMoreTraces != state.hasMore { hasMoreTraces = state.hasMore }
     }
 
     /// The table's last row appeared: read the next page below it. Only
