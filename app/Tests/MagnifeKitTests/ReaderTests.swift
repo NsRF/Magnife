@@ -125,6 +125,43 @@ struct ReaderTests {
         #expect(log.traceID == nil)
     }
 
+    @Test("a span's logs in time order, whatever order they arrived in (S-011)")
+    func spanLogsInTimeOrder() async throws {
+        let (dir, writer, reader) = try await makeStore()
+        defer { dir.remove() }
+        let span = "00f067aa0ba90001"
+        try await writer.write { db in
+            // Arrives after "query failed" but was written before it.
+            try insertLog(db, timeNs: Self.base + 3_000_000_150, severity: 5, service: "orders", body: "retrying",
+                          trace: traceID(3), span: span)
+            try insertLog(db, timeNs: Self.base + 3_000_000_400, severity: 13, service: "orders", body: "gave up",
+                          trace: traceID(3), span: span)
+        }
+        let detail = try #require(try await reader.spanDetail(traceID: traceID(3), spanID: span))
+        #expect(detail.logs.map(\.record.body) == ["retrying", "query failed", "gave up"])
+        #expect(detail.logs.map(\.levelWord) == ["DEBUG", "ERROR", "WARN"])
+    }
+
+    @Test("the log stamp counts a trace's logs and changes when one joins")
+    func logStamp() async throws {
+        let (dir, writer, reader) = try await makeStore()
+        defer { dir.remove() }
+        let before = try await reader.logStamp(traceID: traceID(3))
+        #expect(before.count == 2 && before.lastID > 0)
+        #expect(try await reader.logStamp(traceID: traceID(1)) == LogStamp(count: 0, lastID: 0))
+        try await writer.write { db in
+            try insertLog(db, timeNs: Self.base, severity: 9, service: "orders", body: "late", trace: traceID(3))
+        }
+        let after = try await reader.logStamp(traceID: traceID(3))
+        #expect(after.count == 3 && after.lastID > before.lastID)
+        // logs_by_trace answers it alone: no log row is read.
+        let plan = try await writer.read { db in
+            try Row.fetchAll(db, sql: "EXPLAIN QUERY PLAN " + TelemetrySQL.logStampOfTrace, arguments: [traceID(3)])
+                .map { $0["detail"] as String }.joined(separator: " | ")
+        }
+        #expect(plan.contains("USING COVERING INDEX logs_by_trace"), "\(plan)")
+    }
+
     @Test("services with error counts derived from spans")
     func services() async throws {
         let (dir, writer, reader) = try await makeStore()

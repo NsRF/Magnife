@@ -79,6 +79,8 @@ struct ExpandableText: View {
     let text: String
     let id: String
     var lineLimit = 3
+    /// Monospaced text (a JSON log body), measured the same way; "Show All" keeps the system font.
+    var monospaced = false
     @State private var fullHeight: CGFloat = 0
     @State private var shownHeight: CGFloat = 0
 
@@ -95,6 +97,7 @@ struct ExpandableText: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
             Text(isExpanded ? text : collapsedText)
+                .monospaced(monospaced)
                 .lineLimit(isExpanded ? nil : lineLimit)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -106,6 +109,7 @@ struct ExpandableText: View {
                     // The whole text at the same width, never drawn: its height says whether the shown text is cut.
                     if !isLong {
                         Text(text)
+                            .monospaced(monospaced)
                             .fixedSize(horizontal: false, vertical: true)
                             .hidden()
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {

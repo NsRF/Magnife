@@ -317,7 +317,15 @@ func http500(t *Trace) {
 		"exception.message": "An error occurred while saving the entity changes. See the inner exception for details.",
 		"EventId.Id":        1, "EventId.Name": "UnhandledException",
 	})
-	t.log(&call, Web, scopeNodePino, sevError, 61, "payment request failed", map[string]any{"status": 500, "order_id": 1042})
+	// A structured body, as a pino record carries its fields (S-011 pretty-prints it).
+	failed := t.log(&call, Web, scopeNodePino, sevError, 61, "", map[string]any{"status": 500, "order_id": 1042})
+	body := failed.Body().SetEmptyMap()
+	body.PutStr("msg", "payment request failed")
+	body.PutInt("order_id", 1042)
+	body.PutInt("status", 500)
+	cause := body.PutEmptyMap("err")
+	cause.PutStr("type", "HTTPError")
+	cause.PutStr("message", "Response code 500 (Internal Server Error)")
 }
 
 func jobException(t *Trace) {

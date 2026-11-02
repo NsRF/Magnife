@@ -14,6 +14,7 @@ extension AppModel {
         MenuState.shared.update(hasWaterfall: false)
         collapsedSpans = []
         selectedSpanID = nil
+        openTraceLogStamp = nil
         guard let id = selectedTraceID, let reader else {
             openTrace = nil
             return

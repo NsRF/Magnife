@@ -177,7 +177,7 @@ Depends: S-006
 Acceptance:
 - [unit] Logs whose trace id and span id match the span are shown, in time order.
 - [snap] Each log line shows time, level and body; attributes on demand.
-Status: todo
+Status: done
 
 ### S-012 See all logs for a trace
 As the user, I see every log for the selected trace in one place.

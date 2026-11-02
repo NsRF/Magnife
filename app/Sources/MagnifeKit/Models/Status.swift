@@ -64,14 +64,15 @@ public enum SeverityLevel: Int, Sendable, CaseIterable, Comparable {
     /// The severity numbers this level covers.
     public var range: ClosedRange<Int> { rawValue...(rawValue + 3) }
 
+    /// The word on screen, always in capitals (docs/GLOSSARY.md, Level).
     public var title: String {
         switch self {
-        case .trace: "Trace"
-        case .debug: "Debug"
-        case .info: "Info"
-        case .warn: "Warn"
-        case .error: "Error"
-        case .fatal: "Fatal"
+        case .trace: "TRACE"
+        case .debug: "DEBUG"
+        case .info: "INFO"
+        case .warn: "WARN"
+        case .error: "ERROR"
+        case .fatal: "FATAL"
         }
     }
 

@@ -178,6 +178,10 @@ struct ContractTests {
         // The span detail reads the span and its resource together (S-006).
         let detail = try #require(try await reader.spanDetail(traceID: Self.traceA, spanID: Self.child))
         #expect(detail.span == child && detail.resource == resource)
+        // ...and the logs written during it, not the trace's other logs (S-011).
+        #expect(detail.logs.map(\.record.body) == ["query failed"] && detail.sections.last == .logs)
+        let rootDetail = try #require(try await reader.spanDetail(traceID: Self.traceA, spanID: Self.root))
+        #expect(rootDetail.logs.isEmpty && !rootDetail.sections.contains(.logs))
         #expect(try await reader.spanDetail(traceID: Self.traceA, spanID: "missing") == nil)
     }
 

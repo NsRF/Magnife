@@ -70,7 +70,7 @@ enum SnapshotPage: String, CaseIterable {
 /// writes <page>-light.png and <page>-dark.png for every SnapshotPage,
 /// 02-trace-list-busy and 02-trace-list-not-receiving (the busy-port banners),
 /// 02-trace-list-restarted (the S-008 banner), 02-trace-list-service (S-009),
-/// 02-trace-list-paused (S-010),
+/// 02-trace-list-paused (S-010), 04-span-detail-logs and -log-json (S-011),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab, then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
 /// APP_SNAPSHOT_PAGES=02-trace-list,09-settings limits the pages.
@@ -108,7 +108,10 @@ enum Snapshot {
                     try? await Task.sleep(for: .seconds(0.8))
                     capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
                     if page == .emptyState { await captureCopied(model, dir: dir, mode: mode) }
-                    if page == .spanDetail { await captureSpanEvents(model, dir: dir, mode: mode) }
+                    if page == .spanDetail {
+                        await captureSpanEvents(model, dir: dir, mode: mode)
+                        await captureSpanLogs(model, dir: dir, mode: mode)
+                    }
                     if page == .traceList {
                         await captureReceiverStates(model, dir: dir, mode: mode)
                         await captureEnvironmentPopover(model, dir: dir, mode: mode)

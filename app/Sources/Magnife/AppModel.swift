@@ -97,6 +97,8 @@ final class AppModel {
         didSet { if spanDetail != oldValue { spanDetailChanged(from: oldValue) } }
     }
     @ObservationIgnored var spanDetailTask: Task<Void, Never>?
+    /// The open trace's logs when last checked; a new one re-reads the span detail (S-011).
+    @ObservationIgnored var openTraceLogStamp: LogStamp?
     /// The exception whose Copy Stack Trace reads "Copied" for 2 seconds (S-007), by index.
     var copiedStackTrace: Int?
     @ObservationIgnored var stackTraceCopiedTask: Task<Void, Never>?
@@ -298,7 +300,10 @@ final class AppModel {
             try await reloadList(reader)
             now = Date()
             // Paused, the open waterfall holds still too (S-010).
-            if !isPaused { try await refreshOpenTrace(reader) }
+            if !isPaused {
+                try await refreshOpenTrace(reader)
+                try await refreshOpenTraceLogs(reader)
+            }
         } catch {
             isLoadingScope = false
             FileHandle.standardError.write(Data("magnife: read failed: \(error)\n".utf8))

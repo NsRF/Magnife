@@ -70,6 +70,12 @@ this app starts the helper and reads its database. No server, no accounts.
   `.environment(model).themed()` again); it keeps its divider fraction on
   every resize. "Show All" is measured (`ExpandableText`), and expanded
   values live in `AppModel.expandedValues`.
+- Span logs (S-011): `spanDetail` also reads the span's logs; `LogLine`
+  (MagnifeKit) has the time "14:02:31.204", the level word and the body
+  (`LogBody.pretty` re-indents JSON without re-encoding it). Logs do not
+  change `traces.updated_seq`, so each refresh that is not paused reads
+  `TelemetryReader.logStamp` and re-reads the span when it changed
+  (`AppModel.refreshOpenTraceLogs`). Views in `SpanDetailLogs.swift`.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -119,8 +125,8 @@ this app starts the helper and reads its database. No server, no accounts.
   `kill -9`) print their timings as INFO lines; `APP_SELFTEST_ONLY=lifecycle`
   runs them alone; `APP_SELFTEST_ONLY=sidebar` the S-009 checks, `=pause` the S-010 ones.
   `APP_SELFTEST_ONLY=waterfall tools/selftest.sh` runs only the reader, model
-  and waterfall checks (`APP_SELFTEST_ONLY=span-detail`: the span detail and
-  exception checks); the waterfall checks time 1,000/5,000/30,000-span
+  and waterfall checks (`APP_SELFTEST_ONLY=span-detail`: the span detail,
+  exception and span log checks); the waterfall checks time 1,000/5,000/30,000-span
   traces (INFO lines) and write `/tmp/Magnife-shots/03-trace-detail-30000-*.png`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots and look at them: `tools/snap.sh`.
   It writes `/tmp/Magnife-shots/<page>-light.png` and `-dark.png` for every
@@ -134,7 +140,8 @@ this app starts the helper and reads its database. No server, no accounts.
   button over a held list, `02-trace-list-service` the orders scope (S-009), `02-trace-list-paused` the pause bar (S-010). `04-span-detail` shows the HTTP 500 trace's
   POST /payments span (Exception first), `04-span-detail-events` the gRPC
   server span scrolled to Events, `04-span-detail-long-value` a statement
-  cut with "Show All", `04-span-detail-copied` Copy Stack Trace's "Copied".
+  cut with "Show All", `04-span-detail-copied` Copy Stack Trace's "Copied",
+  `04-span-detail-logs` the Logs section with a log's attributes open, `04-span-detail-log-json` a pretty-printed JSON body.
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Both scripts pass an empty "NSSplitView Subview Frames …" default, so the

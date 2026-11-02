@@ -84,6 +84,9 @@ enum TelemetrySQL {
 
     static let logsOfTrace = "SELECT \(logColumns) FROM logs WHERE trace_id = ? ORDER BY time_ns, id"
 
+    /// logs_by_trace covers it: no log row is read.
+    static let logStampOfTrace = "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM logs WHERE trace_id = ?"
+
     static let logsOfSpan = "SELECT \(logColumns) FROM logs WHERE trace_id = ? AND span_id = ? ORDER BY time_ns, id"
 
     /// Newest first. Optional cursor (time_ns, id), service, and severity range.

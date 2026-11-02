@@ -274,6 +274,17 @@ public struct LogRecord: Sendable, Hashable, Identifiable, FetchableRecord {
     }
 }
 
+/// A trace's logs at one moment: their count and the newest row id.
+public struct LogStamp: Sendable, Hashable {
+    public var count: Int
+    public var lastID: Int64
+
+    public init(count: Int, lastID: Int64) {
+        self.count = count
+        self.lastID = lastID
+    }
+}
+
 /// Where a page of logs ends: newest first by time, then id.
 public struct LogCursor: Sendable, Hashable {
     public var timeNs: Int64

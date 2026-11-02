@@ -38,6 +38,18 @@ extension AppModel {
         copiedStackTrace = nil
     }
 
+    /// After a batch (not paused): when a log joined the open trace, read
+    /// the selected span again, so its Logs section takes it in time order (S-011).
+    func refreshOpenTraceLogs(_ reader: TelemetryReader) async throws {
+        guard let traceID = selectedTraceID, selectedSpanID != nil else { return }
+        let stamp = try await reader.logStamp(traceID: traceID)
+        guard selectedTraceID == traceID, stamp != openTraceLogStamp else { return }
+        openTraceLogStamp = stamp
+        // Also on the trace's first stamp: a log may have joined since the
+        // detail was read. An unchanged detail changes nothing on screen.
+        loadSpanDetail()
+    }
+
     /// True when the pane has nothing to show: a waterfall with no selected span.
     var showsNoSpanSelected: Bool {
         spanDetail == nil && selectedSpanID == nil && hasOpenWaterfall
@@ -95,4 +107,9 @@ enum SpanDetailValueID {
     static func exceptionMessage(_ index: Int) -> String { "exception:\(index):message" }
     static func exceptionAttribute(_ index: Int, _ key: String) -> String { "exception:\(index):\(key)" }
     static func stackTrace(_ index: Int) -> String { "stack-trace:\(index)" }
+    /// The Logs section's "Show All (312)".
+    static let allLogs = "logs:all"
+    static func logBody(_ id: Int64) -> String { "log:\(id):body" }
+    static func logAttributes(_ id: Int64) -> String { "log:\(id):attributes" }
+    static func logAttribute(_ id: Int64, _ key: String) -> String { "log:\(id):attribute:\(key)" }
 }

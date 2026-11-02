@@ -1,7 +1,7 @@
 import MagnifeKit
 import SwiftUI
 
-/// The lower pane of the detail column (S-006, S-007): the selected span's name,
+/// The lower pane of the detail column (S-006, S-007, S-011): the selected span's name,
 /// kind, duration and status, then its sections in the order of design
 /// decision 5. Empty sections are left out.
 struct SpanDetailPane: View {
@@ -72,6 +72,8 @@ struct SpanDetailContent: View {
             EventList(detail: detail)
         case .resource:
             AttributeList(attributes: detail.resourceAttributes, id: SpanDetailValueID.resource)
+        case .logs:
+            SpanLogList(detail: detail)
         }
     }
 }

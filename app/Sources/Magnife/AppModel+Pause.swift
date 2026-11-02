@@ -36,6 +36,7 @@ extension AppModel {
             do {
                 try await reloadList(reader, limit: limit)
                 try await refreshOpenTrace(reader)
+                try await refreshOpenTraceLogs(reader)
             } catch {
                 FileHandle.standardError.write(Data("magnife: read failed: \(error)\n".utf8))
             }

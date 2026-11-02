@@ -145,16 +145,20 @@ public final class TelemetryReader: Sendable {
         try await pool.read { try SpanRecord.fetchOne($0, sql: TelemetrySQL.spanByID, arguments: [traceID, spanID]) }
     }
 
-    /// The span detail (S-006): one span and the resource it came from, in one read.
+    /// The span detail (S-006, S-011): one span, the resource it came from
+    /// and its logs, in one read.
     @concurrent
     public func spanDetail(traceID: String, spanID: String) async throws -> SpanDetail? {
-        try await pool.read { db in
+        let read = try await pool.read { db -> (SpanRecord, ResourceRecord?, [LogRecord])? in
             guard let span = try SpanRecord.fetchOne(db, sql: TelemetrySQL.spanByID, arguments: [traceID, spanID]) else {
                 return nil
             }
             let resource = try ResourceRecord.fetchOne(db, sql: TelemetrySQL.resourceByID, arguments: [span.resourceID])
-            return SpanDetail(span: span, resource: resource)
+            let logs = try LogRecord.fetchAll(db, sql: TelemetrySQL.logsOfSpan, arguments: [traceID, spanID])
+            return (span, resource, logs)
         }
+        // Ordering and pretty-printing happen here, on this nonisolated method, not on the main actor.
+        return read.map { SpanDetail(span: $0.0, resource: $0.1, logs: $0.2) }
     }
 
     @concurrent
@@ -168,6 +172,16 @@ public final class TelemetryReader: Sendable {
     @concurrent
     public func logs(traceID: String) async throws -> [LogRecord] {
         try await pool.read { try LogRecord.fetchAll($0, sql: TelemetrySQL.logsOfTrace, arguments: [traceID]) }
+    }
+
+    /// How many logs carry the trace id, and the newest row id among them:
+    /// it changes whenever a log joins the trace (S-011 refresh).
+    @concurrent
+    public func logStamp(traceID: String) async throws -> LogStamp {
+        try await pool.read { db in
+            let row = try Row.fetchOne(db, sql: TelemetrySQL.logStampOfTrace, arguments: [traceID])
+            return LogStamp(count: row?[0] ?? 0, lastID: row?[1] ?? 0)
+        }
     }
 
     /// Logs written during one span, in time order.

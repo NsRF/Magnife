@@ -1,8 +1,9 @@
 import Foundation
 
-/// The span detail (S-006, S-007): one span with the resource it came from,
-/// in the order of design decision 5: Exception, Attributes (`http.*` and
-/// `db.*` first), Events, Resource. A section with nothing in it is left out.
+/// The span detail (S-006, S-007, S-011): one span with the resource it came
+/// from and the logs written during it, in the order of design decision 5:
+/// Exception, Attributes (`http.*` and `db.*` first), Events, Resource, Logs.
+/// A section with nothing in it is left out.
 /// The ordered lists are worked out once, where the detail is read (off the
 /// main actor), so a view update never sorts thousands of attributes or events.
 public struct SpanDetail: Sendable, Hashable {
@@ -17,12 +18,19 @@ public struct SpanDetail: Sendable, Hashable {
     public let events: [SpanEvent]
     /// The resource's attributes, `service.*` first, then by key.
     public let resourceAttributes: [Attribute]
+    /// The logs whose trace and span ids are this span's, oldest first (S-011).
+    public let logs: [LogLine]
     /// The sections that have something in them, in order.
     public let sections: [Section]
 
-    public init(span: SpanRecord, resource: ResourceRecord?) {
+    /// `logs`: the span's logs as read (`TelemetrySQL.logsOfSpan`); any
+    /// other span's are dropped, and the rest put in time order.
+    public init(span: SpanRecord, resource: ResourceRecord?, logs: [LogRecord] = [], timeZone: TimeZone = .current) {
         self.span = span
         self.resource = resource
+        self.logs = logs.filter { $0.traceID == span.traceID && $0.spanID == span.spanID }
+            .sorted { ($0.timeNs, $0.id) < ($1.timeNs, $1.id) }
+            .map { LogLine($0, timeZone: timeZone) }
         attributes = Self.ordered(span.attributes.pairs, first: Self.attributePrefixes)
         // Every event in time order (the helper stores them that way; ties keep their order).
         let timeOrdered = span.events.enumerated()
@@ -35,6 +43,7 @@ public struct SpanDetail: Sendable, Hashable {
         if !attributes.isEmpty { sections.append(.attributes) }
         if !events.isEmpty { sections.append(.events) }
         if !resourceAttributes.isEmpty { sections.append(.resource) }
+        if !self.logs.isEmpty { sections.append(.logs) }
         self.sections = sections
     }
 
@@ -43,6 +52,7 @@ public struct SpanDetail: Sendable, Hashable {
         case attributes = "Attributes"
         case events = "Events"
         case resource = "Resource"
+        case logs = "Logs"
 
         public var id: String { rawValue }
         /// The section header on screen (docs/STORIES.md, S-006 and S-007 UX).
@@ -53,6 +63,19 @@ public struct SpanDetail: Sendable, Hashable {
     public static let attributePrefixes = ["http.", "db."]
     /// Prefixes listed first in Resource: the service the span came from.
     public static let resourcePrefixes = ["service."]
+
+    /// Over this many logs, the Logs section shows the first ones with "Show All (312)" (S-011).
+    public static let logPreviewCount = 50
+
+    /// The logs the Logs section shows: the first 50 unless `all`.
+    public func shownLogs(all: Bool) -> ArraySlice<LogLine> {
+        all ? logs[...] : logs.prefix(Self.logPreviewCount)
+    }
+
+    /// "Show All (312)" while more than 50 logs are cut, else nil.
+    public var showAllLogsTitle: String? {
+        logs.count > Self.logPreviewCount ? "Show All (\(logs.count.formatted()))" : nil
+    }
 
     /// The stack trace Edit > Copy Stack Trace copies: the first exception's that has one.
     public var firstStackTrace: String? {
