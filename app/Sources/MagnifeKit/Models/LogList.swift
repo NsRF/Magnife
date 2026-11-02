@@ -6,14 +6,84 @@ import Foundation
 // Logs never change once stored, so a held list only counts the logs that
 // arrived after its rows were read (`logs.id` grows with every insert).
 
-/// What narrows the Logs list: the sidebar's service (S-013).
+/// What narrows the Logs list: the sidebar's service (S-013), and the
+/// filter bar's levels and "Body contains" text (S-014).
 public struct LogFilter: Sendable, Hashable {
-    /// The sidebar's service, nil for all services.
+    /// The sidebar's service, nil for all services. The filter bar's Service
+    /// pop-up is the same setting.
     public var service: String?
+    /// The level chips that are on. None on means every log, those with no
+    /// level (severity 0) included; any on keeps their OTel ranges only.
+    public var levels: Set<SeverityLevel>
+    /// Kept when the body contains it, ignoring the case of A to Z (as
+    /// SQLite's lower() does); empty keeps every body.
+    public var bodyContains: String
 
-    public init(service: String? = nil) {
+    public init(service: String? = nil, levels: Set<SeverityLevel> = [], bodyContains: String = "") {
         self.service = service
+        self.levels = levels
+        self.bodyContains = bodyContains
     }
+
+    /// The filter bar's own filters are on (levels or body): the list may
+    /// hide logs of the scope, so the subtitle reads "312 of 1,204 logs".
+    public var narrowsScope: Bool { !levels.isEmpty || !bodyText.isEmpty }
+
+    /// Any filter is on, the service included: Clear Filters has something to clear.
+    public var isActive: Bool { service != nil || narrowsScope }
+
+    /// The body text as matched: surrounding spaces do not count.
+    public var bodyText: String { bodyContains.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// The severity ranges the levels keep, merged where they touch and in
+    /// order: ERROR and FATAL are one range, 17-24.
+    public var severityRanges: [ClosedRange<Int>] {
+        var ranges: [ClosedRange<Int>] = []
+        for level in levels.sorted() {
+            if let last = ranges.last, last.upperBound + 1 == level.range.lowerBound {
+                ranges[ranges.count - 1] = last.lowerBound...level.range.upperBound
+            } else {
+                ranges.append(level.range)
+            }
+        }
+        return ranges
+    }
+
+    /// True when the filter keeps this log (the rule the SQL applies).
+    public func keeps(_ log: LogRecord) -> Bool {
+        if let service, log.serviceName != service { return false }
+        if !levels.isEmpty, !severityRanges.contains(where: { $0.contains(log.severityNumber) }) { return false }
+        let text = bodyText
+        return text.isEmpty || Self.asciiLowercased(log.body).contains(Self.asciiLowercased(text))
+    }
+
+    /// A to Z made lower case, nothing else: SQLite's lower() without ICU.
+    static func asciiLowercased(_ text: String) -> String {
+        String(String.UnicodeScalarView(text.unicodeScalars.map { scalar in
+            (65...90).contains(scalar.value) ? Unicode.Scalar(scalar.value + 32)! : scalar
+        }))
+    }
+
+    /// A click on a level chip shows only that level; clicking the only
+    /// chip on shows every level again. ⌘-click or Space (`adding`) turns
+    /// one chip on or off and leaves the others (docs/ux.md, Filter bar).
+    public func clicking(_ level: SeverityLevel, adding: Bool) -> LogFilter {
+        var next = self
+        if adding {
+            if next.levels.contains(level) { next.levels.remove(level) } else { next.levels.insert(level) }
+        } else {
+            next.levels = levels == [level] ? [] : [level]
+        }
+        return next
+    }
+
+    /// Clear Filters: every level, any body, All Services.
+    public static let cleared = LogFilter()
+}
+
+extension SeverityLevel {
+    /// A level chip's tooltip: "Show only ERROR logs, ERROR to ERROR4".
+    public var chipHelp: String { "Show only \(title) logs, \(title) to \(title)4" }
 }
 
 /// One row of the Logs list: the log, ready to show, and whether Magnife
@@ -53,18 +123,21 @@ public struct LogPage: Sendable, Equatable {
     public var lastID: Int64
     /// meta.last_seq: a read older than the rows shown is dropped.
     public var lastSeq: Int64
-    /// Every log in scope, for the window's subtitle.
+    /// Every log the filter keeps, for the window's subtitle.
     public var logCount: Int
+    /// Every log of the service scope, the filter bar aside: "312 of 1,204 logs".
+    public var scopeCount: Int
     /// Read while paused (S-010): only logs up to this id, and `newCount` above it.
     public var upTo: Int64?
     public var newCount: Int
 
-    public init(items: [LogListItem], lastID: Int64, lastSeq: Int64, logCount: Int? = nil, upTo: Int64? = nil,
-                newCount: Int = 0) {
+    public init(items: [LogListItem], lastID: Int64, lastSeq: Int64, logCount: Int? = nil, scopeCount: Int? = nil,
+                upTo: Int64? = nil, newCount: Int = 0) {
         self.items = items
         self.lastID = lastID
         self.lastSeq = lastSeq
         self.logCount = logCount ?? items.count
+        self.scopeCount = scopeCount ?? logCount ?? items.count
         self.upTo = upTo
         self.newCount = newCount
     }
@@ -119,8 +192,10 @@ public struct LogListState: Sendable, Equatable {
     public var newCount: Int
     /// A full page came back, so there may be older rows to read.
     public var hasMore: Bool
-    /// Every log in scope when the rows were read (the subtitle).
+    /// Every log the filter keeps, and every log of its service scope, when
+    /// the rows were read (the subtitle).
     public var logCount: Int
+    public var scopeCount: Int
     /// While paused (S-010): the log id the list paused at.
     public var pausedID: Int64?
     /// A page for this filter has been applied (the empty state waits for it).
@@ -128,7 +203,7 @@ public struct LogListState: Sendable, Equatable {
 
     public init(filter: LogFilter = LogFilter(), items: [LogListItem] = [], baseID: Int64 = 0, appliedSeq: Int64 = 0,
                 isHeld: Bool = false, newCount: Int = 0, hasMore: Bool = false, logCount: Int = 0,
-                pausedID: Int64? = nil, isLoaded: Bool = false) {
+                scopeCount: Int = 0, pausedID: Int64? = nil, isLoaded: Bool = false) {
         self.filter = filter
         self.items = items
         self.baseID = baseID
@@ -137,6 +212,7 @@ public struct LogListState: Sendable, Equatable {
         self.newCount = newCount
         self.hasMore = hasMore
         self.logCount = logCount
+        self.scopeCount = scopeCount
         self.pausedID = pausedID
         self.isLoaded = isLoaded
     }
@@ -169,6 +245,7 @@ public struct LogListState: Sendable, Equatable {
             next.appliedSeq = page.lastSeq
             next.newCount = page.newCount
             next.logCount = page.logCount
+            next.scopeCount = page.scopeCount
             next.isLoaded = true
         case .held(let held, _, let base):
             guard isHeld || isPaused, base == baseID else { return nil }
@@ -205,6 +282,16 @@ public enum LogList {
         let count = newCount == 0 ? "" : " \(newLogsTitle(newCount))."
         return "Paused.\(count) Magnife is still receiving."
     }
+
+    /// The window's subtitle while the filter bar hides some of the scope's
+    /// logs: "312 of 1,204 logs" (docs/ux.md, Window).
+    public static func subtitle(shown: Int, of total: Int, isPaused: Bool = false) -> String {
+        guard shown != total else { return subtitle(logCount: total, isPaused: isPaused) }
+        return (isPaused ? "Paused · " : "") + "\(shown.formatted()) of \(TraceLogs.countTitle(total))"
+    }
+
+    public static let noMatchesTitle = "No Matching Logs"
+    public static let noMatchesDescription = "No logs match these filters."
 
     public static let emptyTitle = "No Logs Yet"
     public static let emptyDescription = "Logs your apps send over OTLP appear here."

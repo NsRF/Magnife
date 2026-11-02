@@ -10,6 +10,8 @@ struct LogListView: View {
     var body: some View {
         table
             .overlay(alignment: .top) { NewLogsButton() }
+            // Esc in the list hides the filter bar too; the filters stay on.
+            .onExitCommand { model.hideLogFilterBar() }
     }
 
     // Fixed Time and Level; Service's minimum fits "checkout-api" (at the
@@ -73,7 +75,15 @@ struct LogListView: View {
             ContentUnavailableView("Can't Read the Database", systemImage: "exclamationmark.triangle",
                                    description: Text(error.message))
         } else if model.logsLoaded && model.logs.isEmpty {
-            if let service = model.sidebar?.serviceName {
+            if model.logFilter.narrowsScope {
+                ContentUnavailableView {
+                    Label(LogList.noMatchesTitle, systemImage: "line.3.horizontal.decrease.circle")
+                } description: {
+                    Text(LogList.noMatchesDescription)
+                } actions: {
+                    ClearLogFiltersButton()
+                }
+            } else if let service = model.sidebar?.serviceName {
                 ContentUnavailableView(LogList.emptyTitle(service: service), systemImage: "line.3.horizontal.decrease",
                                        description: Text(LogList.emptyDescription(service: service)))
             } else {

@@ -205,7 +205,7 @@ Depends: S-013
 Acceptance:
 - [unit] Level filter matches OTel severity ranges (e.g. Error includes ERROR2–ERROR4).
 - [snap] Active filters are visible and can be cleared in one action.
-Status: todo
+Status: done
 
 ## M3 Retention
 

@@ -229,17 +229,22 @@ public final class TelemetryReader: Sendable {
         let pageArguments = (upTo.map { [$0] as StatementArguments } ?? []) + scope + [limit]
         let countSQL = TelemetrySQL.logCount(upTo: upTo != nil, filter: filter)
         let countArguments = (upTo.map { [$0] as StatementArguments } ?? []) + scope
+        let narrows = filter.narrowsScope
+        let scopeCountSQL = TelemetrySQL.logScopeCount(upTo: upTo != nil, filter: filter)
+        let scopeCountArguments = (upTo.map { [$0] as StatementArguments } ?? []) + Self.scopeArguments(for: filter)
         let rows = try await pool.read { db in
             (rows: try Self.logRows(db, sql: pageSQL, arguments: pageArguments),
              lastID: try Int64.fetchOne(db, sql: TelemetrySQL.lastLogID) ?? 0,
              lastSeq: try Self.lastSeq(db),
              count: try Int.fetchOne(db, sql: countSQL, arguments: countArguments) ?? 0,
+             scopeCount: narrows ? try Int.fetchOne(db, sql: scopeCountSQL, arguments: scopeCountArguments) ?? 0 : nil,
              newCount: try upTo.map { try Int.fetchOne(db, sql: TelemetrySQL.logsAfter(filter: filter),
                                                        arguments: [$0] + scope) ?? 0 } ?? 0)
         }
         // The lines are built here, off the main actor.
         return LogPage(items: rows.rows.map(Self.logItem), lastID: rows.lastID, lastSeq: rows.lastSeq,
-                       logCount: rows.count, upTo: upTo, newCount: rows.newCount)
+                       logCount: rows.count, scopeCount: rows.scopeCount ?? rows.count, upTo: upTo,
+                       newCount: rows.newCount)
     }
 
     /// The next page of the Logs list below `cursor` (the last row shown).
@@ -296,6 +301,14 @@ public final class TelemetryReader: Sendable {
 
     /// The arguments of `TelemetrySQL.logFilterConditions`, in its order.
     private static func arguments(for filter: LogFilter) -> StatementArguments {
+        var arguments = scopeArguments(for: filter)
+        for range in filter.severityRanges { arguments += [range.lowerBound, range.upperBound] }
+        if !filter.bodyText.isEmpty { arguments += [filter.bodyText] }
+        return arguments
+    }
+
+    /// The arguments of `TelemetrySQL.logScopeConditions`.
+    private static func scopeArguments(for filter: LogFilter) -> StatementArguments {
         filter.service.map { [$0] } ?? []
     }
 

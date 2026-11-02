@@ -62,11 +62,42 @@ extension Snapshot {
         capture(to: "\(dir)/\(page)-paused-\(mode).png")
         model.pauseForSnapshot(newTraces: nil)
 
+        await captureLogFilters(model, dir: dir, mode: mode)
+
         let store = model.storeURL
         model.selectedLogID = nil
         await model.useStore(at: SnapshotPage.emptyStore(next: store))
         try? await Task.sleep(for: .seconds(0.8))
         capture(to: "\(dir)/\(page)-empty-\(mode).png")
         await model.useStore(at: store)
+    }
+
+    /// 05-logs-filtered: the filter bar with ERROR and WARN on (S-014).
+    /// 05-logs-filter-hidden: the bar hidden, the filters still on: the
+    /// Filter button filled, "6 of 20 logs". 05-logs-no-matches: "No Matching Logs".
+    static func captureLogFilters(_ model: AppModel, dir: String, mode: String) async {
+        let page = SnapshotPage.logs.rawValue
+        model.selectedLogID = nil
+        model.showsLogFilterBar = true
+        model.clickLevelChip(.error, adding: false)
+        model.clickLevelChip(.warn, adding: true)
+        await model.reload()
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-filtered-\(mode).png")
+
+        model.hideLogFilterBar()
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-filter-hidden-\(mode).png")
+
+        model.showsLogFilterBar = true
+        model.logBodyText = "no log says this"
+        model.logBodyFilter = model.logBodyText
+        await model.reload()
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(page)-no-matches-\(mode).png")
+
+        model.clearLogFilters(undoManager: nil)
+        model.hideLogFilterBar()
+        await model.reload()
     }
 }

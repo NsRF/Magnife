@@ -82,6 +82,7 @@ enum SnapshotPage: String, CaseIterable {
 /// 02-trace-list-restarted (the S-008 banner), 02-trace-list-service (S-009),
 /// 02-trace-list-paused (S-010), 04-span-detail-logs and -log-json (S-011),
 /// 03-trace-detail-trace-logs (S-012), 05-logs-no-trace, -new-logs, -paused and -empty (S-013),
+/// 05-logs-filtered, -filter-hidden and -no-matches (S-014),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab, then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
 /// APP_SNAPSHOT_PAGES=02-trace-list,09-settings limits the pages.

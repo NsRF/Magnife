@@ -154,6 +154,26 @@ final class AppModel {
     }
     var hasMoreLogs = false
     var logCount = 0
+    /// Every log of the service scope, the filter bar aside ("312 of 1,204 logs").
+    var logScopeCount = 0
+    /// The Logs filter bar (S-014): its level chips, its "Body contains"
+    /// text as typed and as applied (a moment later), and whether it shows.
+    /// Log filters are not saved (docs/ux.md, Filter bar).
+    var logLevels: Set<SeverityLevel> = [] {
+        didSet { if logLevels != oldValue { logFilterChanged() } }
+    }
+    var logBodyText = "" {
+        didSet { if logBodyText != oldValue { applyLogBodyText() } }
+    }
+    var logBodyFilter = "" {
+        didSet { if logBodyFilter != oldValue { logFilterChanged() } }
+    }
+    @ObservationIgnored var logBodyTask: Task<Void, Never>?
+    var showsLogFilterBar = false {
+        didSet { updateFilterMenu() }
+    }
+    /// Set by View > Show Filter Bar (⌘F): the bar's field takes the focus once.
+    var focusesLogFilterField = false
     /// A page for the current filter has been shown: the empty state waits for it.
     var logsLoaded = false
     /// While paused, the log id the Logs list paused at (S-010).
@@ -191,6 +211,7 @@ final class AppModel {
             listTraceCount = 0
             isLoadingScope = true
             resetLogList()
+            updateFilterMenu()
             refreshNow()
         }
     }
@@ -251,7 +272,9 @@ final class AppModel {
         case .traces:
             listTraceCount == 0 ? (isPaused ? "Paused" : "") : TraceList.subtitle(traceCount: listTraceCount, isPaused: isPaused)
         case .logs:
-            logCount == 0 ? (isPaused ? "Paused" : "") : LogList.subtitle(logCount: logCount, isPaused: isPaused)
+            // "312 of 1,204 logs" while the filter bar hides some (S-014).
+            logFilter.narrowsScope ? (logsLoaded ? LogList.subtitle(shown: logCount, of: logScopeCount, isPaused: isPaused) : "")
+                : logCount == 0 ? (isPaused ? "Paused" : "") : LogList.subtitle(logCount: logCount, isPaused: isPaused)
         }
     }
 

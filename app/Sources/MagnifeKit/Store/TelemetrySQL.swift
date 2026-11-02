@@ -117,13 +117,36 @@ enum TelemetrySQL {
     }
 
     /// The conditions of a log filter, in the order `TelemetryReader.arguments(for:)` binds them.
+    /// Service, then one BETWEEN per merged severity range (S-014: ERROR is
+    /// 17-20, ERROR to ERROR4), then the body text, case-insensitive for A to Z.
     static func logFilterConditions(_ filter: LogFilter) -> [String] {
+        logScopeConditions(filter) + logBarConditions(filter)
+    }
+
+    /// The sidebar's part of a filter: the service.
+    static func logScopeConditions(_ filter: LogFilter) -> [String] {
         filter.service == nil ? [] : ["service_name = ?"]
+    }
+
+    /// The filter bar's part: levels and body.
+    static func logBarConditions(_ filter: LogFilter) -> [String] {
+        var conditions: [String] = []
+        let ranges = filter.severityRanges
+        if !ranges.isEmpty {
+            conditions.append("(" + ranges.map { _ in "severity_number BETWEEN ? AND ?" }.joined(separator: " OR ") + ")")
+        }
+        if !filter.bodyText.isEmpty { conditions.append("instr(lower(body), lower(?)) > 0") }
+        return conditions
     }
 
     /// How many logs the filter keeps (the subtitle), up to a pause point.
     static func logCount(upTo: Bool, filter: LogFilter) -> String {
         "SELECT COUNT(*) FROM logs " + whereClause((upTo ? ["id <= ?"] : []) + logFilterConditions(filter))
+    }
+
+    /// How many logs the service scope has, the filter bar aside: "of 1,204 logs".
+    static func logScopeCount(upTo: Bool, filter: LogFilter) -> String {
+        "SELECT COUNT(*) FROM logs " + whereClause((upTo ? ["id <= ?"] : []) + logScopeConditions(filter))
     }
 
     /// Logs stored after an id that the filter keeps: "12 new logs".

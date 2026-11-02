@@ -173,6 +173,17 @@ final class MenuState: ObservableObject {
         if self.hasSelectedLog != hasSelectedLog { self.hasSelectedLog = hasSelectedLog }
     }
 
+    /// The current view's filter bar (S-014): View > Show Filter Bar / Hide
+    /// Filter Bar, and Clear Filters while any filter is on.
+    enum FilterBar { case unavailable, hidden, shown }
+    @Published private(set) var filterBar: FilterBar = .unavailable
+    @Published private(set) var hasFilters = false
+
+    func update(filterBar: FilterBar, hasFilters: Bool) {
+        if self.filterBar != filterBar { self.filterBar = filterBar }
+        if self.hasFilters != hasFilters { self.hasFilters = hasFilters }
+    }
+
     /// Traces or Logs: the View and Trace menus follow it (S-013).
     @Published private(set) var contentMode: ContentMode = .traces
 

@@ -96,6 +96,12 @@ this app starts the helper and reads its database. No server, no accounts.
   through `pendingSpan` once the waterfall is built. Views in
   `LogListView.swift` and `LogDetailView.swift`. A Table cell's root view
   never reads `@Environment` (FIXLOG): pass it values and actions.
+- The Logs filter bar (S-014, `LogFilterBar.swift`): `LogFilter` (MagnifeKit)
+  holds the service (the sidebar's), the level chips (merged OTel ranges,
+  `severityRanges`) and "Body contains"; `TelemetrySQL.logFilterConditions`
+  and `TelemetryReader.arguments(for:)` must stay in the same order. Any
+  change empties the list and reads it again (`logFilterChanged`); Clear
+  Filters is undoable. `APP_SELFTEST_ONLY=logs` runs S-013 and S-014 checks.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -164,7 +170,8 @@ this app starts the helper and reads its database. No server, no accounts.
   `04-span-detail-logs` the Logs section with a log's attributes open, `04-span-detail-log-json` a pretty-printed JSON body,
   `03-trace-detail-trace-logs` Trace Logs with a log (and so its span) selected,
   `05-logs` the Logs view with the payment log's detail, `05-logs-no-trace`
-  a log without a trace id, `05-logs-new-logs`, `05-logs-paused`, `05-logs-empty`.
+  a log without a trace id, `05-logs-new-logs`, `05-logs-paused`, `05-logs-empty`,
+  `05-logs-filtered` (ERROR and WARN on), `05-logs-filter-hidden`, `05-logs-no-matches`.
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Both scripts pass an empty "NSSplitView Subview Frames …" default, so the

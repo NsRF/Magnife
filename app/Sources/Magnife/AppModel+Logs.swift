@@ -47,19 +47,20 @@ extension AppModel {
         MenuState.shared.update(contentMode: contentMode)
         updateNewRowsMenu()
         updateLogMenu()
+        updateFilterMenu()
         // The list that shows now starts at its top.
         isListHeld = false
         isLogListHeld = false
         refreshNow()
     }
 
-    var logFilter: LogFilter { LogFilter(service: sidebar?.serviceName) }
+    var logFilter: LogFilter { LogFilter(service: sidebar?.serviceName, levels: logLevels, bodyContains: logBodyFilter) }
 
     /// The list's rows and ids as one value, for `LogListState.applying`.
     var logListState: LogListState {
         LogListState(filter: logFilter, items: logs, baseID: logBaseID, appliedSeq: logAppliedSeq,
                      isHeld: isLogListHeld, newCount: newLogCount, hasMore: hasMoreLogs, logCount: logCount,
-                     pausedID: logPausedID, isLoaded: logsLoaded)
+                     scopeCount: logScopeCount, pausedID: logPausedID, isLoaded: logsLoaded)
     }
 
     /// At the top: the newest page replaces the rows. Held or paused: the
@@ -90,6 +91,7 @@ extension AppModel {
         if newLogCount != state.newCount { newLogCount = state.newCount }
         if hasMoreLogs != state.hasMore { hasMoreLogs = state.hasMore }
         if logCount != state.logCount { logCount = state.logCount }
+        if logScopeCount != state.scopeCount { logScopeCount = state.scopeCount }
         if logsLoaded != state.isLoaded { logsLoaded = state.isLoaded }
     }
 
@@ -102,6 +104,7 @@ extension AppModel {
         newLogCount = 0
         hasMoreLogs = false
         logCount = 0
+        logScopeCount = 0
         logsLoaded = false
         // Paused, a new scope still reads up to the pause point.
     }
@@ -271,5 +274,91 @@ extension AppModel {
     func copySelectedListLogBody(to pasteboard: NSPasteboard = .general) {
         guard let log = selectedLog else { return }
         copyBody(log.record.body, to: pasteboard)
+    }
+}
+
+/// The Logs filter bar (S-014): Service pop-up (the sidebar's setting),
+/// level chips and "Body contains"; View > Show Filter Bar (⌘F) and Clear
+/// Filters, which is undoable. Any change reads the list again from the top.
+extension AppModel {
+    /// A filter changed: the list starts empty (diffing one filter's rows into
+    /// another's trips AppKit's reentrancy warning) and is read again.
+    func logFilterChanged() {
+        resetLogList()
+        updateFilterMenu()
+        refreshNow()
+    }
+
+    /// Typing waits a moment, so each key does not read the list again.
+    func applyLogBodyText() {
+        logBodyTask?.cancel()
+        logBodyTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.bodyTypingDelay)
+            guard let self, !Task.isCancelled else { return }
+            self.logBodyFilter = self.logBodyText
+        }
+    }
+
+    static let bodyTypingDelay: Duration = .milliseconds(250)
+
+    /// A level chip: a click shows only that level, ⌘-click or Space adds or removes it.
+    func clickLevelChip(_ level: SeverityLevel, adding: Bool) {
+        let next = logFilter.clicking(level, adding: adding).levels
+        if logLevels != next { logLevels = next }
+    }
+
+    /// The filter bar's own filters (levels, body) are on: the Filter button is filled.
+    var hasLogBarFilters: Bool { !logLevels.isEmpty || !logBodyText.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// Clear Filters has something to clear: a level, a body or a service.
+    var hasLogFilters: Bool { hasLogBarFilters || sidebar?.serviceName != nil }
+
+    /// View > Show Filter Bar (⌘F) and the Filter button. Shown from the
+    /// menu, the "Body contains" field takes the focus.
+    func toggleLogFilterBar(focusField: Bool = false) {
+        guard contentMode == .logs else { return }
+        showsLogFilterBar.toggle()
+        if showsLogFilterBar && focusField { focusesLogFilterField = true }
+    }
+
+    /// Esc and the bar's close button: the bar hides, the filters stay on.
+    func hideLogFilterBar() {
+        if showsLogFilterBar { showsLogFilterBar = false }
+    }
+
+    /// Clear Filters: every level, any body, All Services, at once. Undo
+    /// ("Undo Clear Filters") puts them back.
+    func clearLogFilters(undoManager: UndoManager?) {
+        let before = (levels: logLevels, body: logBodyText, scope: sidebar)
+        guard hasLogFilters else { return }
+        logBodyTask?.cancel()
+        logLevels = []
+        logBodyText = ""
+        logBodyFilter = ""
+        sidebar = .allTraces
+        undoManager?.registerUndo(withTarget: self) { model in
+            MainActor.assumeIsolated {
+                model.restoreLogFilters(levels: before.levels, body: before.body, scope: before.scope, undoManager: undoManager)
+            }
+        }
+        undoManager?.setActionName("Clear Filters")
+    }
+
+    private func restoreLogFilters(levels: Set<SeverityLevel>, body: String, scope: SidebarSelection?, undoManager: UndoManager?) {
+        logBodyTask?.cancel()
+        logLevels = levels
+        logBodyText = body
+        logBodyFilter = body
+        sidebar = scope
+        // Redo clears them again.
+        undoManager?.registerUndo(withTarget: self) { model in
+            MainActor.assumeIsolated { model.clearLogFilters(undoManager: undoManager) }
+        }
+        undoManager?.setActionName("Clear Filters")
+    }
+
+    func updateFilterMenu() {
+        MenuState.shared.update(filterBar: contentMode == .logs ? (showsLogFilterBar ? .shown : .hidden) : .unavailable,
+                                hasFilters: contentMode == .logs && hasLogFilters)
     }
 }

@@ -48,6 +48,10 @@ struct ContentColumn: View {
             VStack(spacing: 0) {
                 Banners()
                 PauseBar()
+                if model.contentMode == .logs && model.showsLogFilterBar {
+                    LogFilterBar()
+                    Divider()
+                }
             }
         }
         .navigationTitle(model.title)
@@ -56,6 +60,10 @@ struct ContentColumn: View {
         .toolbar {
             ToolbarItem { ContentModePicker() }
             ToolbarItem { PauseButton() }
+            // The Traces filter bar comes with S-018; until then only Logs has one.
+            if model.contentMode == .logs {
+                ToolbarItem { LogFilterButton() }
+            }
         }
     }
 }
