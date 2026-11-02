@@ -152,7 +152,7 @@ extension SelfTest {
     // MARK: Tools
 
     /// Polls `condition` every 20 ms for up to `seconds`.
-    private static func waitUntil(_ seconds: TimeInterval, _ condition: () -> Bool) async -> Bool {
+    static func waitUntil(_ seconds: TimeInterval, _ condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(seconds)
         while !condition() {
             if Date() > deadline { return false }
@@ -162,7 +162,7 @@ extension SelfTest {
     }
 
     /// POSTs OTLP/JSON to 127.0.0.1; the status code, or 0 when the request failed.
-    private static func post(port: Int, path: String, body: String) async -> Int {
+    static func post(port: Int, path: String, body: String) async -> Int {
         var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)\(path)")!, timeoutInterval: 2)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -174,20 +174,20 @@ extension SelfTest {
     }
 
     /// A port nobody listens on right now.
-    private static func freePort() -> Int {
+    static func freePort() -> Int {
         guard let holder = PortHolder(address: "127.0.0.1") else { return 0 }
         defer { holder.close() }
         return holder.port
     }
 
-    private static func portIsFree(_ port: Int) -> Bool {
+    static func portIsFree(_ port: Int) -> Bool {
         guard let holder = PortHolder(address: "127.0.0.1", port: port) else { return false }
         holder.close()
         return true
     }
 
     /// The TCP addresses a process listens on, from lsof ("127.0.0.1:51234").
-    private static func listeningSockets(pid: Int32?) -> [String] {
+    static func listeningSockets(pid: Int32?) -> [String] {
         guard let pid else { return [] }
         let lsof = Process()
         lsof.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
@@ -202,7 +202,7 @@ extension SelfTest {
     }
 
     /// Runs a program to its end off the main actor; its exit status and stderr.
-    private static func run(_ executable: URL, _ arguments: [String]) async -> (status: Int32, output: String) {
+    static func run(_ executable: URL, _ arguments: [String]) async -> (status: Int32, output: String) {
         await Task.detached {
             let process = Process()
             process.executableURL = executable

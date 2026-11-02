@@ -6,6 +6,7 @@
 #   seed_store <db in /tmp>           helper on <db> + scripts/send-sample-traces
 #   seed_store <db in /tmp> --empty   helper on <db>, nothing sent (schema only)
 #   seed_stop                         stops every helper seed_store started
+#   $seed_grpc, $seed_http            the last seeded helper's addresses
 #
 # Each helper keeps running until seed_stop (an EXIT trap): the app reads
 # read-only, and a read-only reader needs the -wal file, which exists only
@@ -51,6 +52,8 @@ seed_store() {
   grpc=$(sed -n 's/.*"grpc":{"addr":"\([^"]*\)","state":"listening".*/\1/p' $out | head -1)
   http=$(sed -n 's/.*"http":{"addr":"\([^"]*\)","state":"listening".*/\1/p' $out | head -1)
   [[ -n $grpc && -n $http ]] || { print -u2 "seed: helper ports not listening: $(head -1 $out)"; return 1 }
+  # The last seeded store's helper, so the self-test can send it more (S-004).
+  typeset -g seed_grpc=$grpc seed_http=$http
   [[ $mode == --empty ]] && return 0
   # The seed set, over mixed protocols (gRPC, HTTP protobuf and JSON, with and without gzip).
   local summary

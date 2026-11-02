@@ -11,5 +11,6 @@ trap seed_stop EXIT INT TERM
 rm -rf ~/Library/Saved\ Application\ State/com.nasserfarhat.magnife.savedState
 store=/tmp/Magnife-self.sqlite
 seed_store $store || exit 1
-APP_STORE=$store APP_HELPER=none APP_SAMPLE_SENDER=$seed_sender \
+# APP_SEED_GRPC / APP_SEED_HTTP: the seed helper, still writing $store, for the live list checks.
+APP_STORE=$store APP_HELPER=none APP_SAMPLE_SENDER=$seed_sender APP_SEED_GRPC=$seed_grpc APP_SEED_HTTP=$seed_http \
   ~/Applications/Magnife.app/Contents/MacOS/Magnife --selftest

@@ -15,3 +15,11 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: `.fixedSize(horizontal: false, vertical: true)` on the banner's text. AppKit asks the window's SwiftUI content for its minimum size with a near-zero width; the text then wraps a word per line, the minimum height outgrows the window, and the content is laid out taller than the window, anchored at the bottom.
 - Fix: removed the modifier; the text wraps within the width it gets.
 - Rule: never put `fixedSize(vertical: true)` on wrapping text in the main window's layout; check the `-layout.json` probe positions after adding a banner or bar.
+
+## Two services could share a color (S-004)
+
+- Symptom: service colors came from a hash of the name into 12 slots, so two services could get the same dot (about one time in four with three services), and the palette held orange, which docs/ux.md keeps for findings.
+- Cause: the scaffold's `ServiceColor.slot(for:)` hashed names instead of following docs/ux.md (ten colors, assigned in order of `services.first_seen_ns`).
+- Fix: `ServiceColors` (MagnifeKit) ranks services by first seen, then name, into docs/ux.md's ten system colors; `ServiceDot` reads it from AppModel in the sidebar, list and detail. Unit test `TraceListTests.colors`, self-test "each seed service has its own color".
+- Rule: assign identity colors from a stable order of the data, never from a hash, when they must stay distinct.
+

@@ -17,6 +17,8 @@ import SwiftUI
 @main
 struct MagnifeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    /// SwiftUI commands do not observe AppModel; this rebuilds them.
+    @ObservedObject private var menu = MenuState.shared
 
     var body: some Scene {
         // A WindowGroup, not a Window: closing the last window keeps Magnife
@@ -39,6 +41,10 @@ struct MagnifeApp: App {
                 Divider()
                 Button("Copy Environment Variables") { delegate.model.copyEnvironmentVariables() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
+            }
+            CommandMenu("Trace") {
+                Button("Show Newest Traces") { delegate.model.showNewestTraces() }
+                    .disabled(menu.newTraceCount == 0)
             }
             // No help book in v0.1 (docs/ux.md, Help menu).
             CommandGroup(replacing: .help) {

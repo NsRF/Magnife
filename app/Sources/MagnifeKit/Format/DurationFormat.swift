@@ -23,4 +23,19 @@ public enum DurationFormat {
         let (hours, rest) = wholeMinutes.quotientAndRemainder(dividingBy: 60)
         return rest == 0 ? "\(hours) h" : "\(hours) h \(rest) min"
     }
+
+    /// The same duration in words for VoiceOver: "240 milliseconds",
+    /// "1.24 seconds", "850 microseconds", "2 minutes 5 seconds", "1 hour".
+    public static func spoken(nanoseconds: Int64) -> String {
+        let words = ["µs": ("microsecond", "microseconds"), "ms": ("millisecond", "milliseconds"),
+                     "s": ("second", "seconds"), "min": ("minute", "minutes"), "h": ("hour", "hours")]
+        let parts = string(nanoseconds: nanoseconds).split(separator: " ").map(String.init)
+        var spoken: [String] = []
+        for index in stride(from: 0, to: parts.count - 1, by: 2) {
+            let number = parts[index]
+            guard let unit = words[parts[index + 1]] else { return parts.joined(separator: " ") }
+            spoken.append("\(number) \(number == "1" ? unit.0 : unit.1)")
+        }
+        return spoken.joined(separator: " ")
+    }
 }

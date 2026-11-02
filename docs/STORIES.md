@@ -81,7 +81,7 @@ UX:
 - States: empty is S-003; too much: Route truncates in the middle with the full route in a tooltip, 100,000 rows scroll smoothly (S-030); a trace still receiving spans updates its row in place without moving it
 - Words: column headers "Service", "Route", "Duration", "Spans", "Status", "Time"; statuses "Error" with an octagon icon, "OK" with no icon, "Unset" shown blank; durations "12 ms", "1.24 s"; time relative under an hour ("2 min ago"), then clock time
 - Access: VoiceOver reads a row as "checkout-api, POST /orders, 240 milliseconds, 18 spans, Error"; the Error status pairs icon and word, not red alone
-Status: todo
+Status: done
 
 ### S-005 Open a trace's waterfall
 As the user, I select a trace and see its spans as a waterfall in the detail column.

@@ -30,6 +30,7 @@ enum SelfTest {
             await checkReader(model)
             await checkModel(model)
             await checkEnvironment(model)
+            await checkTraceList(model)
             await checkSupervisor()
             await checkReceiver()
             checkApp()

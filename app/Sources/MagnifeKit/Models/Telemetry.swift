@@ -25,6 +25,24 @@ public struct TraceSummary: Sendable, Hashable, Identifiable, FetchableRecord {
     /// The cursor that continues a page after this row.
     public var cursor: TraceCursor { TraceCursor(startNs: startNs, traceID: traceID) }
 
+    public init(traceID: String, rootSpanID: String? = nil, rootService: String, route: String, startNs: Int64,
+                durationNs: Int64, spanCount: Int, errorCount: Int = 0, status: SpanStatus = .unset,
+                firstSeq: Int64 = 1, updatedSeq: Int64 = 1) {
+        self.traceID = traceID
+        self.rootSpanID = rootSpanID
+        self.rootService = rootService
+        self.route = route
+        self.startNs = startNs
+        self.endNs = startNs + durationNs
+        self.durationNs = durationNs
+        self.spanCount = spanCount
+        self.errorCount = errorCount
+        self.status = status
+        self.firstSeq = firstSeq
+        self.updatedSeq = updatedSeq
+        self.receivedNs = startNs
+    }
+
     public init(row: Row) throws {
         traceID = try row.decode(forColumn: "trace_id")
         rootSpanID = try row.decode(forColumn: "root_span_id")

@@ -89,6 +89,7 @@ enum Snapshot {
                     if page == .traceList {
                         await captureReceiverStates(model, dir: dir, mode: mode)
                         await captureEnvironmentPopover(model, dir: dir, mode: mode)
+                        await captureNewTraces(model, dir: dir, mode: mode)
                     }
                 }
             }
@@ -146,6 +147,16 @@ enum Snapshot {
         model.environmentLanguage = .defaultLanguage
         model.environmentCopied = false
         model.hasCopiedEnvironment = false
+    }
+
+    /// 02-trace-list-new-traces: the "12 new traces" button over a list that
+    /// holds still (S-004). The seed set fits the window, so this sets the
+    /// held state instead of scrolling; the self-test scrolls for real.
+    private static func captureNewTraces(_ model: AppModel, dir: String, mode: String) async {
+        model.holdListForSnapshot(newTraces: 12)
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(SnapshotPage.traceList.rawValue)-new-traces-\(mode).png")
+        model.holdListForSnapshot(newTraces: 0)
     }
 
     /// 02-trace-list-environment: the toolbar's Copy Environment Variables

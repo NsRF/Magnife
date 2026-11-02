@@ -24,8 +24,6 @@ enum StoreState: Equatable {
 /// main actor in TelemetryReader; this model only holds their results.
 @Observable
 final class AppModel {
-    /// The newest traces the list shows. Paging further comes with S-030.
-    static let pageSize = 500
     /// Batches arriving within this window share one refresh.
     static let refreshDelay: Duration = .milliseconds(150)
 
@@ -44,9 +42,33 @@ final class AppModel {
     /// The helper's last "error" line (banner with Try Again).
     var helperProblem: String?
 
-    private(set) var services: [ServiceSummary] = []
-    private(set) var traces: [TraceSummary] = []
-    private(set) var lastSeq: Int64 = 0
+    var services: [ServiceSummary] = [] {
+        didSet { if services != oldValue { serviceColors = ServiceColors(services: services) } }
+    }
+    /// One color slot per service, in the order first seen (S-004).
+    private(set) var serviceColors = ServiceColors()
+    /// The list's rows: pages from the database, newest first (S-004).
+    var traces: [TraceSummary] = []
+    /// The seq the shown rows were read at, and the last seq applied to them
+    /// while the list holds still.
+    var listBaseSeq: Int64 = 0
+    var listAppliedSeq: Int64 = 0
+    /// True while the list is scrolled away from the top: rows stay where
+    /// they are and new traces are counted instead (design decision 6).
+    var isListHeld = false
+    /// Traces newer than the shown rows while the list holds still.
+    var newTraceCount = 0 {
+        didSet { MenuState.shared.update(newTraceCount: showsNewTracesButton ? newTraceCount : 0) }
+    }
+    /// A full page came back, so there may be older rows to read.
+    var hasMoreTraces = false
+    @ObservationIgnored var isLoadingMore = false
+    /// Reports scrolling in the trace list's table.
+    @ObservationIgnored lazy var listScroller: TraceListScroller = {
+        let scroller = TraceListScroller()
+        scroller.onChange = { [weak self] away in self?.listScrolled(awayFromTop: away) }
+        return scroller
+    }()
     private(set) var selectedSpans: [SpanRecord] = []
     /// The Time column counts from this; it ticks every 15 seconds.
     private(set) var now = Date()
@@ -58,12 +80,15 @@ final class AppModel {
             // into another's makes AppKit re-enter its row height cache
             // ("reentrant operation in its NSTableView delegate").
             traces = []
+            isListHeld = false
+            newTraceCount = 0
+            hasMoreTraces = false
             isLoadingScope = true
             refreshNow()
         }
     }
     /// True between a scope change and its first read, so the empty state waits.
-    private(set) var isLoadingScope = false
+    var isLoadingScope = false
     var selectedTraceID: TraceSummary.ID? {
         didSet { if selectedTraceID != oldValue { loadSelectedSpans() } }
     }
@@ -191,7 +216,7 @@ final class AppModel {
         Task { await reload() }
     }
 
-    /// Reads services, the newest traces, and the selected trace's spans.
+    /// Reads services and the list (S-004), and the selected trace's spans.
     func reload() async {
         guard let reader else {
             services = []
@@ -199,19 +224,8 @@ final class AppModel {
             isLoadingScope = false
             return
         }
-        let service = sidebar?.serviceName
         do {
-            async let services = reader.services()
-            async let traces = reader.latestTraces(limit: Self.pageSize, service: service)
-            async let seq = reader.lastSeq()
-            let result = try await (services, traces, seq)
-            // The sidebar changed while reading: that change reads again.
-            guard service == sidebar?.serviceName, reader === self.reader else { return }
-            // Equal results leave the views alone.
-            if self.services != result.0 { self.services = result.0 }
-            if self.traces != result.1 { self.traces = result.1 }
-            isLoadingScope = false
-            lastSeq = result.2
+            try await reloadList(reader)
             now = Date()
             if let id = selectedTraceID {
                 let spans = try await reader.spans(traceID: id)

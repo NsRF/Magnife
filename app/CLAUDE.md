@@ -27,7 +27,10 @@ this app starts the helper and reads its database. No server, no accounts.
   turns stdout lines into `SupervisorEvent`s, passes stderr through, and
   restarts it after a crash (0.5 s doubling to 30 s, reset after 60 s up).
 - `AppModel` refreshes on `batch` events: at most one read in flight, 150 ms
-  after the first batch. A sidebar scope change empties the list before the
+  after the first batch. The trace list (`AppModel+TraceList.swift`) reads
+  200-row pages; scrolled away from the top it holds still (rows update in
+  place, new traces are counted for the "N new traces" button) through
+  `TraceListScroller`, which watches the table's NSScrollView. A sidebar scope change empties the list before the
   new read: diffing one scope's rows into another's trips AppKit's
   "reentrant operation in its NSTableView delegate" warning.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
@@ -81,7 +84,8 @@ this app starts the helper and reads its database. No server, no accounts.
   and `02-trace-list-not-receiving` show the busy-port banners (replayed
   "ports" lines, since APP_HELPER=none). `01-empty-state-copied` shows the
   S-003 copy feedback and `02-trace-list-environment` the toolbar popover
-  (cropped from the window capture).
+  (cropped from the window capture), `02-trace-list-new-traces` the S-004
+  button over a held list.
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Never test against the real database in `~/Library/Application Support/Magnife/`.
@@ -95,9 +99,11 @@ this app starts the helper and reads its database. No server, no accounts.
   accent by default (`ThemeStore.defaultID = "system"`); people can pick
   another in Settings > Appearance.
 - Views use `.tint`, `Palette.accent`, `Palette.accentText` (accent-colored text), and `Palette.onAccent` (text on an accent fill). Never hard-code colors, radii, or durations in views.
-- Service colors come from `ServicePalette.color(for:)` (slot from
-  `ServiceColor` in MagnifeKit). Red means Error and is not a service color;
-  Error always pairs the octagon icon with the word.
+- Service colors: `ServiceDot(name:)`, which reads `AppModel.serviceColors`
+  (`ServiceColors` in MagnifeKit: docs/ux.md's ten colors in the order
+  services were first seen) and `ServicePalette`. Red means Error and orange
+  a finding; neither is a service color. Error always pairs the octagon icon
+  with the word.
 - Spacing comes from `Space` in `UI/Grid.swift`, on a 4 pt grid. Mark custom pages and cards with `.gridArea` and `.gridProbe`.
 - Windows open calm: `.noInitialFocus()` on every window and sheet, `.fitsContent()` on sheets and Settings tabs. Both in `UI/WindowBehavior.swift`.
 - Settings: one tab per topic in `SettingsView.swift`, one grouped Form per tab. Add a case to `SettingsTab` for a new tab.

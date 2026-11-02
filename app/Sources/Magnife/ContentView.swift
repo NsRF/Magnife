@@ -11,7 +11,7 @@ struct ContentView: View {
             Sidebar()
                 .navigationSplitViewColumnWidth(min: 180, ideal: 210)
         } content: {
-            TraceList()
+            TraceListView()
                 .navigationSplitViewColumnWidth(min: 360, ideal: 520)
         } detail: {
             TraceDetail()
@@ -63,10 +63,7 @@ struct ServiceRow: View {
                     .truncationMode(.tail)
                     .help(service.name)
             } icon: {
-                Image(systemName: "circle.fill")
-                    .foregroundStyle(ServicePalette.color(for: service.name))
-                    .imageScale(.small)
-                    .accessibilityHidden(true)
+                ServiceDot(name: service.name)
             }
             Spacer(minLength: Space.xs)
             // Traces with errors: the octagon pairs with the number, never red alone.
@@ -82,122 +79,6 @@ struct ServiceRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(service.name)
         .accessibilityValue(service.errorCount == 0 ? "no errors" : "\(service.errorCount.formatted()) traces with errors")
-    }
-}
-
-// MARK: Trace list
-
-struct TraceList: View {
-    @Environment(AppModel.self) private var model
-    @State private var listWidth: CGFloat = 0
-
-    var body: some View {
-        table
-            .safeAreaInset(edge: .top, spacing: 0) { Banners() }
-            .navigationTitle(model.title)
-    }
-
-    private var table: some View {
-        @Bindable var model = model
-        return Table(model.traces, selection: $model.selectedTraceID) {
-            TableColumn("Service") { trace in
-                ServiceName(name: trace.rootService)
-            }
-            .width(min: 100, ideal: 120)
-            TableColumn("Route") { trace in
-                Text(trace.route)
-                    .truncationMode(.middle)
-                    .help(trace.route)
-            }
-            .width(min: 120, ideal: 220)
-            TableColumn("Duration") { trace in
-                Text(DurationFormat.string(nanoseconds: trace.durationNs))
-                    .monospacedDigit()
-            }
-            .width(min: 64, ideal: 72)
-            .alignment(.trailing)
-            TableColumn("Spans") { trace in
-                Text(trace.spanCount, format: .number)
-                    .monospacedDigit()
-            }
-            .width(min: 44, ideal: 48)
-            .alignment(.trailing)
-            TableColumn("Status") { trace in
-                StatusLabel(status: trace.status)
-            }
-            .width(min: 56, ideal: 64)
-            TableColumn("Time") { trace in
-                Text(RelativeTime.string(for: trace.start, now: model.now))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            .width(min: 136, ideal: 150)
-        }
-        .alternatingRowBackgrounds(model.traces.isEmpty ? .disabled : .enabled)
-        .overlay { emptyState }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
-    }
-
-    @ViewBuilder
-    private var emptyState: some View {
-        switch model.storeState {
-        case .failed(let error):
-            ContentUnavailableView("Can't Read the Database", systemImage: "exclamationmark.triangle",
-                                   description: Text(error.message))
-        case .ready, .waiting, .opening:
-            if model.traces.isEmpty && !model.isLoadingScope {
-                if let service = model.sidebar?.serviceName {
-                    ContentUnavailableView("No Traces from \(service)", systemImage: "line.3.horizontal.decrease",
-                                           description: Text("Traces with a span from \(service) appear here."))
-                } else {
-                    // S-003: the language tabs and Copy Environment Variables.
-                    ContentUnavailableView {
-                        Label("No Traces Yet", systemImage: "point.3.connected.trianglepath.dotted")
-                    } description: {
-                        Text("Set these environment variables in your app, run it, and its traces appear here.")
-                    } actions: {
-                        // The actions area offers only the description's width; the
-                        // variables take the column's, up to the popover's width.
-                        EnvironmentSetup(showsWaiting: true)
-                            .frame(width: listWidth > 0
-                                   ? max(0, min(listWidth - 2 * Space.margin, EnvironmentToolbarButton.popoverWidth))
-                                   : nil)
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct ServiceName: View {
-    let name: String
-
-    var body: some View {
-        HStack(spacing: Space.xs) {
-            Image(systemName: "circle.fill")
-                .imageScale(.small)
-                .foregroundStyle(ServicePalette.color(for: name))
-                .accessibilityHidden(true)
-            Text(name)
-        }
-    }
-}
-
-/// Error pairs the octagon with the word; OK is the word; Unset is blank.
-struct StatusLabel: View {
-    let status: SpanStatus
-
-    var body: some View {
-        switch status {
-        case .error:
-            Label(status.title, systemImage: "exclamationmark.octagon.fill")
-                .foregroundStyle(.red)
-        case .ok:
-            Text(status.title)
-        case .unset:
-            Text("")
-                .accessibilityLabel(status.title)
-        }
     }
 }
 
@@ -226,9 +107,7 @@ struct TraceDetail: View {
                 Divider()
                 List(model.selectedSpans) { span in
                     HStack(spacing: Space.sm) {
-                        Image(systemName: "circle.fill")
-                            .imageScale(.small)
-                            .foregroundStyle(ServicePalette.color(for: span.serviceName))
+                        ServiceDot(name: span.serviceName)
                             .help(span.serviceName)
                         Text(span.name)
                             .lineLimit(1)

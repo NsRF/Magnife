@@ -62,6 +62,44 @@ public final class TelemetryReader: Sendable {
         return try await pool.read { [arguments] in try TraceSummary.fetchAll($0, sql: sql, arguments: arguments) }
     }
 
+    /// The first page of the list with the services and the last seq, in
+    /// one read, so "new since this page" is exact (S-004).
+    @concurrent
+    public func tracePage(limit: Int = TraceList.pageSize, service: String? = nil) async throws -> TracePage {
+        var arguments: StatementArguments = []
+        if let service { arguments += [service] }
+        arguments += [limit]
+        let sql = TelemetrySQL.latestTraces(cursor: false, service: service != nil)
+        return try await pool.read { [arguments] db in
+            TracePage(traces: try TraceSummary.fetchAll(db, sql: sql, arguments: arguments),
+                      services: try ServiceSummary.fetchAll(db, sql: TelemetrySQL.servicesWithErrors),
+                      lastSeq: try Self.lastSeq(db))
+        }
+    }
+
+    /// While the list holds still: rows that existed at seq `base` and changed
+    /// after seq `applied`, and how many traces are newer than `base`.
+    @concurrent
+    public func heldTraces(base: Int64, applied: Int64, service: String? = nil,
+                           limit: Int = TraceList.heldUpdateLimit) async throws -> HeldTraces {
+        var updateArguments: StatementArguments = [applied, base]
+        var countArguments: StatementArguments = [base]
+        if let service {
+            updateArguments += [service]
+            countArguments += [service]
+        }
+        updateArguments += [limit]
+        let scoped = service != nil
+        return try await pool.read { [updateArguments, countArguments] db in
+            HeldTraces(updated: try TraceSummary.fetchAll(db, sql: TelemetrySQL.heldTraceUpdates(service: scoped),
+                                                          arguments: updateArguments),
+                       newCount: try Int.fetchOne(db, sql: TelemetrySQL.tracesCreatedAfter(service: scoped),
+                                                  arguments: countArguments) ?? 0,
+                       services: try ServiceSummary.fetchAll(db, sql: TelemetrySQL.servicesWithErrors),
+                       lastSeq: try Self.lastSeq(db))
+        }
+    }
+
     @concurrent
     public func trace(id: String) async throws -> TraceSummary? {
         try await pool.read { try TraceSummary.fetchOne($0, sql: TelemetrySQL.traceByID, arguments: [id]) }
@@ -131,7 +169,11 @@ public final class TelemetryReader: Sendable {
     /// The seq of the last committed batch (meta.last_seq), 0 before the first.
     @concurrent
     public func lastSeq() async throws -> Int64 {
-        try await pool.read { Int64(try String.fetchOne($0, sql: TelemetrySQL.lastSeq) ?? "") ?? 0 }
+        try await pool.read { try Self.lastSeq($0) }
+    }
+
+    private static func lastSeq(_ db: Database) throws -> Int64 {
+        Int64(try String.fetchOne(db, sql: TelemetrySQL.lastSeq) ?? "") ?? 0
     }
 
     @concurrent

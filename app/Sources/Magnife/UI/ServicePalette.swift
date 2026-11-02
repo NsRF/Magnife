@@ -2,19 +2,13 @@ import MagnifeKit
 import SwiftUI
 
 /// One color per service, the same in the sidebar, list, and waterfall
-/// (research/design.md, decision 4). The slot comes from MagnifeKit's
-/// ServiceColor, so it is stable across launches. Red and pink are left out:
-/// red means Error. Hues alternate, so nearby slots never look alike.
+/// (research/design.md, decision 4): docs/ux.md's ten system colors, taken in
+/// the order services were first seen (ServiceColors in MagnifeKit). Red is
+/// Error and orange is a finding, so neither is a service color.
 enum ServicePalette {
-    static let colors: [Color] = [
-        .blue, .purple, .teal, .orange, .indigo, .yellow,
-        .cyan, .brown, .green,
-        Color(light: 0x8C6BD6, dark: 0xB7A0F2), // lavender
-        .mint,
-        Color(light: 0x6B7A12, dark: 0xB4C83A), // olive
-    ]
+    static let colors: [Color] = [.blue, .green, .purple, .teal, .pink, .indigo, .brown, .mint, .cyan, .yellow]
 
-    static func color(for service: String) -> Color {
-        colors[ServiceColor.slot(for: service, slots: colors.count)]
+    static func color(slot: Int) -> Color {
+        colors[slot % colors.count]
     }
 }

@@ -48,16 +48,4 @@ struct FormatTests {
         #expect(yesterday == "1 Nov, 12:00")
         #expect(!yesterday.contains("ago"))
     }
-
-    @Test("service color slots are stable and spread")
-    func serviceColors() {
-        // FNV-1a reference values, so the slot never changes between releases.
-        #expect(ServiceColor.slot(for: "", slots: Int(UInt32.max)) == Int(0x811C_9DC5 % UInt32.max))
-        #expect(ServiceColor.slot(for: "a", slots: Int(UInt32.max)) == Int(UInt32(0xE40C_292C) % UInt32.max))
-        #expect(ServiceColor.slot(for: "checkout-api") == ServiceColor.slot(for: "checkout-api"))
-        let fixture = ["checkout-api", "orders", "web"].map { ServiceColor.slot(for: $0) }
-        #expect(Set(fixture).count == 3)
-        let many = Set((0..<200).map { ServiceColor.slot(for: "service-\($0)") })
-        #expect(many == Set(0..<ServiceColor.slotCount))
-    }
 }
