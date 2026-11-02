@@ -10,9 +10,16 @@ struct TraceListView: View {
     var body: some View {
         table
             .overlay(alignment: .top) { NewTracesButton() }
-            .safeAreaInset(edge: .top, spacing: 0) { Banners() }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                    Banners()
+                    PauseBar()
+                }
+            }
             .navigationTitle(model.title)
             .navigationSubtitle(model.subtitle)
+            // Over the list it holds still (docs/ux.md, Toolbar item 4).
+            .toolbar { ToolbarItem { PauseButton() } }
     }
 
     private var table: some View {

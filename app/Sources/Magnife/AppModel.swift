@@ -65,6 +65,14 @@ final class AppModel {
     var hasMoreTraces = false
     /// Every trace in the scope when the rows were read: the window's subtitle (S-009).
     var listTraceCount = 0
+    /// While paused (S-010), the seq the list paused at; nil when live.
+    /// Never restored at launch: Pause is always off then (docs/ux.md).
+    var pausedSeq: Int64? {
+        didSet {
+            MenuState.shared.update(isPaused: isPaused)
+            MenuState.shared.update(newTraceCount: showsNewTracesButton ? newTraceCount : 0)
+        }
+    }
     @ObservationIgnored var isLoadingMore = false
     /// Reports scrolling in the trace list's table.
     @ObservationIgnored lazy var listScroller: TraceListScroller = {
@@ -189,7 +197,7 @@ final class AppModel {
     /// The window's subtitle: the count in the list, "1,204 traces"; blank
     /// while there is nothing to count.
     var subtitle: String {
-        listTraceCount == 0 ? "" : TraceList.subtitle(traceCount: listTraceCount)
+        listTraceCount == 0 ? (isPaused ? "Paused" : "") : TraceList.subtitle(traceCount: listTraceCount, isPaused: isPaused)
     }
 
     /// Starts the clock for the Time column and opens the database.
@@ -243,6 +251,7 @@ final class AppModel {
         // Another file has its own seqs.
         listBaseSeq = 0
         listAppliedSeq = 0
+        pausedSeq = nil
         storeState = .opening
         do {
             reader = try await TelemetryReader.open(at: url)
@@ -288,7 +297,8 @@ final class AppModel {
         do {
             try await reloadList(reader)
             now = Date()
-            try await refreshOpenTrace(reader)
+            // Paused, the open waterfall holds still too (S-010).
+            if !isPaused { try await refreshOpenTrace(reader) }
         } catch {
             isLoadingScope = false
             FileHandle.standardError.write(Data("magnife: read failed: \(error)\n".utf8))

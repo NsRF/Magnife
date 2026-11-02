@@ -52,31 +52,41 @@ public final class TelemetryReader: Sendable {
     /// A page of traces, newest first by start. Pass the last row's cursor
     /// for the next page. `service` keeps traces with any span from it.
     @concurrent
+    /// `upTo` keeps traces created by batches up to that seq (a paused list, S-010).
     public func latestTraces(limit: Int = 200, after cursor: TraceCursor? = nil,
-                             service: String? = nil) async throws -> [TraceSummary] {
+                             service: String? = nil, upTo: Int64? = nil) async throws -> [TraceSummary] {
         var arguments: StatementArguments = []
         if let cursor { arguments += [cursor.startNs, cursor.startNs, cursor.traceID] }
+        if let upTo { arguments += [upTo] }
         if let service { arguments += [service] }
         arguments += [limit]
-        let sql = TelemetrySQL.latestTraces(cursor: cursor != nil, service: service != nil)
+        let sql = TelemetrySQL.latestTraces(cursor: cursor != nil, service: service != nil, upTo: upTo != nil)
         return try await pool.read { [arguments] in try TraceSummary.fetchAll($0, sql: sql, arguments: arguments) }
     }
 
     /// The first page of the list with the services, the scope's trace count
     /// and the last seq, in one read, so "new since this page" is exact (S-004).
+    /// Paused (`upTo`, S-010): the page and count as of that seq, and how
+    /// many traces in the scope were created after it.
     @concurrent
-    public func tracePage(limit: Int = TraceList.pageSize, service: String? = nil) async throws -> TracePage {
-        var arguments: StatementArguments = []
-        if let service { arguments += [service] }
-        arguments += [limit]
-        let sql = TelemetrySQL.latestTraces(cursor: false, service: service != nil)
-        let countSQL = TelemetrySQL.scopeTraceCount(service: service != nil)
-        let countArguments: StatementArguments = service.map { [$0] } ?? []
-        return try await pool.read { [arguments] db in
+    public func tracePage(limit: Int = TraceList.pageSize, service: String? = nil,
+                          upTo: Int64? = nil) async throws -> TracePage {
+        var scope: StatementArguments = []
+        if let upTo { scope += [upTo] }
+        if let service { scope += [service] }
+        let arguments = scope + [limit]
+        let scoped = service != nil
+        let sql = TelemetrySQL.latestTraces(cursor: false, service: scoped, upTo: upTo != nil)
+        let countSQL = TelemetrySQL.scopeTraceCount(service: scoped, upTo: upTo != nil)
+        let newArguments: StatementArguments = upTo.map { [$0] + (service.map { [$0] } ?? []) } ?? []
+        return try await pool.read { [scope] db in
             TracePage(traces: try TraceSummary.fetchAll(db, sql: sql, arguments: arguments),
                       services: try ServiceSummary.fetchAll(db, sql: TelemetrySQL.servicesWithErrors),
                       lastSeq: try Self.lastSeq(db),
-                      traceCount: try Int.fetchOne(db, sql: countSQL, arguments: countArguments) ?? 0)
+                      traceCount: try Int.fetchOne(db, sql: countSQL, arguments: scope) ?? 0,
+                      upTo: upTo,
+                      newCount: upTo == nil ? 0 : try Int.fetchOne(db, sql: TelemetrySQL.tracesCreatedAfter(service: scoped),
+                                                                   arguments: newArguments) ?? 0)
         }
     }
 

@@ -16,18 +16,25 @@ enum TelemetrySQL {
     /// `ServiceScopeTests`).
     static let serviceScope = "trace_id IN (SELECT trace_id FROM spans WHERE service_name = ?)"
 
-    /// Newest first. Optional cursor (start_ns, trace_id) and service scope.
-    static func latestTraces(cursor: Bool, service: Bool) -> String {
+    /// Newest first. Optional cursor (start_ns, trace_id), pause point
+    /// (traces created up to a seq, S-010) and service scope, with their
+    /// arguments in that order.
+    static func latestTraces(cursor: Bool, service: Bool, upTo: Bool = false) -> String {
         var conditions: [String] = []
         if cursor { conditions.append("(start_ns < ? OR (start_ns = ? AND trace_id < ?))") }
+        if upTo { conditions.append("first_seq <= ?") }
         if service { conditions.append(serviceScope) }
         let filter = conditions.isEmpty ? "" : "WHERE " + conditions.joined(separator: " AND ")
         return "SELECT \(traceColumns) FROM traces \(filter) ORDER BY start_ns DESC, trace_id DESC LIMIT ?"
     }
 
-    /// How many traces the scope has: the window's subtitle (S-009).
-    static func scopeTraceCount(service: Bool) -> String {
-        "SELECT COUNT(*) FROM traces" + (service ? " WHERE \(serviceScope)" : "")
+    /// How many traces the scope has: the window's subtitle (S-009). Pause
+    /// point first, then service.
+    static func scopeTraceCount(service: Bool, upTo: Bool = false) -> String {
+        var conditions: [String] = []
+        if upTo { conditions.append("first_seq <= ?") }
+        if service { conditions.append(serviceScope) }
+        return "SELECT COUNT(*) FROM traces" + (conditions.isEmpty ? "" : " WHERE " + conditions.joined(separator: " AND "))
     }
 
     /// The shown rows (a JSON array of trace ids) that changed after seq

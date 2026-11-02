@@ -168,7 +168,7 @@ Acceptance:
 - [self] While paused, the list does not change; ingestion keeps going.
 - [snap] The paused state is visible, with how many traces arrived meanwhile.
 - [self] Resume inserts them and keeps the selected trace selected.
-Status: todo
+Status: done
 
 ### S-011 See the logs for the selected span
 As the user, I select a span and see the logs written during it.

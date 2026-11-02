@@ -47,6 +47,12 @@ this app starts the helper and reads its database. No server, no accounts.
   `spans_by_service_status` that every scoped query shares
   (`ServiceScopeTests` pins the plans). The subtitle is the scope's count
   (`TracePage.traceCount`).
+- Pause (S-010, `AppModel+Pause.swift`): `pausedSeq` is the seq the shown
+  rows were read at; while it is set, `TraceListState.applying` changes no
+  row (not even in place), only the count of traces with `first_seq` after
+  it; a scope change reads up to it (`tracePage(upTo:)`); the open waterfall
+  is not re-read. Resume reads enough rows to keep the selection and scrolls
+  it into view. Later lists (Logs, menu bar extra) read `isPaused`.
 - The waterfall (S-005): `TelemetryReader.waterfallSpans` reads only the
   columns it draws; `Waterfall` (MagnifeKit) builds the tree off the main
   actor, without recursion; `AppModel+Waterfall.swift` re-reads the open trace
@@ -111,7 +117,7 @@ this app starts the helper and reads its database. No server, no accounts.
   The S-008 checks (`SelfTest+Lifecycle.swift`, last: relaunch, helper
   crashes, and a second Magnife process that is quit and killed with
   `kill -9`) print their timings as INFO lines; `APP_SELFTEST_ONLY=lifecycle`
-  runs them alone; `APP_SELFTEST_ONLY=sidebar` the S-009 checks.
+  runs them alone; `APP_SELFTEST_ONLY=sidebar` the S-009 checks, `=pause` the S-010 ones.
   `APP_SELFTEST_ONLY=waterfall tools/selftest.sh` runs only the reader, model
   and waterfall checks (`APP_SELFTEST_ONLY=span-detail`: the span detail and
   exception checks); the waterfall checks time 1,000/5,000/30,000-span
@@ -125,7 +131,7 @@ this app starts the helper and reads its database. No server, no accounts.
   banner. `01-empty-state-copied` shows the
   S-003 copy feedback and `02-trace-list-environment` the toolbar popover
   (cropped from the window capture), `02-trace-list-new-traces` the S-004
-  button over a held list, `02-trace-list-service` the orders scope (S-009). `04-span-detail` shows the HTTP 500 trace's
+  button over a held list, `02-trace-list-service` the orders scope (S-009), `02-trace-list-paused` the pause bar (S-010). `04-span-detail` shows the HTTP 500 trace's
   POST /payments span (Exception first), `04-span-detail-events` the gRPC
   server span scrolled to Events, `04-span-detail-long-value` a statement
   cut with "Show All", `04-span-detail-copied` Copy Stack Trace's "Copied".

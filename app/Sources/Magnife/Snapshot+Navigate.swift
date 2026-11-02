@@ -14,4 +14,14 @@ extension Snapshot {
         model.sidebar = .allTraces
         await model.reload()
     }
+
+    /// 02-trace-list-paused: the pause bar with 12 traces arrived meanwhile,
+    /// Resume in the toolbar and "Paused · " in the subtitle (S-010). The
+    /// state is set, not waited for; the self-test pauses for real.
+    static func capturePaused(_ model: AppModel, dir: String, mode: String) async {
+        model.pauseForSnapshot(newTraces: 12)
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(SnapshotPage.traceList.rawValue)-paused-\(mode).png")
+        model.pauseForSnapshot(newTraces: nil)
+    }
 }

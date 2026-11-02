@@ -12,12 +12,19 @@ public struct TracePage: Sendable, Equatable {
     public var lastSeq: Int64
     /// Every trace in the scope, for the window's subtitle (S-009).
     public var traceCount: Int
+    /// Read while paused (S-010): only traces created up to this seq, and
+    /// `newCount` the ones created after it.
+    public var upTo: Int64?
+    public var newCount: Int
 
-    public init(traces: [TraceSummary], services: [ServiceSummary], lastSeq: Int64, traceCount: Int? = nil) {
+    public init(traces: [TraceSummary], services: [ServiceSummary], lastSeq: Int64, traceCount: Int? = nil,
+                upTo: Int64? = nil, newCount: Int = 0) {
         self.traces = traces
         self.services = services
         self.lastSeq = lastSeq
         self.traceCount = traceCount ?? traces.count
+        self.upTo = upTo
+        self.newCount = newCount
     }
 }
 
@@ -67,9 +74,26 @@ public enum TraceList {
         count == 1 ? "1 span" : "\(count.formatted()) spans"
     }
 
-    /// The window's subtitle: the count in the list, "1,204 traces", "1 trace".
-    public static func subtitle(traceCount: Int) -> String {
-        traceCount == 1 ? "1 trace" : "\(traceCount.formatted()) traces"
+    /// The window's subtitle: the count in the list, "1,204 traces", "1 trace",
+    /// prefixed "Paused · " while paused (S-010).
+    public static func subtitle(traceCount: Int, isPaused: Bool = false) -> String {
+        (isPaused ? "Paused · " : "") + (traceCount == 1 ? "1 trace" : "\(traceCount.formatted()) traces")
+    }
+
+    /// The bar at the top of a paused list (S-010): "Paused. 12 new traces.
+    /// Magnife is still receiving.", without the count while none arrived.
+    public static func pausedText(newCount: Int) -> String {
+        let count = newCount == 0 ? "" : " \(newCount == 1 ? "1 new trace" : "\(newCount.formatted()) new traces")."
+        return "Paused.\(count) Magnife is still receiving."
+    }
+
+    /// The toolbar button and Trace menu item: "Pause" or "Resume".
+    public static func pauseTitle(isPaused: Bool) -> String { isPaused ? "Resume" : "Pause" }
+
+    /// The toolbar button's tooltip (docs/ux.md, Toolbar).
+    public static func pauseHelp(isPaused: Bool) -> String {
+        isPaused ? "Add the traces that arrived while paused (⌃⌘P)"
+            : "Hold the list still while new traces keep arriving (⌃⌘P)"
     }
 }
 
@@ -119,9 +143,13 @@ public struct TraceListState: Sendable, Equatable {
     public var hasMore: Bool
     /// Every trace in the scope when the rows were read (the subtitle).
     public var traceCount: Int
+    /// While paused (S-010), the seq the list paused at: rows never change,
+    /// traces created after it are counted, and a scope change reads up to it.
+    public var pausedSeq: Int64?
 
     public init(scope: String? = nil, traces: [TraceSummary] = [], baseSeq: Int64 = 0, appliedSeq: Int64 = 0,
-                isHeld: Bool = false, newCount: Int = 0, hasMore: Bool = false, traceCount: Int = 0) {
+                isHeld: Bool = false, newCount: Int = 0, hasMore: Bool = false, traceCount: Int = 0,
+                pausedSeq: Int64? = nil) {
         self.scope = scope
         self.traces = traces
         self.baseSeq = baseSeq
@@ -130,10 +158,22 @@ public struct TraceListState: Sendable, Equatable {
         self.newCount = newCount
         self.hasMore = hasMore
         self.traceCount = traceCount
+        self.pausedSeq = pausedSeq
     }
 
-    /// True when the next read is a held one: the list holds still and shows rows.
-    public var readsHeld: Bool { isHeld && !traces.isEmpty }
+    public var isPaused: Bool { pausedSeq != nil }
+
+    /// True when the next read is a held one: the list holds still (scrolled
+    /// away, or paused) and shows rows.
+    public var readsHeld: Bool { (isHeld || isPaused) && !traces.isEmpty }
+
+    /// Paused at the seq the shown rows were read at, so every trace
+    /// created after it counts as new (S-010).
+    public func paused() -> TraceListState {
+        var next = self
+        if next.pausedSeq == nil { next.pausedSeq = baseSeq }
+        return next
+    }
 
     /// The state after `read`, or nil when the read must be dropped.
     public func applying(_ read: TraceListRead) -> TraceListState? {
@@ -141,18 +181,21 @@ public struct TraceListState: Sendable, Equatable {
         var next = self
         switch read {
         case .page(let page, _):
-            // Scrolled away while reading: inserting now would move the rows under the pointer.
-            guard !readsHeld else { return nil }
+            // Scrolled away or paused while reading: inserting now would move the rows under the pointer.
+            // While paused, only a page read up to the pause point may fill the list.
+            guard !readsHeld, page.upTo == pausedSeq else { return nil }
             next.traces = page.traces
-            next.hasMore = page.traces.count == TraceList.pageSize
-            next.baseSeq = page.lastSeq
+            // A Resume read can ask for more than a page.
+            next.hasMore = page.traces.count >= TraceList.pageSize
+            next.baseSeq = pausedSeq ?? page.lastSeq
             next.appliedSeq = page.lastSeq
-            next.newCount = 0
+            next.newCount = page.newCount
             next.traceCount = page.traceCount
         case .held(let held, _, let base):
             // Back at the top, or a newer page arrived while reading: that read decides.
-            guard isHeld, base == baseSeq else { return nil }
-            next.traces = TraceList.applying(held.updated, to: traces)
+            guard isHeld || isPaused, base == baseSeq else { return nil }
+            // Paused, the rows do not change at all; only the count moves.
+            if !isPaused { next.traces = TraceList.applying(held.updated, to: traces) }
             next.appliedSeq = held.lastSeq
             next.newCount = held.newCount
         }

@@ -39,6 +39,8 @@ enum SelfTest {
                 await checkTraceList(model)
             } else if only == "sidebar" {
                 await checkSidebar()
+            } else if only == "pause" {
+                await checkPause(model)
             } else if only == "span-detail" {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
@@ -46,6 +48,7 @@ enum SelfTest {
                 await checkEnvironment(model)
                 await checkTraceList(model)
                 await checkSidebar()
+                await checkPause(model)
                 await checkWaterfall(model)
                 await checkSpanDetail(model)
                 await checkExceptions(model)

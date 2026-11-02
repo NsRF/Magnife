@@ -66,6 +66,28 @@ final class TraceListScroller {
         scroll(toOffset: 0)
     }
 
+    /// The row's frame in the scroll view's clip view, under the headers.
+    private func frame(ofRow row: Int) -> NSRect? {
+        guard let scrollView, let table = tableView, row >= 0, row < table.numberOfRows else { return nil }
+        return table.convert(table.rect(ofRow: row), to: scrollView.contentView)
+    }
+
+    /// True when the whole row shows below the column headers (S-010).
+    func isRowVisible(_ row: Int) -> Bool {
+        guard let scrollView, let rect = frame(ofRow: row) else { return false }
+        let bounds = scrollView.contentView.bounds
+        return rect.minY >= bounds.minY - topY - 1 && rect.maxY <= bounds.maxY + 1
+    }
+
+    /// Scrolls the row to the middle of the list when it does not show (Resume, S-010).
+    func reveal(row: Int) {
+        guard !isRowVisible(row), let scrollView, let rect = frame(ofRow: row) else { return }
+        // The rows' height under the headers; an offset of y puts the
+        // document's y at the top of the rows.
+        let rows = scrollView.contentView.bounds.height + topY
+        scroll(toOffset: max(0, rect.minY - rows / 2))
+    }
+
     /// Scrolls so the list's top is `offset` points above the visible top.
     func scroll(toOffset offset: CGFloat) {
         guard let scrollView else { return }
@@ -118,6 +140,13 @@ final class MenuState: ObservableObject {
     static let shared = MenuState()
     /// Trace > Show Newest Traces is enabled while this is above zero.
     @Published private(set) var newTraceCount = 0
+
+    /// Trace > Pause reads "Resume" while paused (S-010).
+    @Published private(set) var isPaused = false
+
+    func update(isPaused: Bool) {
+        if self.isPaused != isPaused { self.isPaused = isPaused }
+    }
 
     /// Expand All Spans and Collapse All Spans are enabled while a waterfall shows.
     @Published private(set) var hasWaterfall = false

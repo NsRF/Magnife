@@ -5,21 +5,26 @@ import MagnifeKit
 /// scroll, and a list that holds still while you are scrolled away from the
 /// top, with a count of the traces that arrived meanwhile (design decision 6).
 extension AppModel {
-    /// The "12 new traces" button shows while the list holds and traces wait.
-    var showsNewTracesButton: Bool { isListHeld && newTraceCount > 0 }
+    /// The "12 new traces" button shows while the list holds and traces wait;
+    /// while paused the pause bar counts them instead (S-010).
+    var showsNewTracesButton: Bool { isListHeld && !isPaused && newTraceCount > 0 }
 
     /// At the top: the newest page replaces the rows. Held: only the rows
     /// shown are updated in place, and new traces are counted. What a read
     /// may change is `TraceListState.applying`'s to decide.
-    func reloadList(_ reader: TelemetryReader) async throws {
+    /// `limit` is larger after Resume, so the selected trace stays in the list (S-010).
+    func reloadList(_ reader: TelemetryReader, limit: Int = TraceList.pageSize) async throws {
         let state = listState
         let read: TraceListRead
         if state.readsHeld {
+            // Paused, no shown row may change, so none is read.
             read = .held(try await reader.heldTraces(base: state.baseSeq, applied: state.appliedSeq,
-                                                     shown: state.traces.map(\.id), service: state.scope),
+                                                     shown: state.isPaused ? [] : state.traces.map(\.id),
+                                                     service: state.scope),
                          scope: state.scope, base: state.baseSeq)
         } else {
-            read = .page(try await reader.tracePage(service: state.scope), scope: state.scope)
+            read = .page(try await reader.tracePage(limit: limit, service: state.scope, upTo: state.pausedSeq),
+                         scope: state.scope)
         }
         // The state may have moved on while reading (a scope change, scrolling, another read).
         guard reader === self.reader, let next = listState.applying(read) else { return }
@@ -32,7 +37,7 @@ extension AppModel {
     var listState: TraceListState {
         TraceListState(scope: sidebar?.serviceName, traces: traces, baseSeq: listBaseSeq, appliedSeq: listAppliedSeq,
                        isHeld: isListHeld, newCount: newTraceCount, hasMore: hasMoreTraces,
-                       traceCount: listTraceCount)
+                       traceCount: listTraceCount, pausedSeq: pausedSeq)
     }
 
     /// Takes a new list state, setting only what changed, so equal rows leave the table alone.
@@ -52,10 +57,13 @@ extension AppModel {
         guard hasMoreTraces, isListHeld, !isLoadingMore, let reader, let last = traces.last else { return }
         isLoadingMore = true
         let service = sidebar?.serviceName
+        let upTo = pausedSeq
         Task {
             defer { isLoadingMore = false }
-            let page = (try? await reader.latestTraces(limit: TraceList.pageSize, after: last.cursor, service: service)) ?? []
-            guard service == sidebar?.serviceName, reader === self.reader, traces.last?.id == last.id else { return }
+            let page = (try? await reader.latestTraces(limit: TraceList.pageSize, after: last.cursor, service: service,
+                                                       upTo: upTo)) ?? []
+            guard service == sidebar?.serviceName, upTo == pausedSeq, reader === self.reader,
+                  traces.last?.id == last.id else { return }
             traces = TraceList.appending(page, to: traces)
             hasMoreTraces = page.count == TraceList.pageSize
         }

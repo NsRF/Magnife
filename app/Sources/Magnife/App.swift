@@ -52,6 +52,9 @@ struct MagnifeApp: App {
                 Divider()
             }
             CommandMenu("Trace") {
+                // ⌃⌘P, not ⌘P, which is Print (docs/ux.md, Keyboard map).
+                Button(TraceList.pauseTitle(isPaused: menu.isPaused)) { delegate.model.togglePause() }
+                    .keyboardShortcut("p", modifiers: [.command, .control])
                 Button("Show Newest Traces") { delegate.model.showNewestTraces() }
                     .disabled(menu.newTraceCount == 0)
                 Divider()
