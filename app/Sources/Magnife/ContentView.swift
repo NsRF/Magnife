@@ -130,6 +130,9 @@ struct Sidebar: View {
         .focused($focused)
         // Delete Filter (⌘⌫) only while the sidebar has the focus.
         .onChange(of: focused) { _, isFocused in model.sidebarHasFocus = isFocused }
+        .onChange(of: model.focusRequest) { if model.takeFocusRequest(.sidebar) { focused = true } }
+        // Tab and ⇧Tab here go through SidebarTabKeys: the List keeps ⇧Tab from onKeyPress.
+        .accessibilityLabel("Sidebar")
         // Return on a saved filter edits its name in place (docs/ux.md, Keyboard map).
         .onKeyPress(.return) {
             guard model.renamingFilterID == nil, model.selectedSavedFilter != nil else { return .ignored }

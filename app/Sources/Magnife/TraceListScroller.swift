@@ -212,6 +212,13 @@ final class MenuState: ObservableObject {
         if self.savedFilters != savedFilters { self.savedFilters = savedFilters }
     }
 
+    /// Edit > Copy Trace ID: a trace row, or a log with a trace id, is selected.
+    @Published private(set) var hasTraceID = false
+
+    func update(hasTraceID: Bool) {
+        if self.hasTraceID != hasTraceID { self.hasTraceID = hasTraceID }
+    }
+
     /// View > Show Span Detail reads "Hide Span Detail" while the pane shows.
     @Published private(set) var showsSpanDetail = true
 

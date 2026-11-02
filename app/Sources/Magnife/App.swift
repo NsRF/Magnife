@@ -54,6 +54,8 @@ struct MagnifeApp: App {
             }
             CommandGroup(after: .pasteboard) {
                 Divider()
+                Button("Copy Trace ID") { delegate.model.copySelectedTraceID() }
+                    .disabled(!menu.hasTraceID)
                 Button("Copy Span ID") { delegate.model.copySpanID() }
                     .disabled(!menu.hasWaterfall)
                 Button("Copy Stack Trace") { delegate.model.copyStackTrace() }
@@ -119,6 +121,7 @@ struct MagnifeApp: App {
                     .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
                     .disabled(!menu.hasWaterfall || menu.contentMode != .traces)
             }
+            MainWindowCommands()
             // No help book in v0.1 (docs/ux.md, Help menu).
             CommandGroup(replacing: .help) {
                 Button("Show Environment Variables") { delegate.model.showEnvironmentVariables() }
@@ -134,13 +137,43 @@ struct MagnifeApp: App {
     }
 }
 
+/// Window > Magnife (⌘0): the main window, reopened when it was closed.
+struct MainWindowCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(before: .windowArrangement) {
+            Button("Magnife") {
+                // The WindowGroup's window ids read "main-AppWindow-1"; opening another would make a second one.
+                if let window = NSApp.windows.first(where: {
+                    ($0.identifier?.rawValue.hasPrefix("main") ?? false) && ($0.isVisible || $0.isMiniaturized)
+                }) {
+                    if window.isMiniaturized { window.deminiaturize(nil) }
+                    window.makeKeyAndOrderFront(nil)
+                } else {
+                    openWindow(id: "main")
+                }
+            }
+            .keyboardShortcut("0", modifiers: .command)
+            Divider()
+        }
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
+
+    /// Before the window exists, so its first frame is not in the copy yet.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Test runs leave the user's window layout as they found it.
+        AppDefaults.protectLayout()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Started from a terminal, the process is not a foreground app yet.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+        SidebarTabKeys.install(model: model)
         model.start()
     }
 
@@ -151,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// once (platform decision 6). The self-test's result becomes the exit code.
     func applicationWillTerminate(_ notification: Notification) {
         model.stopHelper()
+        AppDefaults.restoreLayout()
         if SelfTest.requested { exit(SelfTest.exitCode) }
     }
 }

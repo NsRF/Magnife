@@ -17,6 +17,8 @@ struct LogListView: View {
                 model.hideLogFilterBar()
                 return .handled
             }
+            .listKeys(page: { model.pageRows(model.logScroller) }, move: { model.moveLogSelection($0) },
+                      tab: { model.focusNextColumn(from: .list, backward: $0) })
     }
 
     // Fixed Time and Level; Service's minimum fits "checkout-api" (at the
@@ -71,6 +73,7 @@ struct LogListView: View {
             guard let log = model.selectedLog else { return [] }
             return [NSItemProvider(object: log.record.body as NSString)]
         }
+        .accessibilityLabel("Logs")
         .overlay { emptyState }
     }
 

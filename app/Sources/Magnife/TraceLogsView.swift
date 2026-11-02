@@ -74,6 +74,17 @@ struct TraceLogsView: View {
             guard let log = model.selectedTraceLog else { return [] }
             return [NSItemProvider(object: log.record.body as NSString)]
         }
+        // Esc: back to the waterfall (span detail focus, docs/ux.md Keyboard map).
+        .onKeyPress(.escape) {
+            model.leaveSpanDetail()
+            return .handled
+        }
+        .onKeyPress(keys: [.tab, Self.backTab]) { press in
+            guard press.modifiers.held.isSubset(of: .shift) else { return .ignored }
+            model.focusNextColumn(from: .spanDetail, backward: press.modifiers.contains(.shift) || press.key == Self.backTab)
+            return .handled
+        }
+        .accessibilityLabel("Trace Logs")
     }
 
     /// A body is one line here: only its start is laid out.

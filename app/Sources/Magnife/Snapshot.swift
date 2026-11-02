@@ -92,6 +92,7 @@ enum SnapshotPage: String, CaseIterable {
 /// 06-command-k (Search for "checkout"), -empty, -suggestions, -tokens and -no-match (S-017),
 /// 07-filter-bar (Error on) and -no-matches (OK on, a hidden trace still in the detail column) (S-018),
 /// 02-trace-list-saved-filter, -edited and -rename, 07-filter-bar-save and -save-duplicate (S-021),
+/// 03-trace-detail-waterfall-focus and -span-focus (S-022),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab,
 /// and 09-settings-general-delete (S-016's dialog), then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
@@ -133,6 +134,7 @@ enum Snapshot {
                     if page == .emptyState { await captureCopied(model, dir: dir, mode: mode) }
                     if page == .traceDetail {
                         await captureTraceLogs(model, dir: dir, mode: mode)
+                        await captureKeyboardFocus(model, dir: dir, mode: mode)
                         await captureNoLongerStored(model, dir: dir, mode: mode)
                     }
                     if page == .logs { await captureLogStates(model, dir: dir, mode: mode) }

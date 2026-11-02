@@ -46,6 +46,7 @@ extension AppModel {
         if !StoreLocation.isOverridden() { UserDefaults.standard.set(contentMode.rawValue, forKey: ContentMode.defaultsKey) }
         MenuState.shared.update(contentMode: contentMode)
         updateNewRowsMenu()
+        updateTraceIDMenu()
         updateLogMenu()
         updateFilterMenu()
         // The list that shows now starts at its top.

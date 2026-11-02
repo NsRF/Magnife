@@ -147,6 +147,21 @@ this app starts the helper and reads its database. No server, no accounts.
   every scoped read uses (never `sidebar?.serviceName`). Views in
   `SavedFilterViews.swift`, model in `AppModel+SavedFilters.swift`;
   `APP_SELFTEST_ONLY=saved-filters` runs its checks.
+- Keyboard (S-022): rules in MagnifeKit `KeyboardNavigation.swift`
+  (`WaterfallMove`, `ListMove`, `FocusColumn`, unit-tested); the model's
+  `focus(_:)`, `enterWaterfall`, `enterSpanDetail`, `leaveWaterfall`,
+  `leaveSpanDetail` in `AppModel+Keyboard.swift`. AppKit tables take the
+  focus directly; SwiftUI columns (sidebar, span detail) follow
+  `focusRequest` and take it once (`takeFocusRequest`). Waterfall keys in
+  `WaterfallOutlineParts.swift` (`handleKey`), list keys in
+  `KeyboardViews.swift` (`listKeys`), the sidebar's Tab in `SidebarTabKeys`
+  (a local key monitor). Self-test keys go through `NSApp.postEvent`;
+  `APP_SELFTEST_ONLY=keyboard` runs them and the menu audit.
+- Test runs and the user's defaults: AppKit saves window frames and column
+  widths in the app's domain by itself; snapshot and self-test runs copy
+  those keys aside at launch (`AppDefaults.protectLayout`, in
+  `applicationWillFinishLaunching`) and put them back at exit
+  (`restoreLayout`). Never write the real domain from a test run.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 
@@ -228,7 +243,9 @@ this app starts the helper and reads its database. No server, no accounts.
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Both scripts pass an empty "NSSplitView Subview Frames …" default, so the
-  window's columns start at their ideal widths, not where the last run left them.
+  window's columns start at their ideal widths, and the run puts the user's
+  layout keys back when it ends (`AppDefaults.restoreLayout`).
+  `03-trace-detail-waterfall-focus` and `-span-focus` show the keyboard focus (S-022).
 - Never test against the real database in `~/Library/Application Support/Magnife/`.
 - Then check the grid: `tools/grid-lint.sh` and `swift tools/check-layout.swift /tmp/Magnife-shots/*-layout.json`. Both print PASS.
 - A change is done when the build has no errors, the grid checks pass, and you looked at the light and dark snapshots.

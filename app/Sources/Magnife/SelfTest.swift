@@ -49,6 +49,8 @@ enum SelfTest {
                 await checkTraceFilters(model)
             } else if only == "saved-filters" {
                 await checkSavedFilters(model)
+            } else if only == "keyboard" {
+                await checkKeyboard(model)
             } else if only == "retention" {
                 await checkRetention(model)
             } else if only == "span-detail" {
@@ -62,6 +64,7 @@ enum SelfTest {
                 await checkSearch(model)
                 await checkTraceFilters(model)
                 await checkSavedFilters(model)
+                await checkKeyboard(model)
                 await checkTraceList(model)
                 await checkSidebar()
                 await checkPause(model)
@@ -209,6 +212,11 @@ enum SelfTest {
     }
 
     private static func checkApp() {
+        // AppKit writes this run's window frame and column widths to the user's defaults;
+        // the copy taken at launch puts the user's back at the end (AppDefaults).
+        let backup = UserDefaults(suiteName: AppDefaults.testSuiteName)?.dictionary(forKey: AppDefaults.layoutBackupKey)
+        print("INFO layout keys written by this run: \(AppDefaults.savedLayout().keys.sorted()), kept aside: \(backup?.keys.sorted() ?? [])")
+        check("a test run keeps the user's window layout aside, to put back when it ends", backup != nil)
         check("APP_HELPER=none starts no helper", AppModel.helperExecutable(environment: ["APP_HELPER": "none"]) == nil)
         check("the bundled helper path",
               AppModel.helperExecutable(environment: [:])?.path.hasSuffix("Contents/Helpers/magnife-ingest") == true)

@@ -17,6 +17,15 @@ struct TraceListView: View {
                 model.hideTraceFilterBar()
                 return .handled
             }
+            // → (or Return, the primary action) moves into the waterfall on the
+            // root span; Space shows or hides the span detail (S-022).
+            .onKeyPress(keys: [.rightArrow, .space]) { press in
+                guard press.modifiers.held.isEmpty, model.selectedTraceID != nil else { return .ignored }
+                if press.key == .space { model.toggleSpanDetail() } else { model.enterWaterfall() }
+                return .handled
+            }
+            .listKeys(page: { model.pageRows(model.listScroller) }, move: { model.moveTraceSelection($0) },
+                      tab: { model.focusNextColumn(from: .list, backward: $0) })
     }
 
     private var table: some View {
@@ -67,6 +76,17 @@ struct TraceListView: View {
             .width(min: 88, ideal: 88, max: 140)
         }
         .alternatingRowBackgrounds(model.traces.isEmpty ? .disabled : .enabled)
+        .contextMenu(forSelectionType: TraceSummary.ID.self) { ids in
+            if let id = ids.first { Button("Copy Trace ID") { model.copyTraceID(id) } }
+        } primaryAction: { _ in
+            // Return and double-click: into the waterfall (docs/ux.md, Keyboard map).
+            model.enterWaterfall()
+        }
+        .onCopyCommand {
+            guard let id = model.selectedTraceID else { return [] }
+            return [NSItemProvider(object: id as NSString)]
+        }
+        .accessibilityLabel("Traces")
         // Read on every layout: a width kept in @State could miss the
         // column's last resize and leave the variables cut (FIXLOG).
         // Only over an empty list, so it never stands between the pointer and the rows.

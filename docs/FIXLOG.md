@@ -163,3 +163,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: the check ran right after the sidebar reloaded the list, before SwiftUI's next update gave the NSTableView its rows, so the table had 0 rows to expose.
 - Fix: the check waits until the table has as many rows as the model (`listScroller.rowCount`) before it reads the Accessibility tree.
 - Rule: a self-test that reads a table through AppKit waits for the table to show the model's rows first.
+
+## Test runs changed the real app's window and column layout (found in S-022)
+
+- Symptom: a normal launch opened with the window 1,697 pt wide at (37, 153) and the columns where the last snapshot or self-test run left them, not at docs/ux.md's ideal widths.
+- Cause: AppKit saves "NSWindow Frame main-AppWindow-1" and "NSSplitView Subview Frames …" in the app's own defaults domain by itself. The scripts' empty split-frames argument only changed what a run read at launch; every resize in a test run (and in the self-test's second Magnife) wrote the real domain.
+- Fix: snapshot and self-test runs (`AppDefaults.isTestRun`) copy the layout keys into the `com.nasserfarhat.magnife.tests` suite in `applicationWillFinishLaunching`, before the window exists, and put them back exactly in `applicationWillTerminate`; a copy left by a crashed run is restored by the next test run. App-owned keys of test runs (saved filters) live in that suite too. The real app's layout keys were reset once (backup in the session scratchpad), so a normal launch opens at 1280 × 760 with the columns at 210 / 520 / the rest.
+- Rule: a test run never writes the user's defaults domain; anything AppKit saves there by itself is copied aside at launch and restored at exit.

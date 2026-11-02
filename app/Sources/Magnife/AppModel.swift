@@ -253,7 +253,11 @@ final class AppModel {
         return scroller
     }()
     var selectedLogID: LogListItem.ID? {
-        didSet { if selectedLogID != oldValue { loadLogDetail() } }
+        didSet {
+            guard selectedLogID != oldValue else { return }
+            loadLogDetail()
+            updateTraceIDMenu()
+        }
     }
     /// The selected log with its resource (the Log Detail), read off the main actor.
     var logDetail: LogDetail? {
@@ -310,8 +314,18 @@ final class AppModel {
     /// True between a scope change and its first read, so the empty state waits.
     var isLoadingScope = false
     var selectedTraceID: TraceSummary.ID? {
-        didSet { if selectedTraceID != oldValue { openSelectedTrace() } }
+        didSet {
+            guard selectedTraceID != oldValue else { return }
+            openSelectedTrace()
+            updateTraceIDMenu()
+        }
     }
+    /// The column the keyboard focus was last sent to (S-022); the SwiftUI
+    /// columns (sidebar, span detail) take it when it names them.
+    var focusRequest: FocusRequest?
+    @ObservationIgnored var unconsumedFocus: FocusColumn?
+    /// The span detail has the keyboard focus (self-test).
+    @ObservationIgnored var spanDetailHasFocus = false
     /// Settings reopens on the last tab. Test and snapshot runs leave it alone.
     var settingsTab: SettingsTab = SettingsTab(rawValue: UserDefaults.standard.string(forKey: "settings.tab") ?? "") ?? .general {
         didSet { if !StoreLocation.isOverridden() { UserDefaults.standard.set(settingsTab.rawValue, forKey: "settings.tab") } }

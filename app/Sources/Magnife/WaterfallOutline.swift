@@ -48,6 +48,7 @@ struct WaterfallOutline: NSViewRepresentable {
         outline.delegate = coordinator
         outline.menu = coordinator.contextMenu()
         coordinator.outline = outline
+        outline.onKey = { [weak coordinator] event in coordinator?.handleKey(event) ?? false }
         model.waterfallOutline = outline
 
         let scroll = WaterfallScrollView()
@@ -79,7 +80,7 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
     let model: AppModel
     weak var outline: NSOutlineView?
     private(set) var waterfall = Waterfall()
-    private var items: [SpanItem] = []
+    private(set) var items: [SpanItem] = []
     private var itemsByID: [String: SpanItem] = [:]
     private var generation = -1
     /// The span last selected from the model: the outline scrolls only when
@@ -90,7 +91,7 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
     private var nameShare: CGFloat = 0.55
     private var isFitting = false
     /// The collapsed spans the outline shows.
-    private var collapsed: Set<String> = []
+    private(set) var collapsed: Set<String> = []
     private var colors = ServiceColors()
     /// True while this coordinator changes the outline, so its own
     /// expand, collapse and selection callbacks do not write back.

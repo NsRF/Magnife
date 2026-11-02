@@ -284,7 +284,7 @@ Acceptance:
 - [self] Up and Down move the selection in the list and in the waterfall; Left and Right collapse and expand spans; Return opens the span detail and Space toggles it (design decision 3).
 - [self] ⌘F opens the filter bar and Esc closes it (design decision 1).
 - [self] Every action in the app has a menu item, and frequent ones have a shortcut shown there.
-Status: todo
+Status: done
 
 ## M5 Detect and alert
 

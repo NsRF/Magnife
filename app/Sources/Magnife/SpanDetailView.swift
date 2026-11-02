@@ -54,6 +54,8 @@ struct SpanDetailTabBar: View {
 /// 5. Empty sections are left out.
 struct SpanTab: View {
     @Environment(AppModel.self) private var model
+    /// Return in the waterfall moves the focus here; Esc moves it back (S-022).
+    @FocusState private var focused: Bool
 
     var body: some View {
         if let detail = model.spanDetail {
@@ -69,6 +71,21 @@ struct SpanTab: View {
                     proxy.scrollTo(target, anchor: model.spanDetailScrollAnchor)
                     model.spanDetailScrollTarget = nil
                 }
+            }
+            .focusable()
+            .focused($focused)
+            // The request may come before the span's detail shows (Return right after a move).
+            .onAppear { if model.takeFocusRequest(.spanDetail) { focused = true } }
+            .onChange(of: model.focusRequest) { if model.takeFocusRequest(.spanDetail) { focused = true } }
+            .onChange(of: focused) { _, isFocused in model.spanDetailHasFocus = isFocused }
+            .onKeyPress(.escape) {
+                model.leaveSpanDetail()
+                return .handled
+            }
+            .onKeyPress(keys: [.tab, Self.backTab]) { press in
+                guard press.modifiers.held.isSubset(of: .shift) else { return .ignored }
+                model.focusNextColumn(from: .spanDetail, backward: press.modifiers.contains(.shift) || press.key == Self.backTab)
+                return .handled
             }
             .accessibilityLabel("Span Detail")
         } else if model.showsNoSpanSelected {
