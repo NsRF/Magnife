@@ -11,7 +11,7 @@ extension SelfTest {
               let sender = ProcessInfo.processInfo.environment["APP_SAMPLE_SENDER"].map(URL.init(fileURLWithPath:)) else {
             return check("the helper and APP_SAMPLE_SENDER exist", false)
         }
-        let root = URL(fileURLWithPath: "/tmp/Magnife-selftest-sidebar")
+        let root = TestRun.scratch("sidebar")
         try? FileManager.default.removeItem(at: root)
         let model = AppModel(storeURL: root.appending(path: "magnife.sqlite"))
         let ports = (grpc: freePort(), http: freePort())

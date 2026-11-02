@@ -13,7 +13,7 @@ extension SelfTest {
         guard let fake = notifier.fake, let reader = model.reader else {
             return check("self-test runs post notifications through the fake poster", false)
         }
-        let suite = "com.nasserfarhat.magnife.selftest.notifier"
+        let suite = TestRun.suiteName + ".notifier"
         UserDefaults().removePersistentDomain(forName: suite)
         if let defaults = UserDefaults(suiteName: suite) {
             check("\"Notify me when a trace has an error\" is on by default",

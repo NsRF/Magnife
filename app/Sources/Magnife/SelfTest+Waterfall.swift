@@ -199,8 +199,8 @@ extension SelfTest {
             check("a \(count.formatted())-span trace opens with deep subtrees collapsed (\(rows) rows)",
                   shown && rows <= Waterfall.autoCollapseLimit && !model.collapsedSpans.isEmpty
                     && model.selectedSpanID == model.waterfall.rootSpanID)
-            check("a \(count.formatted())-span trace opens without a hang (\(String(format: "%.0f", open)) ms, stall \(String(format: "%.0f", stall)) ms)",
-                  shown && open < 2_000 && stall < 250)
+            checkTiming("a \(count.formatted())-span trace opens within 2 s", ms: open, budget: 2_000, ok: shown)
+            checkTiming("a \(count.formatted())-span trace opens without a hang", ms: stall, budget: 250, ok: shown)
 
             if count == 30_000 { await captureLarge(model) }
             if count == 1_000 { await checkScrolling(model, count: count) }
@@ -235,21 +235,22 @@ extension SelfTest {
             await Task.yield()
         }
         print("INFO waterfall \(count) spans expanded: longest scroll step \(String(format: "%.1f", longest)) ms")
-        check("a 1,000-span trace scrolls smoothly (longest step \(String(format: "%.1f", longest)) ms)", longest < 50)
+        checkTiming("a 1,000-span trace scrolls smoothly (longest step)", ms: longest, budget: 50)
         scroll.contentView.scroll(to: .zero)
     }
 
-    /// 03-trace-detail-30000-light.png and -dark.png in /tmp/Magnife-shots: the
+    /// 03-trace-detail-30000-light.png and -dark.png in the run's shots (TestRun): the
     /// auto-collapsed 30,000-span trace (the snapshot store has no huge trace).
     private static func captureLarge(_ model: AppModel) async {
         // APP_HELPER=none sends no batch events: read the list, so the open trace shows in it.
         await model.reload()
-        try? FileManager.default.createDirectory(atPath: "/tmp/Magnife-shots", withIntermediateDirectories: true)
+        let shots = TestRun.shotsDirectory
+        try? FileManager.default.createDirectory(at: shots, withIntermediateDirectories: true)
         let appearance = NSApp.appearance
         for mode in ["light", "dark"] {
             NSApp.appearance = NSAppearance(named: mode == "light" ? .aqua : .darkAqua)
             try? await Task.sleep(for: .seconds(0.6))
-            Snapshot.capture(to: "/tmp/Magnife-shots/03-trace-detail-30000-\(mode).png")
+            Snapshot.capture(to: shots.appending(path: "03-trace-detail-30000-\(mode).png").path)
         }
         NSApp.appearance = appearance
     }

@@ -2,10 +2,13 @@ import Foundation
 import MagnifeKit
 
 /// Where the app keeps what it owns that must survive a relaunch in test
-/// runs too (saved filters, S-021): the user's defaults normally, a
-/// separate suite in snapshot and self-test runs (APP_SNAPSHOT, --selftest)
-/// and other APP_STORE runs, so tests never change what people saved.
+/// runs too (saved filters, S-021): the user's defaults normally; in
+/// snapshot and self-test runs (APP_SNAPSHOT, --selftest) the run's own
+/// suite (`TestRun.suiteName`, so overlapping runs never share saved
+/// filters), and in other APP_STORE runs a shared test suite, so tests never
+/// change what people saved.
 enum AppDefaults {
+    /// The test suite of APP_STORE runs, and the window layout backups of every test run.
     static let testSuiteName = "com.nasserfarhat.magnife.tests"
 
     /// A snapshot or self-test run.
@@ -13,16 +16,20 @@ enum AppDefaults {
         !(ProcessInfo.processInfo.environment["APP_SNAPSHOT"] ?? "").isEmpty || CommandLine.arguments.contains("--selftest")
     }
 
-    static let shared: UserDefaults = isTestRun || StoreLocation.isOverridden()
-        ? UserDefaults(suiteName: testSuiteName) ?? .standard
-        : .standard
+    /// The suite `shared` reads, nil for the user's own defaults.
+    static let sharedSuiteName: String? = {
+        if isTestRun || ProcessInfo.processInfo.environment["APP_DEFAULTS_SUITE"] != nil { return TestRun.suiteName }
+        return StoreLocation.isOverridden() ? testSuiteName : nil
+    }()
+
+    static let shared: UserDefaults = sharedSuiteName.flatMap { UserDefaults(suiteName: $0) } ?? .standard
 
     /// Empties the test suite (a snapshot or self-test run starts from nothing).
     /// The layout backups stay: they belong to the runs, not to their checks.
     static func resetTestSuite() {
-        guard shared !== UserDefaults.standard else { return }
+        guard let name = sharedSuiteName else { return }
         let backups = shared.dictionaryRepresentation().filter { $0.key.hasPrefix(layoutBackupPrefix) }
-        shared.removePersistentDomain(forName: testSuiteName)
+        shared.removePersistentDomain(forName: name)
         for (key, value) in backups { shared.set(value, forKey: key) }
     }
 

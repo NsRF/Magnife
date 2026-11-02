@@ -98,7 +98,7 @@ extension SelfTest {
         check("saved filters survive a relaunch", relaunched.savedFilters == model.savedFilters
               && relaunched.savedFilters.items.map(\.name) == ["Checkout errors", "Orders errors"])
         let defaults = URL(fileURLWithPath: "/usr/bin/defaults")
-        let onDisk = await run(defaults, ["read", AppDefaults.testSuiteName, SavedFilters.defaultsKey])
+        let onDisk = await run(defaults, ["read", AppDefaults.sharedSuiteName ?? "", SavedFilters.defaultsKey])
         let real = await run(defaults, ["read", Bundle.main.bundleIdentifier ?? "com.nasserfarhat.magnife", SavedFilters.defaultsKey])
         check("they are on disk in the test suite, and the user's own defaults are untouched",
               onDisk.status == 0 && real.status != 0, "test \(onDisk.status), user \(real.status)")

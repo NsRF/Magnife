@@ -5,7 +5,7 @@ import MagnifeKit
 /// way the app starts it (AppModel.startReceiver), on free ports and fresh
 /// databases in /tmp. Never 4317/4318, never the real database.
 extension SelfTest {
-    private static let receiverRoot = URL(fileURLWithPath: "/tmp/Magnife-selftest-receiver")
+    private static var receiverRoot: URL { TestRun.directory.appending(path: "receiver") }
 
     static func checkReceiver() async {
         try? FileManager.default.removeItem(at: receiverRoot)

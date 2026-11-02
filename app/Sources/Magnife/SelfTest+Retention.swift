@@ -6,7 +6,7 @@ import MagnifeKit
 /// number of seconds), on a fresh database in /tmp. The window's model reads
 /// that database, so the real list, sidebar and detail column are checked.
 extension SelfTest {
-    private static let retentionRoot = URL(fileURLWithPath: "/tmp/Magnife-selftest-retention")
+    private static var retentionRoot: URL { TestRun.directory.appending(path: "retention") }
     private static let shortRetention = 3
 
     static func checkRetention(_ model: AppModel) async {
@@ -159,10 +159,9 @@ extension SelfTest {
               + "\(Int(maxGap * 1000)) ms, longest main-thread stall \(Int(stall * 1000)) ms")
         check("the sender's exports are all accepted while pruning", result.status == 0, result.output)
         check("pruning ran during the load", passes >= 2, "\(passes)")
-        check("batches keep committing while pruning (no gap over 500 ms)", maxGap < 0.5, "\(Int(maxGap * 1000)) ms")
+        checkTiming("batches keep committing while pruning (no gap over 500 ms)", ms: maxGap * 1000, budget: 500)
         // 250 ms is where macOS counts a hang; the reads run off the main actor and the helper prunes in its own process.
-        check("the interface keeps answering while pruning (no main-thread hang over 250 ms)", stall < 0.25,
-              "\(Int(stall * 1000)) ms")
+        checkTiming("the interface keeps answering while pruning (no main-thread hang over 250 ms)", ms: stall * 1000, budget: 250)
         let rows = (try? await model.reader?.traceCount()) ?? 0
         check("the store keeps only the last few seconds", rows > 0 && rows < 4_000 * 9, "\(rows) traces")
     }

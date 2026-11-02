@@ -134,8 +134,8 @@ extension SelfTest {
         }
         let ms = worst / .milliseconds(1)
         print("INFO search on \(spans.formatted()) spans, ms per keystroke: \(lines.joined(separator: ", "))")
-        check("results show within 100 ms of each keystroke on \(spans.formatted()) spans (slowest \(String(format: "%.0f", ms)) ms)",
-              spans >= 100_000 && ms < 100 && model.searchResult?.text == text)
+        checkTiming("results show within 100 ms of each keystroke on \(spans.formatted()) spans", ms: ms, budget: 100,
+                    ok: spans >= 100_000 && model.searchResult?.text == text)
         model.closeSearch()
         model.searchReader = nil
     }

@@ -174,7 +174,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Before the window exists, so its first frame is not in the copy yet.
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Test runs leave the user's window layout as they found it.
+        LaunchProbe.mark("will_finish_launching")
         AppDefaults.protectLayout()
+        // Each test run has its own defaults suite; crashed runs' are swept here.
+        if AppDefaults.isTestRun { TestRun.sweepSuites() }
         // One main window: no Show Tab Bar / Show All Tabs in the View menu.
         NSWindow.allowsAutomaticWindowTabbing = false
         // Before launch finishes, or the click that launched Magnife is lost (S-028).
@@ -187,7 +190,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate()
         SidebarTabKeys.install(model: model)
         MenuBarTracking.install(model: model)
+        LaunchProbe.mark("did_finish_launching")
         model.start()
+        LaunchProbe.watch(model: model)
     }
 
     /// The window can close; the receiver keeps running until Quit Magnife.
@@ -196,8 +201,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Stops the helper and waits for it, so a relaunch can bind the ports at
     /// once (platform decision 6). The self-test's result becomes the exit code.
     func applicationWillTerminate(_ notification: Notification) {
+        model.keepLaunchState()
         model.stopHelper()
         AppDefaults.restoreLayout()
+        if AppDefaults.isTestRun { TestRun.removeSuite() }
         if SelfTest.requested { exit(SelfTest.exitCode) }
     }
 }

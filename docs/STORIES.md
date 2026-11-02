@@ -348,7 +348,7 @@ Status: done
 As the user, I open Magnife and can use it right away.
 Acceptance:
 - [self] From launch to a window showing stored traces takes under 1 second with a 100,000-span database.
-Status: todo
+Status: done
 
 ### S-030 Stay responsive under heavy load
 As the user, I can scroll and select while my app floods Magnife with spans.

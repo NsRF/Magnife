@@ -57,6 +57,8 @@ enum SelfTest {
                 await checkMenuBar(model)
             } else if only == "notifications" {
                 await checkNotifications(model)
+            } else if only == "launch" {
+                await checkLaunch(model)
             } else if only == "retention" {
                 await checkRetention(model)
             } else if only == "span-detail" {
@@ -90,9 +92,11 @@ enum SelfTest {
                 // With the window closed: a Recent Errors item brings it back (S-027).
                 await checkMenuBar(model)
                 await checkNotifications(model)
-                // Last: it starts a second Magnife, which takes the focus.
+                // Last: they start other copies of Magnife, which take the focus.
+                await checkLaunch(model)
                 await checkLifecycle()
             }
+            if timingWarnings > 0 { print("INFO \(timingWarnings) timings over budget but under their regression limit (WARN lines)") }
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
             finish(code: failures == 0 ? 0 : 1)
         }
@@ -180,7 +184,7 @@ enum SelfTest {
 
     /// The supervisor against the fake helper: events, commands, a crash, stop.
     private static func checkSupervisor() async {
-        let dir = URL(fileURLWithPath: "/tmp/Magnife-selftest-helper")
+        let dir = TestRun.scratch("helper")
         guard let executable = try? FakeHelper.write(to: dir) else {
             check("the fake helper is written", false)
             return
@@ -246,6 +250,32 @@ enum SelfTest {
         count += 1
         if !ok { failures += 1 }
         print(ok ? "PASS \(name)" : "FAIL \(name)\(detail.isEmpty ? "" : ": \(detail)")")
+    }
+
+    /// A timing check that holds on a busy Mac (other runs, the screen saver):
+    /// it always prints the measured value; within `budget` it passes, over
+    /// it it still passes with a WARN line unless it is a clear regression
+    /// (over `regression`, twice the budget by default). `ok` carries the
+    /// check's other conditions, which fail as usual.
+    static func checkTiming(_ name: String, ms: Double, budget: Double, regression: Double? = nil,
+                            ok: Bool = true, _ detail: String = "") {
+        let limit = regression ?? budget * 2
+        let value = "\(String(format: ms < 10 ? "%.1f" : "%.0f", ms)) ms"
+        let extra = detail.isEmpty ? "" : ", \(detail)"
+        if ok && ms > budget && ms <= limit {
+            timingWarnings += 1
+            print("WARN \(name): \(value), over the \(Int(budget)) ms budget (load \(loadAverage))\(extra)")
+        }
+        check("\(name) (\(value), budget \(Int(budget)) ms)", ok && ms <= limit,
+              "\(value), limit \(Int(limit)) ms (load \(loadAverage))\(extra)")
+    }
+
+    private static var timingWarnings = 0
+
+    /// The 1-minute load average, printed with timings so a slow run explains itself.
+    static var loadAverage: String {
+        var loads = [Double](repeating: 0, count: 3)
+        return getloadavg(&loads, 3) > 0 ? String(format: "%.1f", loads[0]) : "?"
     }
 
     /// Quits through NSApp.terminate, never exit(), and closes sheets first:

@@ -175,9 +175,8 @@ extension SelfTest {
         try? await Task.sleep(for: .milliseconds(100))
         let scrollStall = scroll.stop()
         print("INFO trace logs 10,000: shown in \(String(format: "%.0f", elapsed)) ms, open stall \(String(format: "%.0f", openStall)) ms, scroll stall \(String(format: "%.0f", scrollStall)) ms")
-        check("10,000 trace logs show within 2 s and scroll without a stall over 100 ms",
-              shown && elapsed < 2_000 && scrollStall < 100,
-              "\(Int(elapsed)) ms, scroll stall \(Int(scrollStall)) ms")
+        checkTiming("10,000 trace logs show within 2 s", ms: elapsed, budget: 2_000, ok: shown)
+        checkTiming("10,000 trace logs scroll without a stall over 100 ms", ms: scrollStall, budget: 100, ok: shown)
     }
 
     private static func seedHTTPPort() -> Int? {

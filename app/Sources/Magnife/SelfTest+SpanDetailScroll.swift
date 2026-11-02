@@ -94,8 +94,8 @@ extension SelfTest {
         let stall = heartbeat.stop()
         let layout = model.valueLayouts[SpanDetailValueID.attribute("db.statement")]
         print("INFO span detail with a 500 KB value and 2,000 events: longest main-actor stall \(String(format: "%.0f", stall)) ms")
-        check("a 500 KB value and 2,000 events open without a hang (stall \(String(format: "%.0f", stall)) ms), cut with Show All",
-              opened && stall < 250 && layout?.isTruncated == true && model.spanDetail?.events.count == 2_000,
-              "layout \(String(describing: layout))")
+        checkTiming("a 500 KB value and 2,000 events open without a hang, cut with Show All", ms: stall, budget: 250,
+                    ok: opened && layout?.isTruncated == true && model.spanDetail?.events.count == 2_000,
+                    "layout \(String(describing: layout))")
     }
 }

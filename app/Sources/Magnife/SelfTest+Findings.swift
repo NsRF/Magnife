@@ -237,8 +237,8 @@ extension SelfTest {
         let largeTime = await DetectorLoad.time { _ = Detectors.findings(in: large) }
         print("INFO detectors: 12,000 spans in 200 traces \(String(format: "%.1f", smallTime)) ms, "
               + "300,000 spans in one trace \(String(format: "%.1f", largeTime)) ms")
-        check("the detectors take under 50 ms on 12,000 spans and under 1.5 s on 300,000",
-              smallTime < 50 && largeTime < 1_500)
+        checkTiming("the detectors on 12,000 spans in 200 traces", ms: smallTime, budget: 50)
+        checkTiming("the detectors on one 300,000-span trace", ms: largeTime, budget: 1_500)
 
         guard let path = ProcessInfo.processInfo.environment["APP_SEARCH_STORE"],
               let reader = try? await TelemetryReader.open(at: URL(fileURLWithPath: path)),
@@ -256,7 +256,7 @@ extension SelfTest {
         let flagged = summaries.values.filter { !$0.isEmpty }.count
         print("INFO detectors: the list's badges for 200 traces (\(page.reduce(0) { $0 + $1.spanCount }) spans) of the "
               + "100,000-span store read in \(String(format: "%.1f", readTime)) ms, \(flagged) traces flagged")
-        check("the list's badges for a 200-row page read in under 50 ms", readTime < 50 && summaries.count == ids.count)
+        checkTiming("the list's badges for a 200-row page read", ms: readTime, budget: 50, ok: summaries.count == ids.count)
     }
 }
 

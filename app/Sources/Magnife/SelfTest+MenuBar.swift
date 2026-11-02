@@ -99,7 +99,7 @@ extension SelfTest {
         let stall = heartbeat.stop()
         print("INFO menu bar: 20 changes of the count and the list, longest main-actor stall \(String(format: "%.0f", stall)) ms")
         // The hang budget of S-030; about 15 ms each for the icon and the menu here.
-        check("a new count and list do not stall the main thread over 100 ms", stall < 100, "\(stall) ms")
+        checkTiming("a new count and list do not stall the main thread over 100 ms", ms: stall, budget: 100)
         model.recentErrorsMenuOpened()
     }
 

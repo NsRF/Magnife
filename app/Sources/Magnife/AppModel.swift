@@ -293,6 +293,8 @@ final class AppModel {
     /// The trace whose earliest Error span opens once its waterfall is built
     /// (S-027, a Recent Errors item).
     @ObservationIgnored var pendingFailedTrace: String?
+    /// The selected trace of the last quit, selected after the first read (S-029).
+    @ObservationIgnored var launchSelection: String?
     /// The menu bar extra's Recent Errors and the icon's count (S-026). Not
     /// observed: its seqs change with every batch; the menu and the icon
     /// read the two copies below, set only when what they show changes.
@@ -441,6 +443,7 @@ final class AppModel {
     func start() {
         MenuState.shared.update(showsSpanDetail: showsSpanDetail)
         MenuState.shared.update(contentMode: contentMode)
+        restoreLaunchState()
         Task { await openStore() }
         Task { [weak self] in
             while !Task.isCancelled {
@@ -467,9 +470,12 @@ final class AppModel {
     private func tryOpen() async {
         do {
             reader = try await TelemetryReader.open(at: storeURL)
+            LaunchProbe.mark("store_open")
             // Ready after the first read, so a relaunch never shows an empty list first (S-008).
             await reload()
             storeState = .ready
+            LaunchProbe.mark("first_read")
+            finishLaunch()
         } catch {
             storeState = error.isTransient ? .waiting(error) : .failed(error)
             // One retry timer at a time, however many events also retry.

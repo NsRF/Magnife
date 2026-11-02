@@ -6,7 +6,7 @@ import MagnifeKit
 /// second copy of this app that is quit and killed with `kill -9`.
 /// Timings print as INFO lines (docs/PROGRESS.md records them).
 extension SelfTest {
-    private static let lifecycleRoot = URL(fileURLWithPath: "/tmp/Magnife-selftest-lifecycle")
+    private static var lifecycleRoot: URL { TestRun.directory.appending(path: "lifecycle") }
 
     static func checkLifecycle() async {
         try? FileManager.default.removeItem(at: lifecycleRoot)
@@ -50,7 +50,7 @@ extension SelfTest {
         check("after quit and relaunch the list shows the same traces in the same order",
               second.storeState == .ready && second.traces.map(\.traceID) == before,
               "\(second.storeState), \(second.traces.count) traces")
-        check("the stored traces show within 250 ms of opening", opened < .milliseconds(250), "\(opened.milliseconds) ms")
+        checkTiming("the stored traces show within 250 ms of opening", ms: Double(opened.milliseconds), budget: 250)
 
         // The launch path (AppModel.start): open the database and start the helper together.
         let third = AppModel(storeURL: store)
@@ -172,11 +172,13 @@ extension SelfTest {
 
     /// Starts this executable as a second Magnife with the bundled helper, on
     /// `store` (in /tmp) and `ports`. Its output goes to a log next to the store.
-    private static func launchCopy(store: URL, ports: (grpc: Int, http: Int)) -> Process? {
+    static func launchCopy(store: URL, ports: (grpc: Int, http: Int), environment extra: [String: String] = [:]) -> Process? {
         guard let executable = Bundle.main.executableURL, StoreLocation.isTestLocation(store) else { return nil }
         try? FileManager.default.createDirectory(at: store.deletingLastPathComponent(), withIntermediateDirectories: true)
         var environment = ProcessInfo.processInfo.environment
-        for key in ["APP_HELPER", "APP_SNAPSHOT", "APP_SNAPSHOT_PAGES", "APP_SELFTEST_ONLY"] { environment[key] = nil }
+        for key in ["APP_HELPER", "APP_SNAPSHOT", "APP_SNAPSHOT_PAGES", "APP_SELFTEST_ONLY", "APP_LAUNCH_PROBE",
+                    "APP_DEFAULTS_SUITE"] { environment[key] = nil }
+        environment.merge(extra) { $1 }
         environment["APP_STORE"] = store.path
         environment["APP_GRPC_PORT"] = String(ports.grpc)
         environment["APP_HTTP_PORT"] = String(ports.http)

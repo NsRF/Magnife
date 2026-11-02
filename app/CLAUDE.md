@@ -203,6 +203,20 @@ this app starts the helper and reads its database. No server, no accounts.
   Notifications in `NotificationSettings.swift`; `APP_SELFTEST_ONLY=notifications`
   runs the checks with a 1 s window; snapshots `09-settings-notifications`
   and `-notifications-denied`.
+- Launch (S-029): `AppModel.start` restores the last quit's scope, filters
+  and filter bars before the store opens (`restoreLaunchState`, `LaunchState`
+  in MagnifeKit), and `finishLaunch` selects the kept trace after the first
+  read and puts the focus in the list; `keepLaunchState` writes it at quit.
+  Test runs restore nothing. `LaunchProbe` (APP_LAUNCH_PROBE=<file>) writes
+  each step's time since the process started; `APP_SELFTEST_ONLY=launch`
+  launches copies of Magnife on the 100,000-span store (and on
+  `SELFTEST_LAUNCH_VOLUMES="12000 300000"` stores) and checks the restore.
+- Test runs own their files and defaults: `TestRun` (a `mktemp -d`
+  directory from APP_TEST_ROOT, captures in its `shots/`, and the defaults
+  suite `com.nasserfarhat.magnife.tests.run.<pid>`, removed at exit, swept
+  when a run crashed). Never hard-code a /tmp path in a check: use
+  `TestRun.scratch("name")`. Timing checks use `checkTiming` (the value
+  always printed; over the budget a WARN line, over twice it a FAIL).
 - Test runs and the user's defaults: AppKit saves window frames and column
   widths in the app's domain by itself; snapshot and self-test runs copy
   those keys aside at launch (`AppDefaults.protectLayout`, in
@@ -260,9 +274,9 @@ this app starts the helper and reads its database. No server, no accounts.
   `APP_SELFTEST_ONLY=waterfall tools/selftest.sh` runs only the reader, model
   and waterfall checks (`APP_SELFTEST_ONLY=span-detail`: the span detail,
   exception, span log and Trace Logs checks, incl. a 10,000-log trace timed as an INFO line); the waterfall checks time 1,000/5,000/30,000-span
-  traces (INFO lines) and write `/tmp/Magnife-shots/03-trace-detail-30000-*.png`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
+  traces (INFO lines) and write `03-trace-detail-30000-*.png` in the run's `shots/` (selftest.sh prints the run directory). Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots and look at them: `tools/snap.sh`.
-  It writes `/tmp/Magnife-shots/<page>-light.png` and `-dark.png` for every
+  It writes `<run>/shots/<page>-light.png` and `-dark.png`, linked from `/tmp/Magnife-shots`, for every
   `SnapshotPage` (the pages in `docs/STORIES.md`), and
   `09-settings-<tab>-light.png` / `-dark.png` (and `09-settings-general-delete`,
   the S-016 dialog), then quits. `02-trace-list-busy`
