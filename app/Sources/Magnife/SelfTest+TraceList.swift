@@ -40,9 +40,12 @@ extension SelfTest {
         }
         // The table takes the rows on SwiftUI's next update; before it, it has none to read.
         _ = await waitUntil(2) { model.listScroller.rowCount == model.traces.count }
+        // Its findings follow the sentence (S-025: ", findings: HTTP Error").
+        await model.waitForTraceFindings()
+        try? await Task.sleep(for: .milliseconds(100))
         let rows = accessibilityRows()
         check("VoiceOver reads the HTTP 500 row once, as that sentence",
-              rows.contains([failed.accessibilityLabel]), "\(rows.prefix(3))")
+              rows.contains([model.rowAccessibilityLabel(failed)]), "\(rows.prefix(3))")
     }
 
     /// The Accessibility API lists this app's windows as windows.

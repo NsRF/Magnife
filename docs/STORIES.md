@@ -313,7 +313,7 @@ Depends: S-023
 Acceptance:
 - [unit] An HTTP span with a response status of 400 or higher, or span status Error, gets an HTTP error finding.
 - [snap] The finding shows method, URL or route, and status code.
-Status: todo
+Status: done
 
 ### S-026 See recent errors in the menu bar
 As the user, I glance at the menu bar and know whether something failed.

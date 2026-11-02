@@ -10,6 +10,12 @@ extension AppModel {
         findingCache.summary(for: trace)
     }
 
+    /// What VoiceOver reads for a row: the S-004 sentence, then its findings
+    /// ("…, Error, findings: HTTP Error", docs/ux.md S-023 Access).
+    func rowAccessibilityLabel(_ trace: TraceSummary) -> String {
+        ([trace.accessibilityLabel] + [findingSummary(for: trace)?.spoken].compactMap { $0 }).joined(separator: ", ")
+    }
+
     /// Reads the badges of rows that have none yet, or whose trace changed
     /// since. One read in flight; rows that change meanwhile are read after it.
     func updateTraceFindings() {

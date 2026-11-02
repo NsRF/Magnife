@@ -50,7 +50,8 @@ extension SelfTest {
             let expected = waterfall.barFractions(of: item.index)
             if bar.fractions != expected { barsPlaced = false }
             let isError = waterfall.nodes[item.index].span.status == .error
-            if name.showsError != isError || (name.accessibilityLabel() ?? "").hasSuffix(", Error") != isError {
+            // Findings follow the status in the label (", Error, HTTP Error", S-025).
+            if name.showsError != isError || (name.accessibilityLabel() ?? "").contains(", Error") != isError {
                 errorsMarked = false
             }
         }

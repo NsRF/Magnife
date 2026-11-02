@@ -139,8 +139,9 @@ enum TelemetrySQL {
         db_system, db_statement, http_method, http_status_code, http_route, http_url
         """
 
-    /// The spans a detector can flag: database spans (spans_by_db).
-    static let detectorCandidate = "db_system IS NOT NULL"
+    /// The spans a detector can flag: database and HTTP spans. spans_by_trace
+    /// finds the trace's rows; the columns are checked on each row.
+    static let detectorCandidate = "(db_system IS NOT NULL OR http_method IS NOT NULL OR http_status_code IS NOT NULL)"
 
     /// One trace's candidate spans, by start.
     static let detectorSpansOfTrace = """

@@ -62,6 +62,7 @@ public struct DetectorSpan: Sendable, Hashable, FetchableRecord {
 public enum FindingKind: Int, Sendable, CaseIterable, Comparable, Identifiable {
     case slowSQL
     case nPlusOne
+    case httpError
 
     public var id: Int { rawValue }
     public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
@@ -71,6 +72,7 @@ public enum FindingKind: Int, Sendable, CaseIterable, Comparable, Identifiable {
         switch self {
         case .slowSQL: "Slow SQL"
         case .nPlusOne: "N+1"
+        case .httpError: "HTTP Error"
         }
     }
 
@@ -79,6 +81,7 @@ public enum FindingKind: Int, Sendable, CaseIterable, Comparable, Identifiable {
         switch self {
         case .slowSQL: "cylinder"
         case .nPlusOne: "repeat"
+        case .httpError: "network"
         }
     }
 }
@@ -97,6 +100,12 @@ public struct Finding: Sendable, Hashable, Identifiable {
     public var count: Int = 1
     public var dbSystem: String?
     public var spanName: String
+    /// HTTP Error: the method, what was called (URL, route or span name),
+    /// the response code and the span's status message.
+    public var httpMethod: String?
+    public var httpTarget: String?
+    public var httpStatusCode: Int?
+    public var statusMessage: String = ""
 
     public var id: String { "\(kind.rawValue)/\(spanIDs.first ?? "")" }
 
@@ -109,7 +118,24 @@ public struct Finding: Sendable, Hashable, Identifiable {
                 .joined(separator: " · ")
         case .nPlusOne:
             [kind.title, "\(count.formatted()) times", Self.oneLine(statement ?? spanName)].joined(separator: " · ")
+        case .httpError:
+            ([kind.title] + (httpStatusCode.map { [String($0)] } ?? []) + [Self.oneLine(call)]).joined(separator: " · ")
         }
+    }
+
+    /// "POST /payments": the method and what was called, the method left out
+    /// when the target already starts with it (a span named "POST /payments").
+    public var call: String {
+        let target = httpTarget ?? spanName
+        guard let method = httpMethod, !method.isEmpty, !target.hasPrefix(method + " "), target != method else { return target }
+        return "\(method) \(target)"
+    }
+
+    /// "POST /payments returned 500.", or "… has status Error and no response code."
+    private var httpOutcome: String {
+        guard let code = httpStatusCode else { return "\(call) has status Error and no response code." }
+        return code >= Detectors.httpErrorMinimumCode ? "\(call) returned \(code)."
+            : "\(call) returned \(code) and has status Error."
     }
 
     /// The span detail's text under the title (docs/ux.md, S-023 Words).
@@ -122,6 +148,10 @@ public struct Finding: Sendable, Hashable, Identifiable {
             return "\(query) took \(took). Queries over \(threshold) are flagged."
         case .nPlusOne:
             return "This statement ran \(count.formatted()) times in this trace."
+        case .httpError:
+            // The span's status message, when set, follows the text (docs/ux.md, S-025 States).
+            let message = statusMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+            return message.isEmpty ? httpOutcome : "\(httpOutcome) \(message)"
         }
     }
 
@@ -133,13 +163,14 @@ public struct Finding: Sendable, Hashable, Identifiable {
         switch kind {
         case .slowSQL: "Select span: \(kind.title), \(DurationFormat.spoken(nanoseconds: durationNs))"
         case .nPlusOne: "Select span: \(kind.title), \(count.formatted()) times"
+        case .httpError: "Select span: \(kind.title), \(httpOutcome.dropLast())"
         }
     }
 
     /// What the waterfall row adds for VoiceOver for this span: "Slow SQL", "N+1, 1 of 8".
     public func spokenMark(for spanID: String) -> String {
         switch kind {
-        case .slowSQL: kind.title
+        case .slowSQL, .httpError: kind.title
         case .nPlusOne: "\(kind.title), \((spanIDs.firstIndex(of: spanID) ?? 0) + 1) of \(count)"
         }
     }
@@ -229,6 +260,9 @@ public struct FindingSummary: Sendable, Hashable {
         case .nPlusOne:
             return count == 1 ? "\(kind.title): a statement ran \(mostRepeats.formatted()) times"
                 : "\(kind.title): \(count.formatted()) statements ran \(Detectors.nPlusOneMinimum) or more times"
+        case .httpError:
+            return "\(kind.title): \(count == 1 ? "1 call" : "\(count.formatted()) calls") returned "
+                + "\(Detectors.httpErrorMinimumCode) or higher, or had status Error"
         }
     }
 
@@ -245,10 +279,12 @@ public enum Detectors {
     public static let slowSQLThresholdNs: Int64 = 100_000_000
     /// The same normalized statement this many times in one trace is N+1 (docs/GLOSSARY.md: 5 or more).
     public static let nPlusOneMinimum = 5
+    /// An HTTP span with a response code from this one up is an HTTP Error (docs/GLOSSARY.md: 400 or higher).
+    public static let httpErrorMinimumCode = 400
 
     /// Every finding in one trace's spans.
     public static func findings(in spans: [DetectorSpan]) -> TraceFindings {
-        TraceFindings(slowSQL(spans) + nPlusOne(spans))
+        TraceFindings(slowSQL(spans) + nPlusOne(spans) + httpErrors(spans))
     }
 
     /// Findings of several traces at once, by trace id: the trace list's badges.
@@ -292,6 +328,24 @@ extension Detectors {
             return Finding(kind: .nPlusOne, spanIDs: ordered.map(\.spanID), startNs: ordered[0].startNs,
                            durationNs: ordered.reduce(0) { $0 + $1.durationNs }, statement: shape, count: ordered.count,
                            dbSystem: ordered[0].dbSystem, spanName: ordered[0].name)
+        }
+    }
+}
+
+extension Detectors {
+    /// HTTP Error: a span with `http_method` or `http_status_code`, and a
+    /// code of 400 or higher or status Error, one finding each. A client
+    /// span names its URL, a server span its route, else the span's name.
+    public static func httpErrors(_ spans: [DetectorSpan]) -> [Finding] {
+        spans.compactMap { span in
+            guard span.httpMethod != nil || span.httpStatusCode != nil,
+                  (span.httpStatusCode ?? 0) >= httpErrorMinimumCode || span.status == .error else { return nil }
+            let outgoing = span.kind == .client || span.kind == .producer
+            let target = outgoing ? span.httpURL ?? span.httpRoute : span.httpRoute ?? span.httpURL
+            return Finding(kind: .httpError, spanIDs: [span.spanID], startNs: span.startNs, durationNs: span.durationNs,
+                           statement: nil, spanName: span.name, httpMethod: span.httpMethod,
+                           httpTarget: target.flatMap { $0.isEmpty ? nil : $0 }, httpStatusCode: span.httpStatusCode,
+                           statusMessage: span.status == .error ? span.statusMessage : "")
         }
     }
 }

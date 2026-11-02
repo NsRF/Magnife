@@ -258,7 +258,7 @@ this app starts the helper and reads its database. No server, no accounts.
   window's columns start at their ideal widths, and the run puts the user's
   layout keys back when it ends (`AppDefaults.restoreLayout`).
   `03-trace-detail-waterfall-focus` and `-span-focus` show the keyboard focus (S-022).
-  `03-trace-detail-slow-sql` and `-n-plus-one` show a strip line clicked (S-023, S-024) and
+  `03-trace-detail-slow-sql`, `-n-plus-one` and `-http-error` show a strip line clicked (S-023 to S-025) and
   `02-trace-list-findings-wide` the badges' words in a widened Route column.
 - Never test against the real database in `~/Library/Application Support/Magnife/`.
 - Then check the grid: `tools/grid-lint.sh` and `swift tools/check-layout.swift /tmp/Magnife-shots/*-layout.json`. Both print PASS.

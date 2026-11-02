@@ -35,8 +35,7 @@ struct TraceListView: View {
                 ServiceName(name: trace.rootService)
                     // VoiceOver reads the row as one sentence here; the other cells are
                     // hidden from it, so it is read once (S-004 Access).
-                    .accessibilityLabel(([trace.accessibilityLabel] + [model.findingSummary(for: trace)?.spoken].compactMap { $0 })
-                        .joined(separator: ", "))
+                    .accessibilityLabel(model.rowAccessibilityLabel(trace))
                     // The one view inside the NSTableView: it reports scrolling (S-004).
                     .background(TraceListAnchor(scroller: model.listScroller))
                     .onAppear { if trace.id == model.traces.last?.id { model.loadMoreTraces() } }

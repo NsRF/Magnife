@@ -139,6 +139,72 @@ struct FindingTests {
         #expect(Detectors.findings(in: tables).isEmpty)
     }
 
+    // MARK: HTTP Error (S-025)
+
+    private func http(_ id: String, kind: SpanKind = .server, name: String = "POST /payments", method: String? = "POST",
+                      code: Int?, status: SpanStatus = .unset, message: String = "", route: String? = "/payments",
+                      url: String? = nil) -> DetectorSpan {
+        DetectorSpan(spanID: id, name: name, kind: kind, durationNs: Self.ms, status: status, statusMessage: message,
+                     httpMethod: method, httpStatusCode: code, httpRoute: route, httpURL: url)
+    }
+
+    @Test("HTTP Error: a response code of 400 or higher, or status Error",
+          arguments: [(200, SpanStatus.ok, false), (399, .unset, false), (400, .unset, true), (404, .unset, true),
+                      (500, .error, true), (503, .unset, true), (200, .error, true), (302, .unset, false)])
+    func httpRule(code: Int, status: SpanStatus, flagged: Bool) {
+        #expect(Detectors.findings(in: [http("a", code: code, status: status)]).kinds(forSpan: "a") == (flagged ? [.httpError] : []))
+    }
+
+    @Test("only HTTP spans: a span with neither method nor code is never an HTTP Error")
+    func httpOnly() {
+        let job = DetectorSpan(spanID: "a", name: "inventory.reconcile", kind: .internal, durationNs: Self.ms, status: .error)
+        #expect(Detectors.findings(in: [job]).isEmpty)
+        // A code alone is enough.
+        #expect(Detectors.findings(in: [http("b", method: nil, code: 502)]).kinds(forSpan: "b") == [.httpError])
+    }
+
+    @Test("HTTP Error words: method, route or URL, code")
+    func httpWords() throws {
+        let server = try #require(Detectors.findings(in: [http("a", code: 500, status: .error)]).findings.first)
+        #expect(server.line == "HTTP Error · 500 · POST /payments")
+        #expect(server.detailText == "POST /payments returned 500.")
+        #expect(server.accessibilityLabel == "Select span: HTTP Error, POST /payments returned 500")
+        #expect(server.spokenMark(for: "a") == "HTTP Error")
+
+        let client = try #require(Detectors.findings(in: [
+            http("b", kind: .client, name: "POST", code: nil, status: .error, message: "connection reset",
+                 route: nil, url: "https://api.stripe.com/v1/charges"),
+        ]).findings.first)
+        #expect(client.line == "HTTP Error · POST https://api.stripe.com/v1/charges")
+        #expect(client.detailText
+                == "POST https://api.stripe.com/v1/charges has status Error and no response code. connection reset")
+
+        let ok = try #require(Detectors.findings(in: [http("c", code: 200, status: .error)]).findings.first)
+        #expect(ok.detailText == "POST /payments returned 200 and has status Error.")
+    }
+
+    @Test("client spans name the URL, server spans the route, else the span name, never the method twice")
+    func httpTarget() throws {
+        func call(_ span: DetectorSpan) throws -> String { try #require(Detectors.findings(in: [span]).findings.first).call }
+        #expect(try call(http("a", kind: .client, name: "POST", code: 500, url: "http://localhost:5080/payments"))
+                == "POST http://localhost:5080/payments")
+        #expect(try call(http("b", kind: .server, code: 500, url: "/payments?x=1")) == "POST /payments")
+        #expect(try call(http("d", kind: .server, name: "POST /pay", code: 500, route: nil, url: nil)) == "POST /pay")
+        #expect(try call(http("e", kind: .server, name: "GET", method: "GET", code: 404, route: nil, url: nil)) == "GET")
+        #expect(try call(http("f", kind: .client, name: "fetch", method: nil, code: 500, route: nil, url: "http://a/b"))
+                == "http://a/b")
+    }
+
+    @Test("several failed calls: one strip line each, and the badge counts them")
+    func httpSeveral() {
+        let found = Detectors.findings(in: [http("a", code: 500), http("b", kind: .client, code: 502, url: "http://x/y")])
+        #expect(found.findings.map(\.kind) == [.httpError, .httpError])
+        #expect(found.summary.help(.httpError) == "HTTP Error: 2 calls returned 400 or higher, or had status Error")
+        #expect(Detectors.findings(in: [http("a", code: 500)]).summary.help(.httpError)
+                == "HTTP Error: 1 call returned 400 or higher, or had status Error")
+        #expect(found.summary.spoken == "findings: HTTP Error")
+    }
+
     // MARK: Strip
 
     @Test("the strip shows 3 lines, then Show All Findings (7)")
@@ -196,6 +262,11 @@ struct FindingTests {
                                    system: "postgresql", statement: "SELECT 2")
             // Long, but not a database span.
             try insertDetectorSpan(db, trace: traceID(2), span: "00000000000000b1", start: base + 3, duration: 900 * Self.ms)
+            try insertTrace(db, id: traceID(3), startNs: base + 2_000_000_000)
+            try insertDetectorSpan(db, trace: traceID(3), span: "00000000000000c1", kind: 2, start: base + 4,
+                                   duration: Self.ms, status: 2, method: "POST", code: 500, route: "/payments")
+            try insertDetectorSpan(db, trace: traceID(3), span: "00000000000000c2", kind: 3, start: base + 5,
+                                   duration: Self.ms, method: "GET", code: 200, url: "http://a/ok")
         }
         let reader = try await TelemetryReader.open(at: url)
         let findings = try await reader.traceFindings(traceID: traceID(1))
@@ -204,6 +275,8 @@ struct FindingTests {
         let summaries = try await reader.findingSummaries(traceIDs: [traceID(1), traceID(2), traceID(2)])
         #expect(summaries[traceID(1)]?.counts == [.slowSQL: 1])
         #expect(summaries[traceID(2)]?.isEmpty == true)
+        let failed = try await reader.traceFindings(traceID: traceID(3))
+        #expect(failed.findings.map(\.line) == ["HTTP Error · 500 · POST /payments"])
         #expect(try await reader.findingSummaries(traceIDs: []).isEmpty)
 
         // Both reads use an index on trace_id, never a scan of spans.
