@@ -205,3 +205,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: the Logs list is read only while it shows, but `logsLoaded` stayed true after leaving it, so `pauseLogs` paused at the old rows' newest id.
 - Fix: pausing while Logs is not showing empties the Logs list and pauses at `reader.lastLogID()`.
 - Rule: state that is only refreshed while visible is stale when hidden; never act on it from elsewhere.
+
+## The trace list stayed blank after adding a condition row during a read (S-020, M2 review)
+
+- Symptom: finish a value in row 1 (the list empties and reads), then press "+" or type a key in row 2 before the read ends: the list stayed blank, without even "No Matching Traces", until the next batch; with no traffic, for good.
+- Cause: `TraceListState.applying` drops a read whose scope differs from the list's, comparing the whole `TraceFilter`, inactive condition rows included, while a new read starts only when the active conditions change.
+- Fix: the list's scope is `traceFilter.normalized` (active conditions only), in `listState` and the next-page read.
+- Rule: what decides whether a read is still wanted is the same value that decides whether to start one.

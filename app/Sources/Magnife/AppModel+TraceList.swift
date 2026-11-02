@@ -37,7 +37,7 @@ extension AppModel {
 
     /// The list's rows and seqs as one value, for `TraceListState.applying`.
     var listState: TraceListState {
-        TraceListState(scope: traceFilter, traces: traces, baseSeq: listBaseSeq, appliedSeq: listAppliedSeq,
+        TraceListState(scope: traceFilter.normalized, traces: traces, baseSeq: listBaseSeq, appliedSeq: listAppliedSeq,
                        isHeld: isListHeld, newCount: newTraceCount, hasMore: hasMoreTraces,
                        traceCount: listTraceCount, scopeCount: listScopeCount, pausedSeq: pausedSeq)
     }
@@ -72,13 +72,13 @@ extension AppModel {
     func loadMoreTraces() {
         guard hasMoreTraces, isListHeld, !isLoadingMore, let reader, let last = traces.last else { return }
         isLoadingMore = true
-        let filter = traceFilter
+        let filter = traceFilter.normalized
         let upTo = pausedSeq
         Task {
             defer { isLoadingMore = false }
             let page = (try? await reader.latestTraces(limit: TraceList.pageSize, after: last.cursor, filter: filter,
                                                        upTo: upTo)) ?? []
-            guard filter == traceFilter, upTo == pausedSeq, reader === self.reader,
+            guard filter == traceFilter.normalized, upTo == pausedSeq, reader === self.reader,
                   traces.last?.id == last.id else { return }
             traces = TraceList.appending(page, to: traces)
             hasMoreTraces = page.count == TraceList.pageSize

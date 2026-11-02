@@ -108,6 +108,17 @@ extension SelfTest {
               filtered && model.traces.first?.route == "POST /checkout/pay" && model.subtitle == TraceList.subtitle(shown: 1, of: all),
               "\(model.traces.map(\.route)) \(model.subtitle)")
 
+        // A row added (still empty) while the list reads for the first one: the read still fills the list.
+        let route = model.traceConditions.filter(\.isActive)
+        model.traceConditions = []
+        _ = await waitUntil(2) { !model.isLoadingScope && model.traces.count == all }
+        model.traceConditions = route
+        model.traceConditions = route + [TraceCondition()]
+        let filled = await waitUntil(2) { !model.isLoadingScope && model.traces.count == 1 }
+        check("adding a row while the list reads leaves it filled, not blank", filled,
+              "\(model.traces.count) rows, loading \(model.isLoadingScope)")
+        model.traceConditions = route
+
         // A second row matched by other spans of the same trace: all rows must match.
         model.addConditionRow(after: model.conditionRows[0].id)
         model.updateConditionRow(model.conditionRows[1].id) { $0.key = "db.system.name"; $0.op = .exists }

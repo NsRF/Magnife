@@ -114,6 +114,20 @@ struct TraceListTests {
         #expect(state.applying(.page(page([2], lastSeq: 2), scope: TraceFilter(service: "web")))?.traces.map(\.traceID) == [traceID(2)])
     }
 
+    @Test("a condition row still being typed does not change the list's scope")
+    func stateScopeIgnoresUnfinishedRows() {
+        let applied = TraceCondition(field: .attribute("http.route"), op: .is, value: "/orders")
+        let reading = TraceFilter(conditions: [applied]).normalized
+        // While that read runs, "+" adds an empty row, then a key is typed in it.
+        for unfinished in [TraceCondition(), TraceCondition(field: .attribute("db.sys"), op: .is, value: "")] {
+            let now = TraceFilter(conditions: [applied, unfinished]).normalized
+            #expect(now == reading)
+            let state = TraceListState(scope: now, traces: [], baseSeq: 0, appliedSeq: 0)
+            #expect(state.applying(.page(page([1], lastSeq: 2), scope: reading)) != nil)
+        }
+        #expect(TraceFilter(conditions: [applied, TraceCondition()]).normalized.conditions == [applied])
+    }
+
     @Test("held still: a page is dropped; changes update shown rows in place and count new traces")
     func stateHeld() throws {
         var state = TraceListState(traces: [trace(2), trace(1)], baseSeq: 5, appliedSeq: 5, isHeld: true)

@@ -31,6 +31,15 @@ public struct TraceFilter: Sendable, Hashable {
     /// but "exists" a value ("Any Field" and "Route" are keys).
     public var activeConditions: [TraceCondition] { conditions.filter(\.isActive) }
 
+    /// The filter as the list reads it: only the conditions that take part,
+    /// so adding a row or typing an unfinished one leaves the list's scope
+    /// (and a read in flight for it) alone (S-020).
+    public var normalized: TraceFilter {
+        var next = self
+        next.conditions = activeConditions
+        return next
+    }
+
     /// The filter bar's own filters are on (status, duration, a condition):
     /// the list may hide traces of the scope ("312 of 1,204 traces").
     public var narrowsScope: Bool { !statuses.isEmpty || slowerThanNs != nil || !activeConditions.isEmpty }
