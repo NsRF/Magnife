@@ -233,3 +233,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: the status chip wrapped its Button in `.accessibilityElement(children: .ignore)`, a new element that has no press action, and both chips added `.isToggle`, which exposes a checkbox SwiftUI does not press.
 - Fix: the label and value sit on the Button itself; no new element, no toggle trait.
 - Rule: never wrap a Button in `.accessibilityElement(children: .ignore)` or retype it with traits; label the Button and give its state as the value.
+
+## Overlapping test runs wrote their window layout into the user's settings (M2 end-to-end)
+
+- Symptom: "a test run keeps the user's window layout aside" failed with "kept aside: []" while another agent's snapshot run was going, and the real domain was left with a test run's split widths; APP_STORE runs wrote window frames there too.
+- Cause: one shared `layout.backup` key: the second run took the first run's backup for a crashed run's, restored and replaced it, and whichever run ended first removed the backup the other needed; APP_STORE runs did not protect the layout at all.
+- Fix: a backup per process id, a live run's backup copied by a run that starts during it, dead runs' backups restored at launch, and APP_STORE runs included.
+- Rule: anything a test run sets aside in a shared place is keyed by the run, and never assumes it is the only run.
