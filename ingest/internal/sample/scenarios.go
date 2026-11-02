@@ -99,11 +99,16 @@ func setError(s ptrace.Span, msg string) {
 	s.Status().SetMessage(msg)
 }
 
-func addException(t *Trace, s ptrace.Span, atMs float64, typ, msg, stack string) {
+// addEvent records a span event at atMs.
+func addEvent(t *Trace, s ptrace.Span, atMs float64, name string, attrs map[string]any) {
 	ev := s.Events().AppendEmpty()
-	ev.SetName("exception")
+	ev.SetName(name)
 	ev.SetTimestamp(t.at(atMs))
-	putAll(ev.Attributes(), map[string]any{
+	putAll(ev.Attributes(), attrs)
+}
+
+func addException(t *Trace, s ptrace.Span, atMs float64, typ, msg, stack string) {
+	addEvent(t, s, atMs, "exception", map[string]any{
 		"exception.type":       typ,
 		"exception.message":    msg,
 		"exception.stacktrace": stack,
@@ -205,6 +210,13 @@ func healthy(t *Trace) {
 	srv := t.span(&rpc, Orders, scopeOtelGRPC, "orders.v1.OrderService/CreateOrder", ptrace.SpanKindServer, 28, 119, map[string]any{
 		"rpc.system": "grpc", "rpc.service": "orders.v1.OrderService", "rpc.method": "CreateOrder",
 		"rpc.grpc.status_code": 0, "net.sock.peer.addr": "127.0.0.1", "net.sock.peer.port": 52814,
+	})
+	// otelgrpc's message events: the request received, the response sent.
+	addEvent(t, srv, 28.4, "message", map[string]any{
+		"message.type": "RECEIVED", "message.id": 1, "message.uncompressed_size": 214,
+	})
+	addEvent(t, srv, 146.6, "message", map[string]any{
+		"message.type": "SENT", "message.id": 1, "message.uncompressed_size": 38,
 	})
 	t.span(&srv, Orders, scopeOtelSQL, "INSERT orders", ptrace.SpanKindClient, 32, 9, goSQLAttrs("INSERT", "orders",
 		"INSERT INTO orders (customer_id, cart_id, total_cents, status) VALUES ($1, $2, $3, $4) RETURNING id"))

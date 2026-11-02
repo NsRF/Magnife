@@ -136,6 +136,18 @@ public final class TelemetryReader: Sendable {
         try await pool.read { try SpanRecord.fetchOne($0, sql: TelemetrySQL.spanByID, arguments: [traceID, spanID]) }
     }
 
+    /// The span detail (S-006): one span and the resource it came from, in one read.
+    @concurrent
+    public func spanDetail(traceID: String, spanID: String) async throws -> SpanDetail? {
+        try await pool.read { db in
+            guard let span = try SpanRecord.fetchOne(db, sql: TelemetrySQL.spanByID, arguments: [traceID, spanID]) else {
+                return nil
+            }
+            let resource = try ResourceRecord.fetchOne(db, sql: TelemetrySQL.resourceByID, arguments: [span.resourceID])
+            return SpanDetail(span: span, resource: resource)
+        }
+    }
+
     @concurrent
     public func resource(id: Int64) async throws -> ResourceRecord? {
         try await pool.read { try ResourceRecord.fetchOne($0, sql: TelemetrySQL.resourceByID, arguments: [id]) }

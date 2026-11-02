@@ -129,4 +129,11 @@ final class MenuState: ObservableObject {
     func update(hasWaterfall: Bool) {
         if self.hasWaterfall != hasWaterfall { self.hasWaterfall = hasWaterfall }
     }
+
+    /// View > Show Span Detail reads "Hide Span Detail" while the pane shows.
+    @Published private(set) var showsSpanDetail = true
+
+    func update(showsSpanDetail: Bool) {
+        if self.showsSpanDetail != showsSpanDetail { self.showsSpanDetail = showsSpanDetail }
+    }
 }

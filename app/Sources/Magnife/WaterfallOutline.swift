@@ -18,7 +18,8 @@ struct WaterfallOutline: NSViewRepresentable {
     func makeCoordinator() -> WaterfallCoordinator { WaterfallCoordinator(model: model) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let outline = NSOutlineView()
+        let outline = WaterfallOutlineView()
+        outline.onCopy = { [model] in model.copySpanID() }
         let name = NSTableColumn(identifier: .spanName)
         name.title = "Span"
         // Narrow at first: the bar column then grows to fill the column.
@@ -71,6 +72,15 @@ struct WaterfallOutline: NSViewRepresentable {
 extension NSUserInterfaceItemIdentifier {
     static let spanName = NSUserInterfaceItemIdentifier("span-name")
     static let spanBar = NSUserInterfaceItemIdentifier("span-bar")
+}
+
+/// ⌘C on a waterfall row copies its span ID (docs/ux.md, Edit menu).
+final class WaterfallOutlineView: NSOutlineView {
+    var onCopy: (() -> Void)?
+
+    @objc func copy(_ sender: Any?) {
+        onCopy?()
+    }
 }
 
 /// NSOutlineView needs objects for items; one per node, made per tree.
@@ -246,12 +256,25 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
 
     func contextMenu() -> NSMenu {
         let menu = NSMenu()
-        for (title, action) in [("Expand All Spans", #selector(expandAll)), ("Collapse All Spans", #selector(collapseAll))] {
+        for (title, action) in [("Copy Span ID", #selector(copySpanID)), ("", nil),
+                                ("Expand All Spans", #selector(expandAll)), ("Collapse All Spans", #selector(collapseAll))] {
+            guard let action else {
+                menu.addItem(.separator())
+                continue
+            }
             let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
             item.target = self
             menu.addItem(item)
         }
         return menu
+    }
+
+    /// The row that was right-clicked, else the selected one.
+    @objc private func copySpanID() {
+        guard let outline else { return }
+        let row = outline.clickedRow >= 0 ? outline.clickedRow : outline.selectedRow
+        guard row >= 0, let item = outline.item(atRow: row) as? SpanItem else { return }
+        model.copySpanID(waterfall.nodes[item.index].span.spanID)
     }
 
     @objc private func expandAll() { model.expandAllSpans() }

@@ -43,6 +43,22 @@ enum SnapshotPage: String, CaseIterable {
             model.sidebar = .service("checkout-api")
         }
         await model.reload()
+        if self == .spanDetail {
+            // The failed checkout-api span: attributes, the exception event, the resource.
+            await Self.select(model) { $0.name == "POST /payments" }
+        }
+    }
+
+    /// Selects the first span of the open waterfall that matches, once the
+    /// waterfall is built, and waits for its detail.
+    @MainActor
+    static func select(_ model: AppModel, span matches: (WaterfallSpan) -> Bool) async {
+        for _ in 0..<60 where model.waterfall.isEmpty { try? await Task.sleep(for: .milliseconds(50)) }
+        guard let id = model.waterfall.nodes.first(where: { matches($0.span) })?.span.spanID else {
+            return print("SNAPSHOT no matching span")
+        }
+        model.selectedSpanID = id
+        for _ in 0..<60 where model.spanDetail?.span.spanID != id { try? await Task.sleep(for: .milliseconds(50)) }
     }
 }
 
@@ -87,6 +103,7 @@ enum Snapshot {
                     try? await Task.sleep(for: .seconds(0.8))
                     capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
                     if page == .emptyState { await captureCopied(model, dir: dir, mode: mode) }
+                    if page == .spanDetail { await captureSpanEvents(model, dir: dir, mode: mode) }
                     if page == .traceList {
                         await captureReceiverStates(model, dir: dir, mode: mode)
                         await captureEnvironmentPopover(model, dir: dir, mode: mode)
@@ -148,6 +165,24 @@ enum Snapshot {
         model.environmentLanguage = .defaultLanguage
         model.environmentCopied = false
         model.hasCopiedEnvironment = false
+    }
+
+    /// 04-span-detail-events: the orders gRPC server span of the healthy
+    /// trace, with otelgrpc's two message events, scrolled to Events (S-006).
+    /// 04-span-detail-long-value: a statement longer than three lines.
+    private static func captureSpanEvents(_ model: AppModel, dir: String, mode: String) async {
+        model.selectedTraceID = model.traces.first { $0.route == "GET /checkout" }?.traceID
+        await SnapshotPage.select(model) { $0.serviceName == "orders" && $0.kind == .server }
+        try? await Task.sleep(for: .seconds(0.5))
+        model.spanDetailScrollTarget = .events
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(SnapshotPage.spanDetail.rawValue)-events-\(mode).png")
+
+        // 04-span-detail-long-value: the slow query's statement, cut after three lines with "Show All".
+        model.selectedTraceID = model.traces.first { $0.route == "GET /admin/reports" }?.traceID
+        await SnapshotPage.select(model) { $0.name == "SELECT Orders" }
+        try? await Task.sleep(for: .seconds(0.8))
+        capture(to: "\(dir)/\(SnapshotPage.spanDetail.rawValue)-long-value-\(mode).png")
     }
 
     /// 02-trace-list-new-traces: the "12 new traces" button over a list that

@@ -30,12 +30,16 @@ enum SelfTest {
             await checkReader(model)
             await checkModel(model)
             // APP_SELFTEST_ONLY=waterfall runs one story's checks, for quick rounds.
-            if ProcessInfo.processInfo.environment["APP_SELFTEST_ONLY"] == "waterfall" {
+            let only = ProcessInfo.processInfo.environment["APP_SELFTEST_ONLY"]
+            if only == "waterfall" {
                 await checkWaterfall(model)
+            } else if only == "span-detail" {
+                await checkSpanDetail(model)
             } else {
                 await checkEnvironment(model)
                 await checkTraceList(model)
                 await checkWaterfall(model)
+                await checkSpanDetail(model)
                 await checkSupervisor()
                 await checkReceiver()
                 checkApp()

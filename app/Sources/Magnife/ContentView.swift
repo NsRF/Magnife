@@ -84,22 +84,37 @@ struct ServiceRow: View {
 
 // MARK: Detail
 
-/// The detail column: the selected trace's waterfall (S-005).
+/// The detail column: the selected trace's waterfall (S-005) over the
+/// selected span's detail (S-006), split 55 / 45 by default.
 struct TraceDetail: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         if let trace = model.openTrace ?? model.selectedTrace {
-            VStack(alignment: .leading, spacing: 0) {
-                WaterfallHeader(trace: trace)
-                Divider()
-                WaterfallOutline(model: model, generation: model.waterfallGeneration, waterfall: model.waterfall,
-                                 collapsed: model.collapsedSpans, selected: model.selectedSpanID,
-                                 colors: model.serviceColors)
-            }
+            // The split hosts each pane in its own NSHostingView, which does not
+            // inherit this view's environment: pass the model and the accent again.
+            DetailSplit(showsBottom: model.showsSpanDetail,
+                        top: TraceWaterfall(trace: trace).environment(model).themed(),
+                        bottom: SpanDetailPane().environment(model).themed())
         } else {
             ContentUnavailableView("No Trace Selected", systemImage: "chart.bar.doc.horizontal",
                                    description: Text("Select a trace to see its waterfall."))
+        }
+    }
+}
+
+/// The header and the waterfall's rows.
+struct TraceWaterfall: View {
+    @Environment(AppModel.self) private var model
+    let trace: TraceSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            WaterfallHeader(trace: trace)
+            Divider()
+            WaterfallOutline(model: model, generation: model.waterfallGeneration, waterfall: model.waterfall,
+                             collapsed: model.collapsedSpans, selected: model.selectedSpanID,
+                             colors: model.serviceColors)
         }
     }
 }

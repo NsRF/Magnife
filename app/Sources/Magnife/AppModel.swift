@@ -78,7 +78,29 @@ final class AppModel {
     /// Spans whose subtree is closed in the waterfall, by span id.
     var collapsedSpans: Set<String> = []
     /// The selected waterfall row (the span detail reads it, S-006).
-    var selectedSpanID: String?
+    var selectedSpanID: String? {
+        didSet { if selectedSpanID != oldValue { loadSpanDetail() } }
+    }
+    /// The selected span with its resource, read off the main actor (S-006).
+    var spanDetail: SpanDetail? {
+        didSet { if spanDetail != oldValue { spanDetailChanged(from: oldValue) } }
+    }
+    @ObservationIgnored var spanDetailTask: Task<Void, Never>?
+    /// A section to scroll the span detail to; the pane clears it once scrolled.
+    var spanDetailScrollTarget: SpanDetail.Section?
+    /// Values and stack traces opened with Show All, by `SpanDetailValueID`;
+    /// cleared when another span is selected.
+    var expandedValues: Set<String> = []
+    /// How each long value lays out (full and shown height), for the self-test.
+    @ObservationIgnored var valueLayouts: [String: ValueLayout] = [:]
+    /// The lower pane of the detail column (View > Show Span Detail ⌃⌘I).
+    /// Remembered across launches; test and snapshot runs start shown.
+    var showsSpanDetail: Bool = StoreLocation.isOverridden() || UserDefaults.standard.object(forKey: "detail.showsSpanDetail") as? Bool ?? true {
+        didSet {
+            if !StoreLocation.isOverridden() { UserDefaults.standard.set(showsSpanDetail, forKey: "detail.showsSpanDetail") }
+            MenuState.shared.update(showsSpanDetail: showsSpanDetail)
+        }
+    }
     @ObservationIgnored var waterfallTask: Task<Void, Never>?
     /// The generation the outline shows, and when a trace was selected (self-test timing).
     @ObservationIgnored var shownWaterfallGeneration = 0
@@ -154,6 +176,7 @@ final class AppModel {
 
     /// Starts the clock for the Time column and opens the database.
     func start() {
+        MenuState.shared.update(showsSpanDetail: showsSpanDetail)
         Task { await openStore() }
         Task { [weak self] in
             while !Task.isCancelled {

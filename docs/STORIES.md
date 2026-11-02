@@ -114,7 +114,7 @@ UX:
 - States: no span selected "Select a span to see its attributes."; a section with nothing in it is hidden, not shown empty; too much: values longer than three lines collapse with "Show All", keys truncate with a tooltip
 - Words: section headers "Attributes", "Events", "Resource"; span header shows name, kind, duration and status; "Show All", "Show Less"
 - Access: keys and values are selectable text; VoiceOver reads each pair as "key, value"; sections are headings so VoiceOver can jump between them
-Status: todo
+Status: done
 
 ### S-007 Read an exception with its stack trace
 As the user, I click a failed span and read the exception type, message and stack trace.

@@ -39,8 +39,15 @@ struct MagnifeApp: App {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .pasteboard) {
                 Divider()
+                Button("Copy Span ID") { delegate.model.copySpanID() }
+                    .disabled(!menu.hasWaterfall)
                 Button("Copy Environment Variables") { delegate.model.copyEnvironmentVariables() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
+            }
+            CommandGroup(before: .sidebar) {
+                Button(menu.showsSpanDetail ? "Hide Span Detail" : "Show Span Detail") { delegate.model.toggleSpanDetail() }
+                    .keyboardShortcut("i", modifiers: [.command, .control])
+                Divider()
             }
             CommandMenu("Trace") {
                 Button("Show Newest Traces") { delegate.model.showNewestTraces() }

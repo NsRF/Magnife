@@ -240,7 +240,7 @@ extension SelfTest {
         NSApp.appearance = appearance
     }
 
-    private static func isShown(_ model: AppModel) -> Bool {
+    static func isShown(_ model: AppModel) -> Bool {
         !model.waterfall.isEmpty && model.shownWaterfallGeneration == model.waterfallGeneration
     }
 }

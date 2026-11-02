@@ -53,6 +53,8 @@ extension AppModel {
             // Spans that stopped having children cannot stay collapsed.
             collapsedSpans = collapsedSpans.intersection(tree.parentSpanIDs)
             if selectedSpanID.flatMap(tree.index(of:)) == nil { selectedSpanID = tree.rootSpanID }
+            // A resent span replaces the stored row: read the selected one again.
+            loadSpanDetail()
         }
         waterfall = tree
         waterfallGeneration += 1

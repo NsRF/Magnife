@@ -40,6 +40,13 @@ this app starts the helper and reads its database. No server, no accounts.
   `selectedSpanID` across rebuilds. The rows are an NSOutlineView
   (`WaterfallOutline.swift`, cells in `WaterfallCells.swift`). Never pass a
   row of -1 to its view calls: `view(atColumn:row:makeIfNecessary:)` hangs.
+- The span detail (S-006): `TelemetryReader.spanDetail` reads the selected
+  span and its resource in one read; `SpanDetail` (MagnifeKit) orders the
+  sections and attributes. The detail column is `DetailSplit` (an
+  NSSplitView with one NSHostingView per pane, so each pane gets
+  `.environment(model).themed()` again); it keeps its divider fraction on
+  every resize. "Show All" is measured (`ExpandableText`), and expanded
+  values live in `AppModel.expandedValues`.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
 

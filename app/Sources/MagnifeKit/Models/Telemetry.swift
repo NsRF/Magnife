@@ -150,13 +150,23 @@ public struct SpanEvent: Sendable, Hashable, Decodable {
         attributes = try container.decodeIfPresent(Attributes.self, forKey: .attributes) ?? Attributes()
     }
 
+    public init(timeNs: Int64, name: String, attributes: Attributes = Attributes()) {
+        self.timeNs = timeNs
+        self.name = name
+        self.attributes = attributes
+    }
+
+    /// True for an event that records an exception (OTel's event name "exception").
+    public var isException: Bool { name == "exception" }
+
     /// The exception this event records, when its name is "exception".
     public var exception: SpanException? {
-        guard name == "exception" else { return nil }
+        guard isException else { return nil }
         return SpanException(type: attributes["exception.type"]?.text ?? "",
                              message: attributes["exception.message"]?.text ?? "",
                              stackTrace: attributes["exception.stacktrace"]?.text ?? "",
-                             timeNs: timeNs)
+                             timeNs: timeNs,
+                             attributes: attributes.pairs.filter { !SpanException.keys.contains($0.key) })
     }
 }
 
@@ -166,6 +176,19 @@ public struct SpanException: Sendable, Hashable {
     public var message: String
     public var stackTrace: String
     public var timeNs: Int64
+    /// The event's other attributes (`exception.escaped`, custom keys), so nothing is dropped.
+    public var attributes: [Attribute]
+
+    /// The three keys the exception block shows itself.
+    public static let keys: Set<String> = ["exception.type", "exception.message", "exception.stacktrace"]
+
+    public init(type: String, message: String, stackTrace: String, timeNs: Int64, attributes: [Attribute] = []) {
+        self.type = type
+        self.message = message
+        self.stackTrace = stackTrace
+        self.timeNs = timeNs
+        self.attributes = attributes
+    }
 }
 
 /// A link from a span to a span in another (or the same) trace.

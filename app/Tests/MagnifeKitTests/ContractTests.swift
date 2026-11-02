@@ -166,6 +166,11 @@ struct ContractTests {
         let one = try await reader.span(traceID: Self.traceA, spanID: Self.child)
         #expect(one == child)
         #expect(try await reader.span(traceID: Self.traceA, spanID: "missing") == nil)
+
+        // The span detail reads the span and its resource together (S-006).
+        let detail = try #require(try await reader.spanDetail(traceID: Self.traceA, spanID: Self.child))
+        #expect(detail.span == child && detail.resource == resource)
+        #expect(try await reader.spanDetail(traceID: Self.traceA, spanID: "missing") == nil)
     }
 
     @Test("logs: by trace, by span, latest, levels, JSON bodies")
