@@ -3,3 +3,4 @@
 /ingest/bin/
 *.sqlite-shm
 *.sqlite-wal
+/.night/
