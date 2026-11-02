@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import MagnifeKit
 
 /// The sidebar's selection.
@@ -86,8 +87,13 @@ final class AppModel {
         didSet { if spanDetail != oldValue { spanDetailChanged(from: oldValue) } }
     }
     @ObservationIgnored var spanDetailTask: Task<Void, Never>?
+    /// The exception whose Copy Stack Trace reads "Copied" for 2 seconds (S-007), by index.
+    var copiedStackTrace: Int?
+    @ObservationIgnored var stackTraceCopiedTask: Task<Void, Never>?
     /// A section to scroll the span detail to; the pane clears it once scrolled.
     var spanDetailScrollTarget: SpanDetail.Section?
+    /// Where the target lands: its top at the top, or its bottom at the bottom.
+    @ObservationIgnored var spanDetailScrollAnchor: UnitPoint = .top
     /// Values and stack traces opened with Show All, by `SpanDetailValueID`;
     /// cleared when another span is selected.
     var expandedValues: Set<String> = []

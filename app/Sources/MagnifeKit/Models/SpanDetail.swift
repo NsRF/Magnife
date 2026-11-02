@@ -1,8 +1,8 @@
 import Foundation
 
-/// The span detail (S-006): one span with the resource it came from, in
-/// the order of design decision 5: Attributes (`http.*` and `db.*` first),
-/// Events, Resource. A section with nothing in it is left out.
+/// The span detail (S-006, S-007): one span with the resource it came from,
+/// in the order of design decision 5: Exception, Attributes (`http.*` and
+/// `db.*` first), Events, Resource. A section with nothing in it is left out.
 public struct SpanDetail: Sendable, Hashable {
     public var span: SpanRecord
     public var resource: ResourceRecord?
@@ -13,12 +13,13 @@ public struct SpanDetail: Sendable, Hashable {
     }
 
     public enum Section: String, Sendable, CaseIterable, Identifiable {
+        case exception = "Exception"
         case attributes = "Attributes"
         case events = "Events"
         case resource = "Resource"
 
         public var id: String { rawValue }
-        /// The section header on screen (docs/STORIES.md, S-006 UX).
+        /// The section header on screen (docs/STORIES.md, S-006 and S-007 UX).
         public var title: String { rawValue }
     }
 
@@ -26,6 +27,7 @@ public struct SpanDetail: Sendable, Hashable {
     public var sections: [Section] {
         Section.allCases.filter { section in
             switch section {
+            case .exception: !exceptions.isEmpty
             case .attributes: !attributes.isEmpty
             case .events: !events.isEmpty
             case .resource: !resourceAttributes.isEmpty
@@ -43,9 +45,21 @@ public struct SpanDetail: Sendable, Hashable {
         Self.ordered(span.attributes.pairs, first: Self.attributePrefixes)
     }
 
-    /// The span's events in time order (the helper stores them that way; ties keep their order).
-    public var events: [SpanEvent] {
+    /// Every event in time order (the helper stores them that way; ties keep their order).
+    private var timeOrderedEvents: [SpanEvent] {
         span.events.enumerated().sorted { ($0.element.timeNs, $0.offset) < ($1.element.timeNs, $1.offset) }.map(\.element)
+    }
+
+    /// The span's exceptions in time order: one block each in Exception (S-007).
+    public var exceptions: [SpanException] { timeOrderedEvents.compactMap(\.exception) }
+
+    /// The span's other events in time order. Exception events show in
+    /// Exception instead, so they are not listed twice.
+    public var events: [SpanEvent] { timeOrderedEvents.filter { !$0.isException } }
+
+    /// The stack trace Edit > Copy Stack Trace copies: the first exception's that has one.
+    public var firstStackTrace: String? {
+        exceptions.first { $0.hasStackTrace }?.stackTrace
     }
 
     /// The resource's attributes, `service.*` first, then by key.

@@ -47,7 +47,8 @@ extension SelfTest {
         check("clicking a span fills the span detail within 1 s", true)
         check("the header reads name, kind, duration and status",
               payments.span.name == "POST /payments" && payments.summary == "Server · 52 ms · Error", payments.summary)
-        check("sections: Attributes, Events, Resource", payments.sections == [.attributes, .events, .resource],
+        // Its one event is the exception, which shows in Exception (S-007), not again in Events.
+        check("sections: Exception, Attributes, Resource", payments.sections == [.exception, .attributes, .resource],
               "\(payments.sections)")
         let keys = payments.attributes.map(\.key)
         check("http.* attributes are listed first", keys.prefix(3).allSatisfy { $0.hasPrefix("http.") }

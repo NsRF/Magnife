@@ -32,6 +32,9 @@ enum SnapshotPage: String, CaseIterable {
         }
         model.sidebar = .allTraces
         model.selectedTraceID = nil
+        // The first page of a run can come before the store opened and the list was read.
+        await model.openStore()
+        if model.traces.isEmpty { await model.reload() }
         switch self {
         case .emptyState, .traceList, .logs, .commandK, .menuBar, .settings:
             break
@@ -170,7 +173,17 @@ enum Snapshot {
     /// 04-span-detail-events: the orders gRPC server span of the healthy
     /// trace, with otelgrpc's two message events, scrolled to Events (S-006).
     /// 04-span-detail-long-value: a statement longer than three lines.
+    /// 04-span-detail-copied: Copy Stack Trace right after a click.
     private static func captureSpanEvents(_ model: AppModel, dir: String, mode: String) async {
+        // 04-span-detail-copied: Copy Stack Trace reads "Copied" (S-007). A private pasteboard.
+        model.spanDetailScrollAnchor = .bottom
+        model.spanDetailScrollTarget = .exception
+        try? await Task.sleep(for: .seconds(0.3))
+        model.spanDetailScrollAnchor = .top
+        model.copyStackTrace(at: 0, to: NSPasteboard(name: NSPasteboard.Name("Magnife.snapshot")))
+        try? await Task.sleep(for: .seconds(0.5))
+        capture(to: "\(dir)/\(SnapshotPage.spanDetail.rawValue)-copied-\(mode).png")
+
         model.selectedTraceID = model.traces.first { $0.route == "GET /checkout" }?.traceID
         await SnapshotPage.select(model) { $0.serviceName == "orders" && $0.kind == .server }
         try? await Task.sleep(for: .seconds(0.5))

@@ -129,7 +129,7 @@ UX:
 - States: no exception means no section; several exceptions stack in time order; too much: stack traces over 20 lines show the first 20 with "Show All"; a missing stack trace shows type and message only
 - Words: header "Exception"; type in bold, message under it; button "Copy Stack Trace"; feedback "Copied"
 - Access: stack trace is selectable monospace text; Copy Stack Trace has a visible label; VoiceOver reads type, then message, then "stack trace, 42 lines"
-Status: todo
+Status: done
 
 ### S-008 Keep my traces after quitting
 As the user, I quit and reopen Magnife and my traces are still there.

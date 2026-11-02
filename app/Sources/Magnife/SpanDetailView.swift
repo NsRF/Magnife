@@ -1,7 +1,7 @@
 import MagnifeKit
 import SwiftUI
 
-/// The lower pane of the detail column (S-006): the selected span's name,
+/// The lower pane of the detail column (S-006, S-007): the selected span's name,
 /// kind, duration and status, then its sections in the order of design
 /// decision 5. Empty sections are left out.
 struct SpanDetailPane: View {
@@ -16,7 +16,7 @@ struct SpanDetailPane: View {
                 .scrollBounceBehavior(.basedOnSize)
                 .onChange(of: model.spanDetailScrollTarget) { _, target in
                     guard let target else { return }
-                    proxy.scrollTo(target, anchor: .top)
+                    proxy.scrollTo(target, anchor: model.spanDetailScrollAnchor)
                     model.spanDetailScrollTarget = nil
                 }
             }
@@ -62,6 +62,8 @@ struct SpanDetailContent: View {
     @ViewBuilder
     private func sectionBody(_ section: SpanDetail.Section) -> some View {
         switch section {
+        case .exception:
+            ExceptionList(detail: detail)
         case .attributes:
             AttributeList(attributes: detail.attributes, id: SpanDetailValueID.attribute)
         case .events:

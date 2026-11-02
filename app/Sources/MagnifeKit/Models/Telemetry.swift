@@ -189,6 +189,31 @@ public struct SpanException: Sendable, Hashable {
         self.timeNs = timeNs
         self.attributes = attributes
     }
+
+    /// Stack traces over this many lines show their first lines with "Show All" (S-007).
+    public static let previewLineCount = 20
+
+    public var hasStackTrace: Bool { !stackTrace.isEmpty }
+
+    /// The stack trace's lines. A trailing line break adds no empty line; \r\n counts once.
+    public var stackTraceLines: [Substring] {
+        var lines = stackTrace.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+        if lines.count > 1, lines.last?.isEmpty == true { lines.removeLast() }
+        return stackTrace.isEmpty ? [] : lines
+    }
+
+    /// The first `limit` lines when the stack trace is longer, else nil (it shows whole).
+    public func stackTracePreview(limit: Int = previewLineCount) -> String? {
+        let lines = stackTraceLines
+        guard lines.count > limit else { return nil }
+        return lines.prefix(limit).joined(separator: "\n")
+    }
+
+    /// What VoiceOver reads for the stack trace block: "stack trace, 42 lines".
+    public var stackTraceAccessibilityLabel: String {
+        let count = stackTraceLines.count
+        return "stack trace, \(count) \(count == 1 ? "line" : "lines")"
+    }
 }
 
 /// A link from a span to a span in another (or the same) trace.

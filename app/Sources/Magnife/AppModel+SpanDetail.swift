@@ -30,9 +30,12 @@ extension AppModel {
 
     /// Another span starts with every value collapsed again.
     func spanDetailChanged(from old: SpanDetail?) {
+        MenuState.shared.update(hasStackTrace: spanDetail?.firstStackTrace != nil)
         guard old?.span.spanID != spanDetail?.span.spanID || old?.span.traceID != spanDetail?.span.traceID else { return }
         expandedValues = []
         valueLayouts = [:]
+        stackTraceCopiedTask?.cancel()
+        copiedStackTrace = nil
     }
 
     /// True when the pane has nothing to show: a waterfall with no selected span.
@@ -57,10 +60,37 @@ extension AppModel {
     }
 }
 
+extension AppModel {
+    /// Copy Stack Trace (S-007): the whole stack trace of the selected span's
+    /// exception at `index`, even while it shows only its first lines. The
+    /// button reads "Copied" for 2 seconds and VoiceOver hears it. Edit >
+    /// Copy Stack Trace passes no index: the first exception with one.
+    func copyStackTrace(at index: Int? = nil, to pasteboard: NSPasteboard = .general) {
+        guard let exceptions = spanDetail?.exceptions else { return }
+        guard let index = index ?? exceptions.firstIndex(where: \.hasStackTrace), exceptions.indices.contains(index),
+              exceptions[index].hasStackTrace else { return }
+        pasteboard.clearContents()
+        pasteboard.setString(exceptions[index].stackTrace, forType: .string)
+        copiedStackTrace = index
+        NSAccessibility.post(element: NSApp.mainWindow ?? NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: "Copied",
+                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        stackTraceCopiedTask?.cancel()
+        stackTraceCopiedTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.copiedFeedback)
+            guard !Task.isCancelled else { return }
+            self?.copiedStackTrace = nil
+        }
+    }
+}
+
 /// Ids for the span detail's expandable values, unique within one span.
 enum SpanDetailValueID {
     static func attribute(_ key: String) -> String { "attribute:\(key)" }
     static func event(_ index: Int, _ key: String) -> String { "event:\(index):\(key)" }
     static func resource(_ key: String) -> String { "resource:\(key)" }
     static let statusMessage = "status-message"
+    static func exceptionMessage(_ index: Int) -> String { "exception:\(index):message" }
+    static func exceptionAttribute(_ index: Int, _ key: String) -> String { "exception:\(index):\(key)" }
+    static func stackTrace(_ index: Int) -> String { "stack-trace:\(index)" }
 }

@@ -37,3 +37,17 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Fix: narrow initial widths with `lastColumnOnlyAutoresizingStyle`, so the bar column fills what is left; `autoresizesOutlineColumn = false`; `sizeThatFits` returns the proposed size so SwiftUI never sizes the column from the table.
 - Rule: give an AppKit table inside a SwiftUI column a minimum width below the column's minimum, and check the right edge in the snapshot.
 
+
+## The first snapshot page of a run showed "No Trace Selected" (S-007)
+
+- Symptom: `APP_SNAPSHOT_PAGES=04-span-detail tools/snap.sh` wrote `04-span-detail-light.png` with an empty detail column; the dark capture and every later page were right.
+- Cause: `SnapshotPage.prepare` picked the trace from `model.traces` before the store had opened and the list had been read; earlier runs always began with 01-empty-state or 02-trace-list, which need no selection, so the race never showed.
+- Fix: `prepare` awaits `model.openStore()` and reads the list when it is still empty before choosing a trace.
+- Rule: a snapshot or self-test step that selects data waits for the read that provides it; never assume an earlier page warmed it up.
+
+## The span detail split opened 50 / 50 instead of 55 / 45 (S-006, before checkpoint)
+
+- Symptom: the self-test measured the waterfall at 0.50 of the column; the snapshot showed the divider in the middle.
+- Cause: the divider was placed once on the first layout, then AppKit's default resize of an NSSplitView with equal holding priorities shared every later height change evenly between the panes.
+- Fix: `DetailSplitCoordinator` implements `splitView(_:resizeSubviewsWithOldSize:)` and lays both panes out from the stored fraction on every resize.
+- Rule: an NSSplitView that must keep proportions lays its subviews out itself in `resizeSubviewsWithOldSize`; holding priorities alone do not keep a ratio.

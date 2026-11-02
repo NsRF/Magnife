@@ -35,11 +35,13 @@ enum SelfTest {
                 await checkWaterfall(model)
             } else if only == "span-detail" {
                 await checkSpanDetail(model)
+                await checkExceptions(model)
             } else {
                 await checkEnvironment(model)
                 await checkTraceList(model)
                 await checkWaterfall(model)
                 await checkSpanDetail(model)
+                await checkExceptions(model)
                 await checkSupervisor()
                 await checkReceiver()
                 checkApp()

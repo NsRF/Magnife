@@ -130,6 +130,13 @@ final class MenuState: ObservableObject {
         if self.hasWaterfall != hasWaterfall { self.hasWaterfall = hasWaterfall }
     }
 
+    /// Edit > Copy Stack Trace is enabled while the selected span has an exception with one.
+    @Published private(set) var hasStackTrace = false
+
+    func update(hasStackTrace: Bool) {
+        if self.hasStackTrace != hasStackTrace { self.hasStackTrace = hasStackTrace }
+    }
+
     /// View > Show Span Detail reads "Hide Span Detail" while the pane shows.
     @Published private(set) var showsSpanDetail = true
 

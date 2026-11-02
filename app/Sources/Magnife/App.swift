@@ -41,6 +41,8 @@ struct MagnifeApp: App {
                 Divider()
                 Button("Copy Span ID") { delegate.model.copySpanID() }
                     .disabled(!menu.hasWaterfall)
+                Button("Copy Stack Trace") { delegate.model.copyStackTrace() }
+                    .disabled(!menu.hasStackTrace)
                 Button("Copy Environment Variables") { delegate.model.copyEnvironmentVariables() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
             }

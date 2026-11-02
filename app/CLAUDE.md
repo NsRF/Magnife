@@ -92,7 +92,8 @@ this app starts the helper and reads its database. No server, no accounts.
   ports, in `SelfTest+Receiver.swift`; the gRPC check runs the sample sender
   named by `APP_SAMPLE_SENDER`, which `selftest.sh` sets): `tools/selftest.sh`.
   `APP_SELFTEST_ONLY=waterfall tools/selftest.sh` runs only the reader, model
-  and waterfall checks; the waterfall checks time 1,000/5,000/30,000-span
+  and waterfall checks (`APP_SELFTEST_ONLY=span-detail`: the span detail and
+  exception checks); the waterfall checks time 1,000/5,000/30,000-span
   traces (INFO lines) and write `/tmp/Magnife-shots/03-trace-detail-30000-*.png`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
 - After every UI change, take snapshots and look at them: `tools/snap.sh`.
   It writes `/tmp/Magnife-shots/<page>-light.png` and `-dark.png` for every
@@ -102,7 +103,10 @@ this app starts the helper and reads its database. No server, no accounts.
   "ports" lines, since APP_HELPER=none). `01-empty-state-copied` shows the
   S-003 copy feedback and `02-trace-list-environment` the toolbar popover
   (cropped from the window capture), `02-trace-list-new-traces` the S-004
-  button over a held list.
+  button over a held list. `04-span-detail` shows the HTTP 500 trace's
+  POST /payments span (Exception first), `04-span-detail-events` the gRPC
+  server span scrolled to Events, `04-span-detail-long-value` a statement
+  cut with "Show All", `04-span-detail-copied` Copy Stack Trace's "Copied".
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
 - Never test against the real database in `~/Library/Application Support/Magnife/`.
