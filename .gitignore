@@ -1,0 +1,5 @@
+.DS_Store
+.build/
+/ingest/bin/
+*.sqlite-shm
+*.sqlite-wal
