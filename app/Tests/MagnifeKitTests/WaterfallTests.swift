@@ -160,6 +160,37 @@ struct WaterfallTests {
         #expect(big.visibleRows(collapsed: big.defaultCollapsed()).count == 259)
     }
 
+    @Test("a trace that grows past 500 spans while open collapses like one that opened that big")
+    func growsPastLimit() {
+        let spans = Self.huge(30_000)
+        let small = Waterfall(spans: Array(spans.prefix(40)))
+        #expect(small.autoCollapsed(after: nil).isEmpty)
+        // A span people collapsed while the trace was small stays collapsed.
+        let kept = Set(small.parentSpanIDs.prefix(1))
+        let big = Waterfall(spans: spans)
+        let added = big.autoCollapsed(after: small)
+        #expect(added == big.defaultCollapsed())
+        let collapsed = big.collapsed(keeping: kept, adding: added)
+        #expect(collapsed.isSuperset(of: kept))
+        #expect(big.visibleRows(collapsed: collapsed).count <= Waterfall.autoCollapseLimit)
+    }
+
+    @Test("above 500 spans, a rebuild collapses only spans that became parents since")
+    func growsAboveLimit() {
+        let spans = Self.huge(30_000)
+        let before = Waterfall(spans: Array(spans.prefix(5_000)))
+        let after = Waterfall(spans: spans)
+        let added = after.autoCollapsed(after: before)
+        #expect(!added.isEmpty)
+        #expect(added.isDisjoint(with: before.parentSpanIDs))
+        #expect(added.isSubset(of: after.defaultCollapsed()))
+        // People expanded everything: the old parents stay open, new deep subtrees close.
+        let collapsed = after.collapsed(keeping: [], adding: added)
+        #expect(after.visibleRows(collapsed: collapsed).count < after.count)
+        // A span that lost its children (it never does in OTLP, but a resent trace could) drops out.
+        #expect(Waterfall(spans: Self.orders).collapsed(keeping: ["auth", "charge"], adding: []) == ["charge"])
+    }
+
     @Test("a root with more than 500 children still shows them all")
     func wideRoot() {
         let spans = [Self.span("r", start: 0, duration: 1_000)]

@@ -22,7 +22,7 @@ struct WaterfallOutline: NSViewRepresentable {
         outline.onCopy = { [model] in model.copySpanID() }
         let name = NSTableColumn(identifier: .spanName)
         name.title = "Span"
-        // Narrow at first: the bar column then grows to fill the column.
+        // Narrow at first: the scroll view gives it its share once it has a width.
         name.width = 200
         name.minWidth = 120
         let bars = NSTableColumn(identifier: .spanBar)
@@ -50,7 +50,8 @@ struct WaterfallOutline: NSViewRepresentable {
         coordinator.outline = outline
         model.waterfallOutline = outline
 
-        let scroll = NSScrollView()
+        let scroll = WaterfallScrollView()
+        scroll.onTile = { [weak coordinator] in coordinator?.fitColumns() }
         scroll.documentView = outline
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
@@ -74,27 +75,20 @@ extension NSUserInterfaceItemIdentifier {
     static let spanBar = NSUserInterfaceItemIdentifier("span-bar")
 }
 
-/// ⌘C on a waterfall row copies its span ID (docs/ux.md, Edit menu).
-final class WaterfallOutlineView: NSOutlineView {
-    var onCopy: (() -> Void)?
-
-    @objc func copy(_ sender: Any?) {
-        onCopy?()
-    }
-}
-
-/// NSOutlineView needs objects for items; one per node, made per tree.
-final class SpanItem: NSObject {
-    let index: Int
-    init(_ index: Int) { self.index = index }
-}
-
 final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
-    private let model: AppModel
+    let model: AppModel
     weak var outline: NSOutlineView?
-    private var waterfall = Waterfall()
+    private(set) var waterfall = Waterfall()
     private var items: [SpanItem] = []
+    private var itemsByID: [String: SpanItem] = [:]
     private var generation = -1
+    /// The span last selected from the model: the outline scrolls only when
+    /// it changes, never because a rebuild moved its row.
+    private var lastSelected: String?
+    /// The Span column's share of the width (S-005: name and service need
+    /// room more than the bars do); a drag of its divider changes it.
+    private var nameShare: CGFloat = 0.55
+    private var isFitting = false
     /// The collapsed spans the outline shows.
     private var collapsed: Set<String> = []
     private var colors = ServiceColors()
@@ -113,14 +107,21 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
             self.waterfall = waterfall
             self.collapsed = collapsed
             self.colors = colors
-            items = waterfall.nodes.indices.map(SpanItem.init)
+            var reused: [String: SpanItem] = [:]
+            items = waterfall.nodes.enumerated().map { index, node in
+                let item = itemsByID[node.span.spanID] ?? SpanItem(index)
+                item.index = index
+                reused[node.span.spanID] = item
+                return item
+            }
+            itemsByID = reused
             if let header = outline.tableColumns.last?.headerCell as? TimelineHeaderCell {
                 header.durationNs = waterfall.durationNs
                 outline.headerView?.needsDisplay = true
             }
             outline.reloadData()
             expandOpenSpans(outline)
-            outline.sizeLastColumnToFit()
+            fitColumns()
             model.waterfallShown(generation: generation)
         } else if collapsed != self.collapsed {
             self.collapsed = collapsed
@@ -163,9 +164,35 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
             let id = waterfall.nodes[shown].span.spanID
             Task { @MainActor [model] in model.selectedSpanID = id }
         }
+        let moved = spanID != lastSelected
+        lastSelected = spanID
         guard row >= 0, row != outline.selectedRow else { return }
         outline.selectRowIndexes([row], byExtendingSelection: false)
-        outline.scrollRowToVisible(row)
+        // A rebuild moved the row under a list people may be scrolling: leave the view alone.
+        if moved { outline.scrollRowToVisible(row) }
+    }
+
+    /// The Span column takes its share of the width, the bars the rest.
+    func fitColumns() {
+        guard !isFitting, let outline, outline.tableColumns.count == 2 else { return }
+        isFitting = true
+        defer { isFitting = false }
+        let name = outline.tableColumns[0], bars = outline.tableColumns[1]
+        // The bars fill the width first, so the two columns add up to all of it.
+        outline.sizeLastColumnToFit()
+        let total = name.width + bars.width
+        let wanted = min(max(name.minWidth, (total * nameShare).rounded()), max(name.minWidth, total - bars.minWidth))
+        if abs(name.width - wanted) >= 1 { name.width = wanted }
+        outline.sizeLastColumnToFit()
+    }
+
+    /// A drag of the column divider sets the share the Span column keeps.
+    func outlineViewColumnDidResize(_ notification: Notification) {
+        guard !isFitting, !isApplying, let outline, outline.inLiveResize == false,
+              let column = notification.userInfo?["NSTableColumn"] as? NSTableColumn, column.identifier == .spanName,
+              let bars = outline.tableColumns.last else { return }
+        let total = column.width + bars.width
+        if total > 0 { nameShare = min(max(column.width / total, 0.2), 0.8) }
     }
 
     /// Rows show "N spans" while collapsed; refresh the ones on screen.
@@ -251,32 +278,4 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
             }
         }
     }
-
-    // MARK: Context menu
-
-    func contextMenu() -> NSMenu {
-        let menu = NSMenu()
-        for (title, action) in [("Copy Span ID", #selector(copySpanID)), ("", nil),
-                                ("Expand All Spans", #selector(expandAll)), ("Collapse All Spans", #selector(collapseAll))] {
-            guard let action else {
-                menu.addItem(.separator())
-                continue
-            }
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-            item.target = self
-            menu.addItem(item)
-        }
-        return menu
-    }
-
-    /// The row that was right-clicked, else the selected one.
-    @objc private func copySpanID() {
-        guard let outline else { return }
-        let row = outline.clickedRow >= 0 ? outline.clickedRow : outline.selectedRow
-        guard row >= 0, let item = outline.item(atRow: row) as? SpanItem else { return }
-        model.copySpanID(waterfall.nodes[item.index].span.spanID)
-    }
-
-    @objc private func expandAll() { model.expandAllSpans() }
-    @objc private func collapseAll() { model.collapseAllSpans() }
 }

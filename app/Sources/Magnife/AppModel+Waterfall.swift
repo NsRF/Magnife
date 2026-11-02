@@ -8,6 +8,7 @@ extension AppModel {
     /// collapse deep subtrees above 500 spans, select the root span.
     func openSelectedTrace() {
         waterfallTask?.cancel()
+        isOpeningTrace = false
         waterfall = Waterfall()
         waterfallGeneration += 1
         MenuState.shared.update(hasWaterfall: false)
@@ -20,38 +21,53 @@ extension AppModel {
         openTrace = traces.first { $0.id == id }
         waterfallRequestedAt = .now
         lastWaterfallOpen = nil
+        startOpening(id, reader: reader)
+    }
+
+    /// Reads the trace that opens. A failed read (a busy or failing disk)
+    /// leaves the waterfall empty, and the next batch's refresh tries again.
+    private func startOpening(_ id: String, reader: TelemetryReader) {
+        isOpeningTrace = true
         waterfallTask = Task { [weak self] in
-            guard let (trace, tree) = try? await Self.readWaterfall(reader, traceID: id) else { return }
+            let result = try? await Self.readWaterfall(reader, traceID: id, after: nil)
             guard let self, !Task.isCancelled, self.selectedTraceID == id else { return }
-            self.show(tree, of: trace, opening: true)
+            self.isOpeningTrace = false
+            guard let result else { return }
+            self.show(result.tree, of: result.trace, collapsing: result.collapsed, opening: true)
         }
     }
 
     /// After a batch: rebuild the waterfall when the open trace changed, so
     /// late spans join under their parent. Collapsed spans and the
-    /// selection stay as they were.
+    /// selection stay as they were; spans that became parents collapse as
+    /// they would have if the trace had opened that big.
     func refreshOpenTrace(_ reader: TelemetryReader) async throws {
-        // While a trace opens, its own read is the fresh one.
-        guard let id = selectedTraceID, !waterfall.isEmpty else { return }
+        guard let id = selectedTraceID else { return }
+        guard !waterfall.isEmpty else {
+            // While a trace opens, its own read is the fresh one; after a failed one, read again.
+            if !isOpeningTrace { startOpening(id, reader: reader) }
+            return
+        }
         guard let trace = try await reader.trace(id: id) else { return }
         guard selectedTraceID == id else { return }
         guard trace.updatedSeq != openTrace?.updatedSeq || trace.spanCount != waterfall.count else {
             if openTrace != trace { openTrace = trace }
             return
         }
-        let (fresh, tree) = try await Self.readWaterfall(reader, traceID: id)
+        let previous = waterfall
+        let result = try await Self.readWaterfall(reader, traceID: id, after: previous)
         guard selectedTraceID == id else { return }
-        show(tree, of: fresh ?? trace, opening: false)
+        show(result.tree, of: result.trace ?? trace, collapsing: result.collapsed, opening: false)
     }
 
-    private func show(_ tree: Waterfall, of trace: TraceSummary?, opening: Bool) {
+    /// `collapsing`: the spans `Waterfall.autoCollapsed` closes, worked out off the main actor.
+    private func show(_ tree: Waterfall, of trace: TraceSummary?, collapsing added: Set<String>, opening: Bool) {
         if let trace { openTrace = trace }
         if opening {
-            collapsedSpans = tree.defaultCollapsed()
+            collapsedSpans = added
             selectedSpanID = tree.rootSpanID
         } else {
-            // Spans that stopped having children cannot stay collapsed.
-            collapsedSpans = collapsedSpans.intersection(tree.parentSpanIDs)
+            collapsedSpans = tree.collapsed(keeping: collapsedSpans, adding: added)
             if selectedSpanID.flatMap(tree.index(of:)) == nil { selectedSpanID = tree.rootSpanID }
             // A resent span replaces the stored row: read the selected one again.
             loadSpanDetail()
@@ -61,12 +77,14 @@ extension AppModel {
         MenuState.shared.update(hasWaterfall: !tree.isEmpty)
     }
 
+    /// The trace's row, its tree, and the spans to collapse in it, off the main actor.
     @concurrent
-    nonisolated private static func readWaterfall(_ reader: TelemetryReader,
-                                                  traceID: String) async throws -> (TraceSummary?, Waterfall) {
+    nonisolated private static func readWaterfall(_ reader: TelemetryReader, traceID: String, after previous: Waterfall?)
+        async throws -> (trace: TraceSummary?, tree: Waterfall, collapsed: Set<String>) {
         let trace = try await reader.trace(id: traceID)
         let spans = try await reader.waterfallSpans(traceID: traceID)
-        return (trace, await Waterfall.build(spans))
+        let tree = await Waterfall.build(spans)
+        return (trace, tree, tree.autoCollapsed(after: previous))
     }
 
     /// The outline shows `generation`: the self-test's open time ends here.

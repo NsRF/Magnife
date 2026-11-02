@@ -72,6 +72,9 @@ public struct Waterfall: Sendable {
     public private(set) var startNs: Int64 = 0
     public private(set) var endNs: Int64 = 0
     public private(set) var maxDepth = 0
+    /// Every span id that has children: Collapse All Spans, and the spans a
+    /// collapsed set can hold.
+    public private(set) var parentSpanIDs: Set<String> = []
     private var indexByID: [String: Int] = [:]
 
     public var count: Int { nodes.count }
@@ -120,6 +123,7 @@ public struct Waterfall: Sendable {
         }
         roots = rootCandidates.sorted()
         maxDepth = nodes.map(\.depth).max() ?? 0
+        parentSpanIDs = Set(nodes.lazy.filter { !$0.children.isEmpty }.map(\.span.spanID))
     }
 
     /// Sets depths under `root` and counts descendants, without recursion.
@@ -188,6 +192,25 @@ public struct Waterfall: Sendable {
         return Set(nodes.filter { $0.depth >= openDepth && !$0.children.isEmpty }.map(\.span.spanID))
     }
 
+    /// The spans to collapse when this tree replaces `previous`, the same
+    /// trace before more spans arrived, so a trace that grows past `limit`
+    /// while it is open reads like one that opened that big (design decision
+    /// 7). Crossing the limit, or with no previous tree (a trace that opens):
+    /// `defaultCollapsed`. Already above it: only spans that became parents
+    /// since, where `defaultCollapsed` would collapse them; spans that were
+    /// parents before keep the state people gave them.
+    public func autoCollapsed(after previous: Waterfall?, limit: Int = Waterfall.autoCollapseLimit) -> Set<String> {
+        let collapsed = defaultCollapsed(limit: limit)
+        guard let previous, previous.count > limit, !collapsed.isEmpty else { return collapsed }
+        return collapsed.filter { !previous.parentSpanIDs.contains($0) }
+    }
+
+    /// The collapsed spans after a rebuild: spans that stopped having
+    /// children cannot stay collapsed, and `added` (from `autoCollapsed`) joins.
+    public func collapsed(keeping collapsed: Set<String>, adding added: Set<String>) -> Set<String> {
+        collapsed.intersection(parentSpanIDs).union(added)
+    }
+
     /// The rows on screen, in order, with `collapsed` subtrees closed.
     public func visibleRows(collapsed: Set<String>) -> [Int] {
         var rows: [Int] = []
@@ -199,10 +222,6 @@ public struct Waterfall: Sendable {
         return rows
     }
 
-    /// Every span id that has children: Collapse All Spans.
-    public var parentSpanIDs: Set<String> {
-        Set(nodes.filter { !$0.children.isEmpty }.map(\.span.spanID))
-    }
 
     /// The service shown next to the name: only where it differs from the parent's.
     public func shownService(of index: Int) -> String? {

@@ -58,3 +58,24 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: the helper's SQLite deleted the `-wal` on a clean exit, so the read-only app could not open the file until the helper had; meanwhile `.opening` / `.waiting` counted as "no traces", and `storeState` turned `.ready` before the first read.
 - Fix: the helper keeps its `-wal` and `-shm` (persistent WAL); the app shows the empty state only once it knows (`knowsStoredTraces`: after the first read, or when no file exists) and sets `.ready` after the first read.
 - Rule: an empty state means "there is nothing", never "not read yet"; until the first read the list stays blank.
+
+## An open trace that grew past 500 spans never collapsed, and every batch scrolled the waterfall back (S-005, M1 review)
+
+- Symptom: a trace selected while `--huge-trace 30000` was still arriving ended with all 30,000 rows expanded; on every refresh the waterfall jumped back to the selected span, so it could not be scrolled while spans arrived.
+- Cause: `defaultCollapsed()` ran only when a trace opened; a rebuild only intersected the old collapsed set, so every new parent started expanded. Each rebuild made new `SpanItem`s and reloaded the outline, whose selected row index then pointed at another row, and `select()` scrolled whenever the row differed.
+- Fix: `Waterfall.autoCollapsed(after:)` (worked out off the main actor with the tree) collapses as if the trace had opened that big when it crosses 500 spans, and above 500 collapses only spans that became parents since. Items are kept per span id across rebuilds, and the outline scrolls only when the selected span id changes, never because a rebuild moved its row. Unit tests `growsPastLimit`, `growsAboveLimit`; self-test `checkGrowingWaterfall` (601 then 603 spans over OTLP/HTTP, scroll offset and selection kept).
+- Rule: a rule that applies "when it opens" also applies when the data grows into it while open; rebuilds never move the user's view.
+
+## Span names and services were cut at the default window size (S-005, M1 review)
+
+- Symptom: the waterfall's Span column was a fixed 200 pt, so names read "POST /pa…", "SELECT Or…", and a span's service (checkout-api under web) never showed, while the bars took three quarters of the column.
+- Cause: the column kept its initial width and only the bar column followed the window; the service gave way to the name entirely below 40 pt. The review's snapshot also came from a saved split layout (the detail column at its 420 pt minimum, from an earlier run), because test runs read and wrote the app's real split autosave.
+- Fix: the Span column takes 55% of the waterfall's width on every tile (a drag of its divider sets a new share); when name and service do not both fit, the service keeps 35% of the text's room (at least 40 pt) and both truncate with "…". `snap.sh` and `selftest.sh` pass an empty split-frames default, so test runs start at docs/ux.md's ideal widths. Self-test "a span from another service than its parent's shows its service".
+- Rule: size columns that hold names by share of the width, and give tests a known window layout instead of whatever the last run saved.
+
+## A trace whose first read failed stayed empty (S-005, M1 review)
+
+- Symptom: after a failed read at open time (a busy or failing disk), the header showed over an empty outline until another trace was selected.
+- Cause: the open read swallowed the error, and `refreshOpenTrace` returned early whenever the waterfall was empty.
+- Fix: `isOpeningTrace` marks the read in flight; a refresh that finds a selected trace with an empty waterfall and no read in flight reads it again. Self-test "a trace whose first read failed opens on the next refresh".
+- Rule: an early return for "still loading" must tell "loading" from "failed".

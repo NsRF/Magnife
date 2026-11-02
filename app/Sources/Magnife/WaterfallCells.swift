@@ -14,7 +14,17 @@ final class SpanNameCell: NSTableCellView {
     private let duration = NSTextField(labelWithString: "")
     /// Narrower than this, a service name would show one or two letters.
     private static let serviceMinimum: CGFloat = 40
+    /// The share of the text's room the service keeps when name and service
+    /// do not both fit, so both show, each cut with "…" (S-005 Words).
+    private static let serviceShare: CGFloat = 0.35
     private let spacer = NSView()
+    private lazy var serviceWidth: NSLayoutConstraint = {
+        let constraint = service.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
+        // Above the name's compression resistance (251), below required.
+        constraint.priority = .init(252)
+        constraint.isActive = true
+        return constraint
+    }()
 
     init() {
         super.init(frame: .zero)
@@ -61,10 +71,37 @@ final class SpanNameCell: NSTableCellView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override func layout() {
+        reserveServiceRoom()
         super.layout()
         let needed = min(Self.serviceMinimum, service.intrinsicContentSize.width)
         service.alphaValue = service.frame.width + 0.5 >= needed ? 1 : 0
     }
+
+    /// The room the name and service share: the cell less the dot, the
+    /// octagon, the duration, the margins and the gaps between them.
+    private var textRoom: CGFloat {
+        let fixed = [dot, octagon, duration].filter { !$0.isHidden }.map(\.intrinsicContentSize.width).reduce(0, +)
+        let gaps = CGFloat([dot, octagon, name, service, spacer, duration].filter { !$0.isHidden }.count - 1) * Space.xs
+        return bounds.width - Space.xs - Space.sm - fixed - gaps
+    }
+
+    /// A service that would not fit next to the whole name keeps a share of
+    /// the room, at least a few letters' worth; in a cell too narrow for
+    /// both, the name takes it all.
+    private func reserveServiceRoom() {
+        guard !service.isHidden else {
+            if serviceWidth.constant != 0 { serviceWidth.constant = 0 }
+            return
+        }
+        let room = textRoom
+        let full = service.intrinsicContentSize.width
+        let share = (room * Self.serviceShare).rounded(.down)
+        let wanted = share >= Self.serviceMinimum ? min(full, share) : 0
+        if serviceWidth.constant != wanted { serviceWidth.constant = wanted }
+    }
+
+    /// The service name shows, at least partly (self-test).
+    var showsService: Bool { !service.isHidden && service.alphaValue > 0 && service.frame.width > 0 }
 
     /// The octagon shows (self-test).
     var showsError: Bool { !octagon.isHidden }
@@ -79,8 +116,8 @@ final class SpanNameCell: NSTableCellView {
         service.isHidden = shown == nil
         // A span whose parent never arrived says so (S-005 States).
         let named = shown.map { "\(text) · \($0)" } ?? text
-        let help = isOrphan ? Waterfall.orphanHelp
-            : hiddenCount == 0 ? named : "\(named) (\(TraceList.spansText(hiddenCount)))"
+        var help = hiddenCount == 0 ? named : "\(named) (\(TraceList.spansText(hiddenCount)))"
+        if isOrphan { help += " · \(Waterfall.orphanHelp)" }
         toolTip = help
         name.toolTip = help
         setAccessibilityLabel(hiddenCount == 0 ? label : "\(label), \(TraceList.spansText(hiddenCount))")

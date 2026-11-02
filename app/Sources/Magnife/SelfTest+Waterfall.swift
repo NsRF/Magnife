@@ -12,6 +12,8 @@ extension SelfTest {
         await model.reload()
         await checkSeedWaterfall(model)
         await checkLateSpans(model)
+        await checkGrowingWaterfall(model)
+        await checkFailedOpenRetries(model)
         await checkHugeWaterfalls(model)
         model.selectedTraceID = nil
     }
@@ -55,6 +57,14 @@ extension SelfTest {
         check("bars are placed and sized by start time and duration", barsPlaced)
         check("Error spans carry the octagon, and VoiceOver reads \"Error\"", errorsMarked
               && waterfall.nodes.contains { $0.span.status == .error })
+        // checkout-api's POST /payments under web's client span: its service shows next to the name.
+        let paymentsRow = (0..<outline.numberOfRows).first { row in
+            (outline.item(atRow: row) as? SpanItem).map { waterfall.nodes[$0.index].span.name == "POST /payments" } == true
+        }
+        let payments = paymentsRow.flatMap { outline.view(atColumn: 0, row: $0, makeIfNecessary: true) as? SpanNameCell }
+        let nameColumn = outline.tableColumns.first?.width ?? 0
+        check("a span from another service than its parent's shows its service (Span column \(Int(nameColumn)) pt)",
+              payments?.showsService == true && nameColumn >= outline.bounds.width * 0.5)
 
         // Collapse the subtree that holds the selection, as a click on the triangle does.
         let leafRow = (0..<outline.numberOfRows).last { row in
@@ -148,7 +158,8 @@ extension SelfTest {
         let orphanRow = rows.firstIndex(of: "orphan-call") ?? -1
         let orphan = orphanRow < 0 ? nil : outline.view(atColumn: 0, row: orphanRow, makeIfNecessary: true) as? SpanNameCell
         check("a span whose parent never arrives sits at the root with \"Parent span not received\"",
-              outline.level(forRow: max(orphanRow, 0)) == 0 && orphan?.toolTip == Waterfall.orphanHelp
+              outline.level(forRow: max(orphanRow, 0)) == 0 && orphan?.toolTip?.hasPrefix("orphan-call") == true
+                && orphan?.toolTip?.hasSuffix(" · \(Waterfall.orphanHelp)") == true
                 && model.openTrace?.spanCount == 4,
               orphan?.toolTip ?? "nil")
     }
@@ -230,6 +241,8 @@ extension SelfTest {
     /// 03-trace-detail-30000-light.png and -dark.png in /tmp/Magnife-shots: the
     /// auto-collapsed 30,000-span trace (the snapshot store has no huge trace).
     private static func captureLarge(_ model: AppModel) async {
+        // APP_HELPER=none sends no batch events: read the list, so the open trace shows in it.
+        await model.reload()
         try? FileManager.default.createDirectory(atPath: "/tmp/Magnife-shots", withIntermediateDirectories: true)
         let appearance = NSApp.appearance
         for mode in ["light", "dark"] {

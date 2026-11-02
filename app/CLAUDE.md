@@ -43,8 +43,11 @@ this app starts the helper and reads its database. No server, no accounts.
   columns it draws; `Waterfall` (MagnifeKit) builds the tree off the main
   actor, without recursion; `AppModel+Waterfall.swift` re-reads the open trace
   only when its `updated_seq` changes and keeps `collapsedSpans` and
-  `selectedSpanID` across rebuilds. The rows are an NSOutlineView
-  (`WaterfallOutline.swift`, cells in `WaterfallCells.swift`). Never pass a
+  `selectedSpanID` across rebuilds (spans that become parents collapse as
+  `Waterfall.autoCollapsed(after:)` says). The rows are an NSOutlineView
+  (`WaterfallOutline.swift`, cells in `WaterfallCells.swift`) with one
+  `SpanItem` per span id across rebuilds; it scrolls only when the selected
+  span changes, and the Span column keeps 55% of the width. Never pass a
   row of -1 to its view calls: `view(atColumn:row:makeIfNecessary:)` hangs.
 - The span detail (S-006): `TelemetryReader.spanDetail` reads the selected
   span and its resource in one read; `SpanDetail` (MagnifeKit) orders the
@@ -120,6 +123,8 @@ this app starts the helper and reads its database. No server, no accounts.
   cut with "Show All", `04-span-detail-copied` Copy Stack Trace's "Copied".
   `APP_SNAPSHOT_PAGES=02-trace-list,09-settings tools/snap.sh` limits the pages.
   A story that adds a screen fills in its page's `prepare` in `Snapshot.swift`.
+- Both scripts pass an empty "NSSplitView Subview Frames …" default, so the
+  window's columns start at their ideal widths, not where the last run left them.
 - Never test against the real database in `~/Library/Application Support/Magnife/`.
 - Then check the grid: `tools/grid-lint.sh` and `swift tools/check-layout.swift /tmp/Magnife-shots/*-layout.json`. Both print PASS.
 - A change is done when the build has no errors, the grid checks pass, and you looked at the light and dark snapshots.

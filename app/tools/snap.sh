@@ -19,4 +19,6 @@ seed_store $store || exit 1
 # 01-empty-state reads the schema-only file next to the store (SnapshotPage.emptyStore).
 seed_store ${store:r}.empty.sqlite --empty || exit 1
 rm -rf $shots
-APP_STORE=$store APP_HELPER=none APP_SNAPSHOT=$shots $app
+# The empty split-frames default makes the window's columns start at their
+# ideal widths (docs/ux.md), not where the last run left them.
+APP_STORE=$store APP_HELPER=none APP_SNAPSHOT=$shots $app -"NSSplitView Subview Frames main-AppWindow-1, SidebarNavigationSplitView" "()"

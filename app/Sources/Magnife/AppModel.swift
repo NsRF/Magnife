@@ -108,6 +108,8 @@ final class AppModel {
         }
     }
     @ObservationIgnored var waterfallTask: Task<Void, Never>?
+    /// True while the selected trace's first read is in flight.
+    @ObservationIgnored var isOpeningTrace = false
     /// The generation the outline shows, and when a trace was selected (self-test timing).
     @ObservationIgnored var shownWaterfallGeneration = 0
     @ObservationIgnored var waterfallRequestedAt: ContinuousClock.Instant?
