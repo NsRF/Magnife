@@ -263,6 +263,14 @@ enum TelemetrySQL {
 
     static let lastSeq = "SELECT value FROM meta WHERE key = 'last_seq'"
 
+    /// Recent Errors (S-026): the newest traces with an error, on the index
+    /// traces_by_status (status, start_ns DESC).
+    static let recentErrorTraces = """
+        SELECT \(traceColumns) FROM traces WHERE status = 2 ORDER BY start_ns DESC, trace_id DESC LIMIT ?
+        """
+    /// Traces with an error that a batch after ?1 changed: the menu bar icon's count.
+    static let errorTracesChangedAfter = "SELECT COUNT(*) FROM traces WHERE status = 2 AND updated_seq > ?"
+
     /// Keys last seen at or after ?1 (the retention's cutoff, so pruned keys
     /// leave the suggestions; the helper keeps every key it ever saw).
     static func attributeKeys(source: Bool) -> String {

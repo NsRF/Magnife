@@ -19,6 +19,8 @@ struct MagnifeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     /// SwiftUI commands do not observe AppModel; this rebuilds them.
     @ObservedObject private var menu = MenuState.shared
+    /// Settings > General, "Show Magnife in the menu bar" (S-026, on by default).
+    @AppStorage(MenuBarSettings.showsKey, store: AppDefaults.shared) private var showsMenuBarExtra = true
 
     var body: some Scene {
         // A WindowGroup, not a Window: closing the last window keeps Magnife
@@ -134,6 +136,20 @@ struct MagnifeApp: App {
                 .themed()
         }
         .windowResizability(.contentSize)
+
+        // Recent Errors and the red icon (S-026); a native menu (platform decision 8).
+        // Only Settings changes it. SwiftUI writes back what the status item
+        // reports; written into the setting, that and the scene's update fed
+        // each other without end in snapshot runs (FIXLOG), so it is only
+        // kept for the self-test. Read here, so the scene follows the setting.
+        let showsMenuBarExtra = showsMenuBarExtra
+        MenuBarExtra(isInserted: Binding(get: { showsMenuBarExtra },
+                                         set: { MenuBarTracking.statusItemVisible = $0 })) {
+            MenuBarMenu(model: delegate.model)
+        } label: {
+            MenuBarLabel(model: delegate.model)
+        }
+        .menuBarExtraStyle(.menu)
     }
 }
 
@@ -143,17 +159,7 @@ struct MainWindowCommands: Commands {
 
     var body: some Commands {
         CommandGroup(before: .windowArrangement) {
-            Button("Magnife") {
-                // The WindowGroup's window ids read "main-AppWindow-1"; opening another would make a second one.
-                if let window = NSApp.windows.first(where: {
-                    ($0.identifier?.rawValue.hasPrefix("main") ?? false) && ($0.isVisible || $0.isMiniaturized)
-                }) {
-                    if window.isMiniaturized { window.deminiaturize(nil) }
-                    window.makeKeyAndOrderFront(nil)
-                } else {
-                    openWindow(id: "main")
-                }
-            }
+            Button("Magnife") { MainWindow.bringForward(openWindow) }
             .keyboardShortcut("0", modifiers: .command)
             Divider()
         }
@@ -176,6 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
         SidebarTabKeys.install(model: model)
+        MenuBarTracking.install(model: model)
         model.start()
     }
 

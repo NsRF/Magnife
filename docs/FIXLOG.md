@@ -240,3 +240,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: one shared `layout.backup` key: the second run took the first run's backup for a crashed run's, restored and replaced it, and whichever run ended first removed the backup the other needed; APP_STORE runs did not protect the layout at all.
 - Fix: a backup per process id, a live run's backup copied by a run that starts during it, dead runs' backups restored at launch, and APP_STORE runs included.
 - Rule: anything a test run sets aside in a shared place is keyed by the run, and never assumes it is the only run.
+
+## The menu bar extra kept SwiftUI updating the scene at 100% CPU (S-026)
+
+- Symptom: with the first menu bar extra the app sat at 100% CPU with no window drawn and snapshot mode never started; `sample` showed `AppGraph.graphDidChange` and `makeMainMenu` in a loop.
+- Cause: two feedback loops between the status item and the scene. (1) `.accessibilityLabel` on the label's `Image(nsImage:)` made every scene update touch the status button again. (2) In snapshot runs, `MenuBarExtra(isInserted:)` bound to `@AppStorage` was written back by SwiftUI from the status item's KVO state on each update, and that write updated the scene again.
+- Fix: the label is a cached, prerendered bitmap per count (`MenuBarGlyph.image(count:)`) whose `accessibilityDescription` carries the VoiceOver words; `isInserted` reads the setting in the scene's body (so the scene follows it) and never writes SwiftUI's reports back into it (only the Settings toggle changes it).
+- Rule: a `MenuBarExtra` label is a plain value that only changes with the model (same NSImage object for the same state, no view modifiers on it), and a binding passed to the scene is never written back by the system into state the scene reads.

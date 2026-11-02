@@ -169,6 +169,20 @@ this app starts the helper and reads its database. No server, no accounts.
   row's orange icons are `SpanNameCell.marks`. N+1 groups statements by
   `SQLNormalizer.normalize` (MagnifeKit, table-tested in `SQLNormalizerTests`). `APP_SELFTEST_ONLY=findings`
   runs the checks and the cost INFO lines.
+- Menu bar extra (S-026): `MenuBarExtra` `.menu` style in `App.swift`, views
+  in `MenuBarViews.swift`. `RecentErrors` (MagnifeKit, unit-tested) holds the
+  five newest traces with an error and the count since the menu was last
+  opened (traces with status Error and `updated_seq` after the mark), read in
+  every refresh, paused too (`TelemetryReader.recentErrors`,
+  `AppModel+RecentErrors.swift`). The label is `MenuBarGlyph.image(count:)`,
+  one cached bitmap per count with its VoiceOver words as the image's
+  description; never add view modifiers to the label or a fresh NSImage per
+  update, and never let `isInserted` write back (FIXLOG: both looped the scene
+  at 100% CPU). `MenuBarTracking` sees the menu open (`NSMenu`
+  didBeginTracking, then the "Recent Errors" header once SwiftUI filled it).
+  `MenuBarProbe` clicks the real status item for the self-test
+  (`APP_SELFTEST_ONLY=menu-bar`) and snapshots (`08-menu-bar`, `-icon`,
+  `-empty`, region captures with the glass).
 - Test runs and the user's defaults: AppKit saves window frames and column
   widths in the app's domain by itself; snapshot and self-test runs copy
   those keys aside at launch (`AppDefaults.protectLayout`, in

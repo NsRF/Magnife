@@ -65,5 +65,19 @@ struct GeneralSettings: View {
             LabeledContent("Status", value: model.receiver.text)
         }
         RetentionSettings()
+        MenuBarSettings()
+    }
+}
+
+/// Settings > General, "Show Magnife in the menu bar" (S-026): the menu
+/// bar extra shows while it is on, which it is by default.
+struct MenuBarSettings: View {
+    static let showsKey = "menuBar.showsExtra"
+    @AppStorage(showsKey, store: AppDefaults.shared) private var shows = true
+
+    var body: some View {
+        Section {
+            Toggle("Show Magnife in the menu bar", isOn: $shows)
+        }
     }
 }

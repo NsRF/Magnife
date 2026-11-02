@@ -95,6 +95,7 @@ enum SnapshotPage: String, CaseIterable {
 /// 07-filter-bar (Error on) and -no-matches (OK on, a hidden trace still in the detail column) (S-018),
 /// 02-trace-list-saved-filter, -edited and -rename, 07-filter-bar-save and -save-duplicate (S-021),
 /// 03-trace-detail-waterfall-focus and -span-focus (S-022), 03-trace-detail-slow-sql and 02-trace-list-findings-wide (S-023),
+/// 08-menu-bar (the menu bar extra's menu), -icon and -empty (S-026),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab,
 /// and 09-settings-general-delete (S-016's dialog), then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
@@ -132,7 +133,10 @@ enum Snapshot {
                 for page in pages where page != .settings {
                     await page.prepare(model)
                     try? await Task.sleep(for: .seconds(0.8))
-                    capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
+                    // 08-menu-bar is the menu bar extra's own menu, not the window.
+                    if page == .menuBar { await captureMenuBar(model, dir: dir, mode: mode) } else {
+                        capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
+                    }
                     if page == .emptyState { await captureCopied(model, dir: dir, mode: mode) }
                     if page == .traceDetail {
                         await captureTraceLogs(model, dir: dir, mode: mode)
@@ -171,7 +175,11 @@ enum Snapshot {
                     for tab in SettingsTab.allCases {
                         model.settingsTab = tab
                         try? await Task.sleep(for: .seconds(0.8))
-                        let settings = NSApp.windows.first { $0.isVisible && $0 !== main && !$0.isSheet }
+                        // Not the menu bar extra's status item window (S-026), which is visible too.
+                        let settings = NSApp.windows.first {
+                            $0.isVisible && $0 !== main && !$0.isSheet && $0.canBecomeKey
+                                && !String(describing: type(of: $0)).contains("StatusBar")
+                        }
                         capture(to: "\(dir)/\(SnapshotPage.settings.rawValue)-\(tab.rawValue)-\(mode).png", window: settings)
                         if tab == .general, let settings { await captureRetentionDialog(model, settings: settings, dir: dir, mode: mode) }
                     }

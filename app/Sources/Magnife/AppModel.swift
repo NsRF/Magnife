@@ -290,6 +290,16 @@ final class AppModel {
     /// The span Open Trace selects once that trace's waterfall is built
     /// (nil span: the root, which opening selects anyway).
     @ObservationIgnored var pendingSpan: (traceID: String, spanID: String?)?
+    /// The menu bar extra's Recent Errors and the icon's count (S-026). Not
+    /// observed: its seqs change with every batch; the menu and the icon
+    /// read the two copies below, set only when what they show changes.
+    @ObservationIgnored var recentErrors = RecentErrors() {
+        didSet { publishRecentErrors() }
+    }
+    var recentErrorTraces: [TraceSummary] = []
+    var newErrorCount = 0
+    /// The items' times count from when the menu last opened (docs/ux.md, S-026).
+    var recentErrorsOpenedAt = Date()
     /// The Time column counts from this; it ticks every 15 seconds.
     private(set) var now = Date()
 
@@ -477,6 +487,7 @@ final class AppModel {
         pausedSeq = nil
         logPausedID = nil
         resetLogList()
+        recentErrors = RecentErrors()
         storeState = .opening
         do {
             reader = try await TelemetryReader.open(at: url)
@@ -526,6 +537,8 @@ final class AppModel {
             // The Logs list is read while it shows; switching to it reads it at once.
             if contentMode == .logs { try await reloadLogs(reader) }
             now = Date()
+            // The menu bar extra keeps counting while paused (docs/ux.md, S-010 States).
+            await refreshRecentErrors(reader)
             // Paused, the open waterfall holds still too (S-010).
             if !isPaused {
                 try await refreshOpenTrace(reader)

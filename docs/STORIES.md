@@ -322,7 +322,7 @@ Depends: S-004
 Acceptance:
 - [snap] The icon turns red and shows a count of failed traces since the menu was last opened (decided by the agent).
 - [snap] The menu lists the last five failed traces with service, route and time.
-Status: todo
+Status: done
 
 ### S-027 Open a failed trace from the menu bar
 As the user, I click a failed trace in the menu and land on its detail.

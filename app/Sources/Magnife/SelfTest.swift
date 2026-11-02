@@ -53,6 +53,8 @@ enum SelfTest {
                 await checkKeyboard(model)
             } else if only == "findings" {
                 await checkFindings(model)
+            } else if only == "menu-bar" {
+                await checkMenuBar(model)
             } else if only == "retention" {
                 await checkRetention(model)
             } else if only == "span-detail" {
@@ -83,6 +85,8 @@ enum SelfTest {
                 await checkReceiver()
                 checkApp()
                 await checkWindowClose()
+                // With the window closed: a Recent Errors item brings it back (S-027).
+                await checkMenuBar(model)
                 // Last: it starts a second Magnife, which takes the focus.
                 await checkLifecycle()
             }
