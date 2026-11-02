@@ -84,12 +84,17 @@ extension SelfTest {
         check("Return opens the trace: Search closes, Traces view, the trace selected and in the detail",
               failed?.route == "POST /checkout/pay" && opened && !model.showsSearch && model.contentMode == .traces
                 && model.selectedTraceID == failed?.traceID)
+        let listFocused = await waitUntil(2) { model.listScroller.tableView.map { window.firstResponder === $0 } ?? false }
+        check("and the trace list has the focus, so ↑↓ work at once", listFocused,
+              "\(String(describing: window.firstResponder))")
 
         // ⌘Return applies the query as the list's filters.
         model.showSearch()
         model.searchText = "service:checkout-api status:error"
         _ = await waitUntil(1) { model.searchResult?.text == model.searchText }
         await ensureKey(window)
+        // The field takes the focus a turn after the panel appears; ⌘Return before that reaches the list.
+        _ = await waitUntil(2) { (window.firstResponder as? NSTextView)?.delegate is NSTextField }
         pressKey(window, "\r", keyCode: 36, modifiers: .command)
         await model.reload()
         check("⌘Return applies the query: the filter bar shows it, the sidebar takes the service, the list the status",

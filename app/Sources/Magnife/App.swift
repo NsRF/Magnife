@@ -167,6 +167,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Test runs leave the user's window layout as they found it.
         AppDefaults.protectLayout()
+        // One main window: no Show Tab Bar / Show All Tabs in the View menu.
+        NSWindow.allowsAutomaticWindowTabbing = false
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

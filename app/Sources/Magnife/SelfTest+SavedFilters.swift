@@ -33,6 +33,8 @@ extension SelfTest {
         model.saveFilterName = "Checkout errors"
         model.confirmSaveFilter()
         let closed = await waitUntil(2) { window.attachedSheet == nil }
+        let listFocused = await waitUntil(2) { model.listScroller.tableView.map { window.firstResponder === $0 } ?? false }
+        check("when the sheet closes, the trace list has the focus", listFocused, "\(String(describing: window.firstResponder))")
         await model.reload()
         guard let saved = model.savedFilters.items.first else { return check("the filter is saved", false) }
         check("Save adds it under Saved Filters, selected, and the title is its name",

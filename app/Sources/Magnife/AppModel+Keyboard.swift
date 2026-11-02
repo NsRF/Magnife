@@ -43,6 +43,25 @@ extension AppModel {
         focusRequest = FocusRequest(column: column, serial: (focusRequest?.serial ?? 0) + 1)
     }
 
+    /// After Search or a sheet closes: the list takes the focus only when
+    /// nothing has it (the window itself is first responder), so a field or
+    /// column people moved to meanwhile keeps it.
+    func focusListIfNothingFocused() {
+        let table = contentMode == .traces ? listScroller.tableView : logScroller.tableView
+        guard !showsSearch, let window = table?.window, window.attachedSheet == nil,
+              window.firstResponder == nil || window.firstResponder === window else { return }
+        focus(.list)
+    }
+
+    /// A sheet's onDismiss runs while AppKit still ends the sheet: wait for it.
+    func focusListAfterSheet() {
+        Task {
+            let window = (contentMode == .traces ? listScroller.tableView : logScroller.tableView)?.window
+            for _ in 0..<50 where window?.attachedSheet != nil { try? await Task.sleep(for: .milliseconds(20)) }
+            focusListIfNothingFocused()
+        }
+    }
+
     /// A SwiftUI column takes the focus once per request, never again when it reappears.
     func takeFocusRequest(_ column: FocusColumn) -> Bool {
         guard unconsumedFocus == column else { return false }

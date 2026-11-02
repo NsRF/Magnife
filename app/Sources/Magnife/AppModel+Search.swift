@@ -121,12 +121,16 @@ extension AppModel {
     }
 
     /// Opens a result: Search closes, the Traces view shows the trace in
-    /// the detail column, selected in the list when the list shows it.
+    /// the detail column, selected in the list when the list shows it, and
+    /// the list takes the focus so ↑↓ move on from it (S-022).
     func openSearchResult(_ traceID: String) {
         closeSearch()
         showContentMode(.traces)
         if selectedTraceID != traceID { selectedTraceID = traceID }
-        Task { await revealSelectedTrace() }
+        Task {
+            await revealSelectedTrace()
+            focusListIfNothingFocused()
+        }
     }
 
     /// ⌘Return, "Apply as Filter": the query becomes the trace list's

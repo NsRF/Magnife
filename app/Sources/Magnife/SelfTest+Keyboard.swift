@@ -91,11 +91,12 @@ extension SelfTest {
         // schedule, so the shortcut itself is checked in the menu audit below.
         model.toggleFilterBar(focusField: true)
         let barShown = await waitUntil(1) { model.showsTraceFilterBar }
-        _ = await waitUntil(1) { window.firstResponder is NSTextView }
+        // Under load the field can take more than a second to appear and focus; Esc before that goes elsewhere.
+        let fieldFocused = await waitUntil(3) { window.firstResponder is NSTextView }
         press(window, "\u{1b}", keyCode: 53)
-        let barHidden = await waitUntil(1) { !model.showsTraceFilterBar }
+        let barHidden = await waitUntil(2) { !model.showsTraceFilterBar }
         check("View > Show Filter Bar (⌘F) opens the bar with its field focused, and Esc closes it",
-              barShown && barHidden, "shown \(barShown), hidden \(barHidden)")
+              barShown && fieldFocused && barHidden, "shown \(barShown), focused \(fieldFocused), hidden \(barHidden)")
         model.showsTraceFilterBar = true
         window.makeFirstResponder(outline)
         key(window, .escape)

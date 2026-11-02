@@ -26,7 +26,9 @@ struct ContentView: View {
         }
         // Search (S-017) floats over every column.
         .overlay { SearchOverlay() }
-        .sheet(isPresented: Binding(get: { model.showsSaveFilterSheet }, set: { if !$0 { model.cancelSaveFilter() } })) {
+        // Closed, the list takes the focus back, so the arrow keys work at once (S-022).
+        .sheet(isPresented: Binding(get: { model.showsSaveFilterSheet }, set: { if !$0 { model.cancelSaveFilter() } }),
+               onDismiss: { model.focusListAfterSheet() }) {
             SaveFilterSheet()
                 .environment(model)
                 .themed()

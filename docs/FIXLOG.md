@@ -184,3 +184,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: the helper keeps a row per service and per key ever seen (the contract's meaning), and the reader listed every row.
 - Fix: `servicesWithErrors` lists a service only while a span or log of it is stored; `attributeKeys(seenSinceNs:)` leaves out keys last seen before the retention's cutoff. Unit test `prunedServicesAndKeys`.
 - Rule: a list read from a "ever seen" table filters by what is still stored.
+
+## No view had the keyboard focus after Search or the Save Filter sheet (S-022, M2 end-to-end)
+
+- Symptom: after Return opened a trace from Search, or after the Save Filter sheet closed, the arrow keys did nothing until Tab was pressed; the focused element was the window itself.
+- Cause: Search's panel and the sheet held the focus; when they went away AppKit gave it back to the window, not to a column, and nothing asked for it.
+- Fix: `openSearchResult` focuses the trace list after revealing the trace, and the sheet's `onDismiss` does the same once AppKit has ended the sheet, both only when nothing else has the focus. Self-test checks for both.
+- Rule: anything that takes the focus and goes away (panel, sheet, popover) hands it to a column, or the keyboard user is stranded.
