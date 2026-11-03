@@ -65,7 +65,11 @@ this app starts the helper and reads its database. No server, no accounts.
   only logs above the last count (`LogCountMark`, dropped on `pruned`).
   `APP_SELFTEST_ONLY=load` floods the window at 5,000 spans/s for 60 s
   (`APP_LOAD_SECONDS`, `APP_LOAD_STEPS`); `APP_DEBUG_STALLS=1` prints each
-  main run loop turn over 100 ms with the app's work in it (`StallLog`).
+  main run loop turn over 100 ms with the app's work in it (`StallLog`), and
+  each real main-thread hang over 100 ms as `HANG <ms> ms` (a 5 ms
+  heartbeat, App Nap off): a long run loop turn alone is not a hang. The
+  load check fails over the acceptance's 100 ms (no WARN band); its switching
+  part is `checkBlocked` (a BLOCKED line) while S-030 is blocked on it.
   The self-test turns App Nap off (FIXLOG); `selftest.sh` fails on the
   reentrant warning.
 - The sidebar (S-009): services come with every list read
@@ -248,7 +252,9 @@ this app starts the helper and reads its database. No server, no accounts.
   suite `com.nasserfarhat.magnife.tests.run.<pid>`, removed at exit, swept
   when a run crashed). Never hard-code a /tmp path in a check: use
   `TestRun.scratch("name")`. Timing checks use `checkTiming` (the value
-  always printed; over the budget a WARN line, over twice it a FAIL).
+  always printed; over the budget a WARN line, over twice it a FAIL; a check
+  that encodes an acceptance line's number passes it as `regression`, so it
+  fails over it: launch 1 s, search 100 ms, load 100 ms).
 - Test runs and the user's defaults: AppKit saves window frames and column
   widths in the app's domain by itself; snapshot and self-test runs copy
   those keys aside at launch (`AppDefaults.protectLayout`, in

@@ -318,3 +318,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: the click waited only for the main window (about 160 ms) and selected B, but the first read ends later (300 to 370 ms) and `finishLaunch` then set `selectedTraceID` to the kept `launchSelection` without condition, which also dropped B's `pendingFailedTrace`.
 - Fix: `openFailedTrace` clears `launchSelection`; a selected trace whose read failed is opened again (`openSelectedTrace`) instead of waiting for a refresh a paused list never makes.
 - Rule: a launch-time restore only fills in what nothing chose meanwhile; anything people did first wins.
+
+## The S-030 load check could not fail its acceptance (M3 review)
+
+- Symptom: the self-test printed PASS for "no main-thread hang over 100 ms" while its own INFO line showed stalls of 158-181 ms under the flood.
+- Cause: three loosenings stacked: stalls after a view switch were moved to a separate 250 ms budget, the heartbeat's longest stall was passed as `stall > 50 ? 0 : stall` (dropped exactly when it was large), and `checkTiming` passes up to twice the budget.
+- Fix: every stall counts against 100 ms with `regression: 100` (no WARN band); the switching part prints a BLOCKED line while S-030 is blocked on it; launch and search checks fail over their acceptance numbers too.
+- Rule: a check that encodes an acceptance number fails over that number; never carve a case out of a check to make it pass, mark the story blocked instead.

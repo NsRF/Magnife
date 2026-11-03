@@ -58,6 +58,8 @@ final class AppModel {
     var shownServices: [ServiceSummary] = []
     @ObservationIgnored var countThrottle = Throttle()
     @ObservationIgnored var countTask: Task<Void, Never>?
+    /// The menus' update after a Traces | Logs switch (AppModel+Logs.swift).
+    @ObservationIgnored var menuModeTask: Task<Void, Never>?
     /// True while a refresh started by the helper's batches applies its read
     /// (a task-local value: overlapping refreshes each keep their own, M3 review 6).
     var isBatchRefresh: Bool { RefreshPacing.isBatch }

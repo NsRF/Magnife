@@ -357,7 +357,8 @@ Depends: S-004
 Acceptance:
 - [self] At 5,000 spans per second for 60 seconds, no main-thread hang exceeds 100 ms.
 - [self] The list pages from the database instead of loading every trace.
-Status: done
+Status: todo
+Blocked: switching Traces | Logs under the flood hangs the main thread 95-137 ms (37-47 ms at rest), over the 100 ms limit; scrolling, keys, selecting and opening traces stay under it (77-96 ms), and the list pages (M3 review 1, 2026-11-02). The switch's cost is SwiftUI re-rendering the content and detail columns and the toolbar in one turn; deferring the menus' update saved about 10 ms, removing `.disabled` or covering the hidden column instead of zero opacity saved nothing. Next: take the switch out of the window's SwiftUI graph (an AppKit container that swaps two hosting views) or make the hidden column's views not depend on `contentMode`. The self-test prints the value as a BLOCKED line.
 
 ### S-031 Use Magnife in dark mode
 As the user, Magnife follows my Mac's appearance.

@@ -90,10 +90,10 @@ extension SelfTest {
         model.listScroller.scrollToTop()
         try? await Task.sleep(for: .seconds(1.5))
         let stall = heartbeat.stop()
-        // Switching Traces | Logs rebuilds the content and detail columns and
-        // the toolbar items (SwiftUI): a one-off action, timed on its own,
-        // like opening a big waterfall (PROGRESS, S-030); the rest is the
-        // scrolling, keys and selecting the acceptance names.
+        // Every stall counts against the acceptance's 100 ms (M3 review 1):
+        // browsing (scrolling, keys, selecting) and switching Traces | Logs,
+        // which rebuilds the content and detail columns and the toolbar items
+        // in SwiftUI, are printed apart so a failure says which one it was.
         let switching: Set<String> = ["logs view", "traces view"]
         let browsing = stalls.filter { !switching.contains($0.step) }.map(\.ms).max() ?? 0
         let switchStall = stalls.filter { switching.contains($0.step) }.map(\.ms).max() ?? 0
@@ -104,10 +104,13 @@ extension SelfTest {
         let worst = stalls.sorted { $0.ms > $1.ms }.prefix(8).map { "\($0.ms) ms after \($0.step)" }
         print("INFO load: \(stalls.count) stalls over 50 ms; longest: \(worst.joined(separator: ", "))")
         check("the sender's exports are all accepted (\(result.output.split(separator: "\n").last ?? ""))", result.status == 0)
+        // The acceptance's number is the limit: no WARN band (M3 review 5).
         checkTiming("at 5,000 spans/s for \(seconds) s, while scrolling and selecting, no main-thread hang over 100 ms",
-                    ms: Double(max(browsing, stall > 50 ? 0 : Int(stall))), budget: 100)
-        checkTiming("under that load, switching Traces and Logs stays under the 250 ms hang threshold",
-                    ms: Double(switchStall), budget: 250)
+                    ms: Double(browsing), budget: 100, regression: 100, "the whole run \(Int(stall)) ms")
+        // S-030 is blocked on this part (docs/STORIES.md): printed as BLOCKED
+        // while it is over, PASS once it holds, never a quiet pass.
+        checkBlocked("S-030", "under that load, switching Traces and Logs has no main-thread hang over 100 ms",
+                     ms: Double(switchStall), limit: 100)
         // Paging (S-004, S-030): at the top the list reads one page of 200 rows, never every trace.
         check("the list pages from the database: \(model.traces.count) rows read of \(stored.formatted()) traces",
               stored > 1_000 && model.traces.count <= 2 * TraceList.pageSize && model.listTraceCount >= stored - 1_000,
@@ -131,8 +134,9 @@ extension SelfTest {
         case 15..<18: "select"
         case 18: "newest"
         case 19: "trace logs"
-        case 20: "logs view"
-        case 21..<28: "logs down"
+        case 20: "span tab"
+        case 21: "logs view"
+        case 22..<28: "logs down"
         case 28: "logs scroll"
         case 29: "traces view"
         default: "wait"
@@ -164,10 +168,13 @@ extension SelfTest {
             model.showSpanDetailTab(.traceLogs)
             return "trace logs"
         case 20:
+            // One action per step, as people do them: back to the Span tab, then Logs.
             model.showSpanDetailTab(.span)
+            return "span tab"
+        case 21:
             model.showContentMode(.logs)
             return "logs view"
-        case 21..<28:
+        case 22..<28:
             model.focus(.list)
             _ = press(window, String(UnicodeScalar(NSDownArrowFunctionKey)!), keyCode: 125)
             return "logs down"

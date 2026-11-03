@@ -26,6 +26,8 @@ extension SelfTest {
     }
 
     private static func checkLogRows(_ model: AppModel, _ reader: TelemetryReader) async {
+        // The menus follow the switch on a later turn (S-030).
+        _ = await waitUntil(1) { MenuState.shared.contentMode == model.contentMode }
         let page = try? await reader.logPage()
         check("the Logs view lists the first page of every log, newest first",
               model.contentMode == .logs && MenuState.shared.contentMode == .logs && !model.logs.isEmpty

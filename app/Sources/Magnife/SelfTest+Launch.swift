@@ -55,7 +55,7 @@ extension SelfTest {
               + "since the process started (last: \(steps))")
         let median = times.sorted()[1]
         checkTiming("from launch to a window showing stored traces on \(label) (median of 3)", ms: median, budget: 1_000,
-                    ok: (last["rows"] as? Int ?? 0) >= min(traces.count, TraceList.pageSize))
+                    regression: 1_000, ok: (last["rows"] as? Int ?? 0) >= min(traces.count, TraceList.pageSize))
         check("at launch the focus is in the trace list on \(label)", last["focus_in_list"] as? Bool == true)
         guard restores else { return }
 

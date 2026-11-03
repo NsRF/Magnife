@@ -297,8 +297,10 @@ enum SelfTest {
     /// A timing check that holds on a busy Mac (other runs, the screen saver):
     /// it always prints the measured value; within `budget` it passes, over
     /// it it still passes with a WARN line unless it is a clear regression
-    /// (over `regression`, twice the budget by default). `ok` carries the
-    /// check's other conditions, which fail as usual.
+    /// (over `regression`, twice the budget by default). A check that encodes
+    /// an acceptance line's number passes that number as `regression` too, so
+    /// it fails over it (M3 review 5). `ok` carries the check's other
+    /// conditions, which fail as usual.
     static func checkTiming(_ name: String, ms: Double, budget: Double, regression: Double? = nil,
                             ok: Bool = true, _ detail: String = "") {
         let limit = regression ?? budget * 2
@@ -313,6 +315,19 @@ enum SelfTest {
     }
 
     private static var timingWarnings = 0
+
+    /// A check a story is blocked on (its Status in docs/STORIES.md is todo
+    /// with a "Blocked:" note): over the limit it prints a BLOCKED line with
+    /// the value and does not fail the run; within it, a PASS that says the
+    /// story can be unblocked.
+    static func checkBlocked(_ story: String, _ name: String, ms: Double, limit: Double) {
+        let value = "\(String(format: "%.0f", ms)) ms"
+        if ms > limit {
+            print("BLOCKED \(story) \(name): \(value), limit \(Int(limit)) ms (load \(loadAverage))")
+        } else {
+            check("\(name) (\(value), limit \(Int(limit)) ms; \(story) can be unblocked)", true)
+        }
+    }
 
     /// The 1-minute load average, printed with timings so a slow run explains itself.
     static var loadAverage: String {

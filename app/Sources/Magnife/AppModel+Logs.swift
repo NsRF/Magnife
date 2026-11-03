@@ -44,11 +44,18 @@ extension AppModel {
 
     func contentModeChanged() {
         if !StoreLocation.isOverridden() { UserDefaults.standard.set(contentMode.rawValue, forKey: ContentMode.defaultsKey) }
-        MenuState.shared.update(contentMode: contentMode)
-        updateNewRowsMenu()
-        updateTraceIDMenu()
-        updateLogMenu()
-        updateFilterMenu()
+        // The menus follow on a later turn: rebuilding them in the switch's
+        // own turn added about 10 ms to its hang (S-030, M3 review 1).
+        menuModeTask?.cancel()
+        menuModeTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(100))
+            guard let self, !Task.isCancelled else { return }
+            MenuState.shared.update(contentMode: self.contentMode)
+            self.updateNewRowsMenu()
+            self.updateTraceIDMenu()
+            self.updateLogMenu()
+            self.updateFilterMenu()
+        }
         // The list that shows now starts at its top.
         isListHeld = false
         isLogListHeld = false
