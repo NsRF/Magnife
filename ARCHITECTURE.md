@@ -48,6 +48,9 @@ task-local `RefreshPacing.isBatch`, never a stored flag, since refreshes overlap
   stands in for it in the self-test.
 - The database file: `APP_STORE` (tests and snapshots use /tmp).
 - Ports: `APP_GRPC_PORT`, `APP_HTTP_PORT`.
+- Software updates: the SwiftPM trait `Sparkle` (`MAGNIFE_SPARKLE=1`), off by
+  default; `UpdaterController` is an empty shell without it. Release steps,
+  ad hoc and Developer ID: `docs/RELEASE.md`; local installs: `scripts/install-local.sh`.
 
 Both live lists (traces, logs) report and set their scroll position through
 `TraceListScroller`; revealing a row after a read (Resume, Open Trace, Search) is
