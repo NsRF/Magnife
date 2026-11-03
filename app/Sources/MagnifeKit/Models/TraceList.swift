@@ -73,30 +73,30 @@ public enum TraceList {
 
     /// The floating button and its menu item: "12 new traces", "1 new trace".
     public static func newTracesTitle(_ count: Int) -> String {
-        count == 1 ? "1 new trace" : "\(count.formatted()) new traces"
+        count == 1 ? "1 new trace" : "\(CountFormat.string(count)) new traces"
     }
 
     /// A span count: "18 spans", "1 span", "30,000 spans".
     public static func spansText(_ count: Int) -> String {
-        count == 1 ? "1 span" : "\(count.formatted()) spans"
+        count == 1 ? "1 span" : "\(CountFormat.string(count)) spans"
     }
 
     /// The window's subtitle: the count in the list, "1,204 traces", "1 trace",
     /// prefixed "Paused · " while paused (S-010).
     public static func subtitle(traceCount: Int, isPaused: Bool = false) -> String {
-        (isPaused ? "Paused · " : "") + (traceCount == 1 ? "1 trace" : "\(traceCount.formatted()) traces")
+        (isPaused ? "Paused · " : "") + (traceCount == 1 ? "1 trace" : "\(CountFormat.string(traceCount)) traces")
     }
 
     /// The subtitle while filters hide some traces: "312 of 1,204 traces",
     /// "1 of 1 trace", prefixed "Paused · " while paused.
     public static func subtitle(shown: Int, of total: Int, isPaused: Bool = false) -> String {
-        (isPaused ? "Paused · " : "") + "\(shown.formatted()) of \(total.formatted()) \(total == 1 ? "trace" : "traces")"
+        (isPaused ? "Paused · " : "") + "\(CountFormat.string(shown)) of \(CountFormat.string(total)) \(total == 1 ? "trace" : "traces")"
     }
 
     /// The bar at the top of a paused list (S-010): "Paused. 12 new traces.
     /// Magnife is still receiving.", without the count while none arrived.
     public static func pausedText(newCount: Int) -> String {
-        let count = newCount == 0 ? "" : " \(newCount == 1 ? "1 new trace" : "\(newCount.formatted()) new traces")."
+        let count = newCount == 0 ? "" : " \(newCount == 1 ? "1 new trace" : "\(CountFormat.string(newCount)) new traces")."
         return "Paused.\(count) Magnife is still receiving."
     }
 
@@ -126,7 +126,7 @@ public enum TraceList {
 extension ServiceSummary {
     /// The sidebar count's tooltip (S-009): "12 traces with errors", "1 trace with errors".
     public var errorCountText: String {
-        errorCount == 1 ? "1 trace with errors" : "\(errorCount.formatted()) traces with errors"
+        errorCount == 1 ? "1 trace with errors" : "\(CountFormat.string(errorCount)) traces with errors"
     }
 
     /// What VoiceOver reads after the name: "12 traces with errors" or "no errors".

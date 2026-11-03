@@ -299,7 +299,7 @@ public enum LogList {
 
     /// "12 new logs", "1 new log" (docs/GLOSSARY.md).
     public static func newLogsTitle(_ count: Int) -> String {
-        count == 1 ? "1 new log" : "\(count.formatted()) new logs"
+        count == 1 ? "1 new log" : "\(CountFormat.string(count)) new logs"
     }
 
     /// The window's subtitle in the Logs view: "8,310 logs", "1 log",
@@ -318,7 +318,7 @@ public enum LogList {
     /// logs: "312 of 1,204 logs" (docs/ux.md, Window).
     public static func subtitle(shown: Int, of total: Int, isPaused: Bool = false) -> String {
         guard shown != total else { return subtitle(logCount: total, isPaused: isPaused) }
-        return (isPaused ? "Paused · " : "") + "\(shown.formatted()) of \(TraceLogs.countTitle(total))"
+        return (isPaused ? "Paused · " : "") + "\(CountFormat.string(shown)) of \(TraceLogs.countTitle(total))"
     }
 
     public static let noMatchesTitle = "No Matching Logs"

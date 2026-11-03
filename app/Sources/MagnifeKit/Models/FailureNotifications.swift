@@ -70,7 +70,7 @@ public struct FailureNotice: Sendable, Hashable {
 
     /// A burst: title "3 traces with errors", subtitle "checkout-api", body "Newest: POST /orders".
     public static func burst(count: Int, newest: FailedTrace, id: String) -> FailureNotice {
-        FailureNotice(id: id, threadID: newest.service, title: "\(count) traces with errors", subtitle: newest.service,
+        FailureNotice(id: id, threadID: newest.service, title: "\(CountFormat.string(count)) traces with errors", subtitle: newest.service,
                       body: "Newest: \(newest.route)", traceID: newest.traceID, count: count)
     }
 }

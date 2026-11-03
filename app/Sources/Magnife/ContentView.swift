@@ -176,7 +176,7 @@ struct ServiceRow: View {
             Spacer(minLength: Space.xs)
             // Traces with errors: the octagon pairs with the number, never red alone.
             if service.errorCount > 0 {
-                Label(service.errorCount.formatted(), systemImage: "exclamationmark.octagon.fill")
+                Label(CountFormat.string(service.errorCount), systemImage: "exclamationmark.octagon.fill")
                     .labelStyle(.titleAndIcon)
                     .font(.callout)
                     .monospacedDigit()

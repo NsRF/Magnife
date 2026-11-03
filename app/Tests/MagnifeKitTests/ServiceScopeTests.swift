@@ -109,8 +109,8 @@ struct ServiceScopeTests {
         (0, "0 traces with errors", "no errors"),
         (1, "1 trace with errors", "1 trace with errors"),
         (12, "12 traces with errors", "12 traces with errors"),
-        // Numbers follow the user's locale ("1,204", "1.204").
-        (1_204, "\(1_204.formatted()) traces with errors", "\(1_204.formatted()) traces with errors"),
+        // Counts group the en_US way on every region (CountFormat, PROGRESS decision 192).
+        (1_204, "1,204 traces with errors", "1,204 traces with errors"),
     ])
     func words(count: Int, text: String, spoken: String) {
         let service = ServiceSummary(name: "checkout-api", firstSeenNs: 0, lastSeenNs: 0, errorCount: count)
@@ -119,7 +119,7 @@ struct ServiceScopeTests {
     }
 
     @Test("the window's subtitle counts the list", arguments: [(1, "1 trace"), (5, "5 traces"),
-                                                                    (1_204, "\(1_204.formatted()) traces")])
+                                                                    (1_204, "1,204 traces")])
     func subtitle(count: Int, expected: String) {
         #expect(TraceList.subtitle(traceCount: count) == expected)
     }

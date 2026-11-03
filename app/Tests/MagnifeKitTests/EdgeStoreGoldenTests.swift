@@ -17,7 +17,6 @@ struct EdgeStoreGoldenTests {
             var line: String
             var detail: String
             var label: String
-            var hint: String?
             var rowHelp: [String]
             var spokenMarks: [String]
         }
@@ -52,19 +51,46 @@ struct EdgeStoreGoldenTests {
             if FindingGolden.edges[trace.route] != nil {
                 for (kind, count) in summary.counts { totals[kind, default: 0] += count }
             }
-            dumps.append(Dump(traceID: trace.traceID, route: trace.route, findings: findings.findings.map { finding in
-                let place = findings.place(for: finding)
-                return Dump.Line(kind: finding.kind.title, line: finding.line(in: place), detail: finding.detailText(in: place),
-                                 label: finding.accessibilityLabel(in: place), hint: finding.accessibilityHint(in: place),
-                                 rowHelp: finding.spanIDs.map { finding.rowHelp(for: $0) },
-                                 spokenMarks: finding.spanIDs.map { finding.spokenMark(for: $0) })
-            }, help: Dictionary(uniqueKeysWithValues: summary.kinds.map { ($0.title, summary.help($0)) }), spoken: summary.spoken))
+            dumps.append(Self.dump(trace, findings, summary))
         }
         #expect(totals == [.slowSQL: 4, .nPlusOne: 3, .httpError: 9], "\(totals)")
         if let out = ProcessInfo.processInfo.environment["MAGNIFE_FINDINGS_DUMP"], !out.isEmpty {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            try encoder.encode(dumps.sorted { $0.traceID < $1.traceID }).write(to: URL(fileURLWithPath: out))
+            try Self.write(dumps, to: out)
         }
+    }
+
+    /// `MAGNIFE_DUMP_STORE=<db> MAGNIFE_FINDINGS_DUMP=<file>`: what every
+    /// trace of any store says, with no golden to match (probe stores).
+    @Test("every trace of a store, dumped (MAGNIFE_DUMP_STORE)")
+    func dumpStore() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let path = env["MAGNIFE_DUMP_STORE"], !path.isEmpty, let out = env["MAGNIFE_FINDINGS_DUMP"], !out.isEmpty else { return }
+        let reader = try await TelemetryReader.open(at: URL(fileURLWithPath: path))
+        var dumps: [Dump] = []
+        for trace in try await reader.latestTraces(limit: 10_000) {
+            let read = try await reader.openTrace(traceID: trace.traceID)
+            let tree = await Waterfall.build(read.spans)
+            let findings = try await reader.placedFindings(read.findings, in: tree, trace: read.trace, traceID: trace.traceID)
+            let summary = try await reader.findingSummaries(traceIDs: [trace.traceID])[trace.traceID] ?? FindingSummary()
+            #expect(summary == findings.summary, "\(trace.route): the list's badges and the open trace agree")
+            dumps.append(Self.dump(trace, findings, summary))
+        }
+        try Self.write(dumps, to: out)
+    }
+
+    static func dump(_ trace: TraceSummary, _ findings: TraceFindings, _ summary: FindingSummary) -> Dump {
+        Dump(traceID: trace.traceID, route: trace.route, findings: findings.findings.map { finding in
+            let place = findings.place(for: finding)
+            return Dump.Line(kind: finding.kind.title, line: finding.line(in: place), detail: finding.detailText(in: place),
+                             label: finding.accessibilityLabel(in: place),
+                             rowHelp: finding.spanIDs.map { finding.rowHelp(for: $0) },
+                             spokenMarks: finding.spanIDs.map { finding.spokenMark(for: $0) })
+        }, help: Dictionary(uniqueKeysWithValues: summary.kinds.map { ($0.title, summary.help($0)) }), spoken: summary.spoken)
+    }
+
+    static func write(_ dumps: [Dump], to path: String) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        try encoder.encode(dumps.sorted { $0.traceID < $1.traceID }).write(to: URL(fileURLWithPath: path))
     }
 }

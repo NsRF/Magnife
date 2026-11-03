@@ -42,13 +42,13 @@ public enum Retention {
     /// the largest unit that divides them ("90 seconds").
     public static func title(seconds: Int) -> String {
         let (count, unit) = parts(seconds)
-        return "\(count.formatted()) \(count == 1 ? unit : unit + "s")"
+        return "\(CountFormat.string(count)) \(count == 1 ? unit : unit + "s")"
     }
 
     /// The dialog's title case: "1 Hour", "3 Days".
     public static func titleCase(seconds: Int) -> String {
         let (count, unit) = parts(seconds)
-        return "\(count.formatted()) \((count == 1 ? unit : unit + "s").capitalized)"
+        return "\(CountFormat.string(count)) \((count == 1 ? unit : unit + "s").capitalized)"
     }
 
     /// Hours up to 24, then days, as the choices read.

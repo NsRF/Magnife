@@ -43,7 +43,7 @@ struct FailureNotificationTests {
         for n in 1...20_000 { posted += coalescer.add(failed(n), at: start.addingTimeInterval(Double(n) / 10_000)).count }
         #expect(ContinuousClock.now - started < .seconds(1))
         #expect(posted == 1)
-        #expect(coalescer.flush(at: start.addingTimeInterval(12)).first?.title == "20000 traces with errors")
+        #expect(coalescer.flush(at: start.addingTimeInterval(12)).first?.title == "20,000 traces with errors")
     }
 
     @Test("a burst within 10 seconds posts one banner, then one follow-up naming the count")

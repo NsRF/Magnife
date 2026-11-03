@@ -33,24 +33,55 @@ extension Finding {
 
     // MARK: Strip line
 
-    /// The strip line, where before the statement, since the view cuts the tail:
-    /// "Slow SQL · 851 ms · checkout-api · GET /reports/sales · SELECT …".
+    /// The strip line: what, what it cost, which query, where, then the
+    /// statement, since the view cuts the tail:
+    /// "Slow SQL · 851 ms · SELECT Orders · checkout-api · GET /reports/sales · SELECT …".
     public func line(in place: FindingPlace?) -> String {
         guard let place else { return line }
         let shownUnder = place.underIsHeader ? nil : place.under
         let parts: [String?]
         switch kind {
         case .slowSQL:
-            parts = [kind.title, durationText, Self.whereText(place.services), shownUnder, Self.oneLine(statement ?? spanName)]
+            parts = [kind.title, durationText, queryName, Self.whereText(place.services), shownUnder,
+                     Self.oneLine(statement ?? spanName)]
         case .nPlusOne:
-            parts = [kind.title, "\(CountFormat.string(count)) times, \(totalText) in all", Self.whereText(place.services),
-                     shownUnder, Self.oneLine(statement ?? spanName)]
+            parts = [kind.title, "\(CountFormat.string(count)) times, \(totalText) in all", queryName,
+                     Self.whereText(place.services), shownUnder, Self.oneLine(statement ?? spanName)]
         case .httpError:
             let who = isOutgoing ? callerText(place).map { caller in place.callee.map { "\(caller) → \($0)" } ?? caller }
                 : Self.whereText(place.services)
-            parts = [kind.title, httpStatusCode.map(String.init) ?? "no response code", durationText, who, Self.oneLine(call)]
+            parts = [kind.title, httpStatusCode.map(String.init) ?? "no response code", durationText, who,
+                     Self.oneLine(stripCall(calleeKnown: place.callee != nil))]
         }
         return parts.compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// The span's name ("SELECT MonthlyTotals") before the statement on the
+    /// strip line, so a cut line still says which query (PROGRESS decision
+    /// 188); nil when there is no statement (the name is the line's end then)
+    /// or the statement starts with the name.
+    var queryName: String? {
+        guard let statement else { return nil }
+        let name = Self.oneLine(spanName)
+        guard !name.isEmpty, !Self.oneLine(statement).hasPrefix(name) else { return nil }
+        return name
+    }
+
+    /// A client's call on the strip line without the URL's scheme, and
+    /// without its host when the service that answered is named before it:
+    /// "GET /customers/404", "POST api.stripe.com/v1/refunds". The detail
+    /// keeps the whole URL.
+    func stripCall(calleeKnown: Bool) -> String {
+        guard isOutgoing, let target = httpTarget, let scheme = target.range(of: "://") else { return call }
+        let rest = target[scheme.upperBound...]
+        var shown = String(rest)
+        if calleeKnown {
+            let pathStart = rest.firstIndex { $0 == "/" || $0 == "?" || $0 == "#" }
+            shown = pathStart.map { String(rest[$0...]) } ?? "/"
+            if shown.first != "/" { shown = "/" + shown }
+        }
+        guard let method = httpMethod, !method.isEmpty else { return shown }
+        return "\(method) \(shown)"
     }
 
     private func callerText(_ place: FindingPlace) -> String? {
@@ -136,13 +167,6 @@ extension Finding {
         case .httpError:
             return "\(kind.title), " + httpOutcome(place, duration: spokenDuration, spoken: true)
         }
-    }
-
-    /// What a click on the strip line does; nil without a place.
-    public func accessibilityHint(in place: FindingPlace?) -> String? {
-        guard place != nil else { return nil }
-        return kind == .nPlusOne ? "Selects the first of the \(CountFormat.string(count)) spans"
-            : "Selects the span in the waterfall"
     }
 
     // MARK: Waterfall row

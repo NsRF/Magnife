@@ -223,8 +223,8 @@ struct LogListTests {
     func words() {
         #expect(LogList.newLogsTitle(1) == "1 new log")
         #expect(LogList.newLogsTitle(12) == "12 new logs")
-        // Numbers follow the user's locale ("8,310", "8.310").
-        #expect(LogList.subtitle(logCount: 8_310) == "\(8_310.formatted()) logs")
+        // Counts group the en_US way on every region (CountFormat, PROGRESS decision 192).
+        #expect(LogList.subtitle(logCount: 8_310) == "8,310 logs")
         #expect(LogList.subtitle(logCount: 1, isPaused: true) == "Paused · 1 log")
         #expect(LogList.pausedText(newCount: 12) == "Paused. 12 new logs. Magnife is still receiving.")
         #expect(LogList.pausedText(newCount: 0) == "Paused. Magnife is still receiving.")

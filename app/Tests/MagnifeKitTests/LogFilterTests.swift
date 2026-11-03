@@ -122,7 +122,7 @@ struct LogFilterTests {
         #expect(LogList.subtitle(shown: 3, of: 3) == "3 logs")
         #expect(LogList.subtitle(shown: 1, of: 20, isPaused: true) == "Paused · 1 of 20 logs")
         // Numbers follow the user's locale.
-        #expect(LogList.subtitle(shown: 312, of: 1_204) == "312 of \(1_204.formatted()) logs")
+        #expect(LogList.subtitle(shown: 312, of: 1_204) == "312 of 1,204 logs")
         #expect(LogList.noMatchesTitle == "No Matching Logs" && LogList.noMatchesDescription == "No logs match these filters.")
     }
 

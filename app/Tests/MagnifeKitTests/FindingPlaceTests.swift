@@ -54,16 +54,16 @@ struct FindingPlaceTests {
         #expect(finding.line(in: nil) == finding.line)
         #expect(finding.detailText(in: nil) == finding.detailText)
         #expect(finding.accessibilityLabel(in: nil) == finding.accessibilityLabel)
-        #expect(finding.accessibilityHint(in: nil) == nil)
         #expect(TraceFindings([finding]).place(for: finding) == nil)
     }
 
     // MARK: Rules
 
     private func span(_ id: String, _ parent: String?, _ name: String, kind: SpanKind = .internal, service: String = "api",
-                      start: Int64 = 0, ms duration: Int64 = 1, status: SpanStatus = .unset) -> WaterfallSpan {
+                      start: Int64 = 0, ms duration: Int64 = 1, status: SpanStatus = .unset,
+                      method: String? = nil, route: String? = nil) -> WaterfallSpan {
         WaterfallSpan(spanID: id, parentSpanID: parent, name: name, kind: kind, startNs: start, durationNs: duration * Self.ms,
-                      status: status, serviceName: service)
+                      status: status, serviceName: service, httpMethod: method, httpRoute: route)
     }
 
     private func slow(_ id: String, service: String = "api", ms: Int64 = 150) -> DetectorSpan {
@@ -75,6 +75,59 @@ struct FindingPlaceTests {
         -> (TraceFindings, [String: FindingPlace]) {
         let findings = Detectors.findings(in: detector)
         return (findings, FindingPlaces.build(findings, in: Waterfall(spans: spans), trace: trace))
+    }
+
+    @Test("a server span named only for its method reads as its route when it has one (verifiers: route)")
+    func methodOnlyWithRoute() throws {
+        // Node's http instrumentation: web → client "POST" → server "POST" with http.route → INSERT.
+        let spans = [span("r", nil, "POST /checkout/pay", kind: .server, service: "web", ms: 400),
+                     span("c", "r", "POST", kind: .client, service: "web", start: 1, ms: 380),
+                     span("s", "c", "POST", kind: .server, service: "pay", start: 2, ms: 360, method: "POST", route: "/payments"),
+                     span("q", "s", "INSERT payments", kind: .client, service: "pay", start: 3, ms: 300)]
+        let insert = DetectorSpan(spanID: "q", name: "INSERT payments", durationNs: 300 * Self.ms, dbSystem: "postgresql",
+                                  dbStatement: "INSERT INTO payments (cents) VALUES ($1)", serviceName: "pay")
+        let client = DetectorSpan(spanID: "c", name: "POST", kind: .client, startNs: 1, durationNs: 380 * Self.ms,
+                                  status: .error, httpMethod: "POST", httpStatusCode: 500,
+                                  httpURL: "http://localhost:3000/payments", serviceName: "web")
+        let (findings, places) = places(spans, [insert, client])
+        let query = try #require(findings.findings.first { $0.kind == .slowSQL })
+        #expect(places[query.id]?.under == "POST /payments")
+        let failed = try #require(findings.findings.first { $0.kind == .httpError })
+        #expect(places[failed.id]?.calleeRoute == "POST /payments")
+        #expect(failed.line(in: places[failed.id]) == "HTTP Error · 500 · 380 ms · web → pay · POST /payments")
+        #expect(failed.detailText(in: places[failed.id]).hasPrefix(
+            "web called POST http://localhost:3000/payments and got 500 after 380 ms. pay answered as POST /payments."))
+        // A root named "GET" with its route: the trace's route, as the helper writes it.
+        let root = [span("g", nil, "GET", kind: .server, service: "reports", ms: 350, method: "GET", route: "/admin/reports"),
+                    span("q", "g", "SELECT t", kind: .client, service: "reports")]
+        let (rootFindings, rootPlaces) = self.places(root, [slow("q", service: "reports")])
+        #expect(rootPlaces[try #require(rootFindings.findings.first).id]?.under == "GET /admin/reports")
+        #expect(WaterfallSpan(spanID: "x", name: "GET", startNs: 0, durationNs: 0, serviceName: "", httpRoute: "/x").route == "/x")
+        #expect(WaterfallSpan(spanID: "x", name: "work", startNs: 0, durationNs: 0, serviceName: "", httpMethod: "GET").route == "work")
+    }
+
+    @Test("the strip line names the query before where, and a client's URL without its scheme, and its host when the callee is named")
+    func stripWhat() throws {
+        let finding = try #require(Detectors.findings(in: [slow("q")]).findings.first)
+        #expect(finding.line(in: FindingPlace(services: ["api"])) == "Slow SQL · 150 ms · SELECT t · api · SELECT * FROM t WHERE id = 1")
+        // The name is left out when the statement starts with it.
+        let update = DetectorSpan(spanID: "u", name: "UPDATE t", durationNs: 150 * Self.ms, dbSystem: "postgresql",
+                                  dbStatement: "UPDATE t SET a = 1", serviceName: "api")
+        let updated = try #require(Detectors.findings(in: [update]).findings.first)
+        #expect(updated.line(in: FindingPlace(services: ["api"])) == "Slow SQL · 150 ms · api · UPDATE t SET a = 1")
+        func call(_ url: String) throws -> Finding {
+            try #require(Detectors.httpErrors([DetectorSpan(spanID: "c", name: "GET", kind: .client, durationNs: Self.ms,
+                                                            httpMethod: "GET", httpStatusCode: 404, httpURL: url,
+                                                            serviceName: "web")]).first)
+        }
+        #expect(try call("https://api.example.com/v1/x?id=2").line(in: FindingPlace(services: ["web"], caller: "web"))
+            == "HTTP Error · 404 · 1.0 ms · web · GET api.example.com/v1/x?id=2")
+        #expect(try call("http://localhost:5080/customers/404").line(in: FindingPlace(services: ["web"], caller: "web", callee: "api"))
+            == "HTTP Error · 404 · 1.0 ms · web → api · GET /customers/404")
+        #expect(try call("http://localhost:5080").line(in: FindingPlace(services: ["web"], caller: "web", callee: "api"))
+            == "HTTP Error · 404 · 1.0 ms · web → api · GET /")
+        #expect(try call("http://localhost:5080/customers/404").detailText(in: FindingPlace(services: ["web"], caller: "web"))
+            == "web called GET http://localhost:5080/customers/404 and got 404 after 1.0 ms.")
     }
 
     @Test("a server span named only for its method is skipped for one further up")
@@ -97,7 +150,7 @@ struct FindingPlaceTests {
         let lone = try #require(orphan.findings.first)
         let place = try #require(orphanPlaces[lone.id])
         #expect(place.under == nil)
-        #expect(lone.line(in: place) == "Slow SQL · 150 ms · api · SELECT * FROM t WHERE id = 1")
+        #expect(lone.line(in: place) == "Slow SQL · 150 ms · SELECT t · api · SELECT * FROM t WHERE id = 1")
     }
 
     @Test("an N+1 under two roots, or orphans, has no under; under two parents it sits under their common one")
@@ -130,11 +183,15 @@ struct FindingPlaceTests {
         #expect(deepPlaces[try #require(deep.findings.first).id]?.under == "GET /n")
     }
 
-    @Test("the share of the trace is left out at a trace of 0 and capped at 100%")
+    @Test("the share of the trace is left out at a trace of 0, and when the finding took longer than the trace")
     func share() throws {
         let finding = try #require(Detectors.findings(in: [slow("q")]).findings.first)
         #expect(FindingPlace(services: ["api"], traceDurationNs: 0).share(of: finding) == nil)
-        #expect(FindingPlace(services: ["api"], traceDurationNs: 100 * Self.ms).share(of: finding) == 100)
+        #expect(FindingPlace(services: ["api"], traceDurationNs: 150 * Self.ms).share(of: finding) == 100)
+        // Runs at the same time, or clock skew: no "100% of the trace's 100 ms" for 150 ms.
+        #expect(FindingPlace(services: ["api"], traceDurationNs: 100 * Self.ms).share(of: finding) == nil)
+        let parallel = finding.detailText(in: FindingPlace(services: ["api"], under: "GET /x", traceDurationNs: 100 * Self.ms))
+        #expect(parallel == "This query took 150 ms in api, under GET /x. Queries over 100 ms are flagged.")
         #expect(FindingPlace(services: ["api"], traceDurationNs: 100_000 * Self.ms).share(of: finding) == nil)
         let detail = finding.detailText(in: FindingPlace(services: ["api"], under: "GET /x", traceDurationNs: 0))
         #expect(detail == "This query took 150 ms in api, under GET /x. Queries over 100 ms are flagged.")
@@ -150,7 +207,7 @@ struct FindingPlaceTests {
         let finding = try #require(found.findings.first)
         #expect(finding.services == ["a", "b", "c"])
         let place = FindingPlace(services: finding.services, under: "GET /x", traceDurationNs: 0)
-        #expect(finding.line(in: place) == "N+1 · 6 times, 12 ms in all · 3 services · GET /x · SELECT * FROM t WHERE id = ?")
+        #expect(finding.line(in: place) == "N+1 · 6 times, 12 ms in all · SELECT t · 3 services · GET /x · SELECT * FROM t WHERE id = ?")
         #expect(found.summary.help(.nPlusOne) == "N+1: a statement ran 6 times in 3 services, 12 ms in all")
     }
 

@@ -188,7 +188,7 @@ struct FindingTests {
         #expect(try #require(found.findings.first).dbSystem == nil)
     }
 
-    @Test("long IN lists of 4- and 5-digit ids, cut at 10,000 bytes, are one N+1")
+    @Test("long IN lists of 4- and 5-digit ids, over 10,000 bytes, are one N+1")
     func nPlusOneLongLists() throws {
         let spans = (0..<6).map { n in
             let first = n.isMultiple(of: 2) ? 1_000 : 10_000
@@ -197,7 +197,30 @@ struct FindingTests {
         }
         let finding = try #require(Detectors.findings(in: spans).findings.first)
         #expect(finding.count == 6)
-        #expect(finding.statement == "SELECT id FROM t WHERE id IN (? …")
+        #expect(finding.statement == "SELECT id FROM t WHERE id IN (?)")
+    }
+
+    @Test("an IN list whose length falls on both sides of 10,000 bytes is one N+1 (detector verifier 1)")
+    func nPlusOneListsAroundTheCut() throws {
+        let lengths = [100, 500, 1_000, 3_000, 3_000, 3_000]
+        let spans = lengths.enumerated().map { n, length in
+            let list = (1...length).map(String.init).joined(separator: ", ")
+            return db("p\(n)", 4 * Self.ms, statement: "SELECT id, name FROM products WHERE id IN (\(list)) AND deleted = false",
+                      start: Int64(n))
+        }
+        #expect(spans.contains { ($0.dbStatement?.utf8.count ?? 0) < SQLNormalizer.maxBytes })
+        #expect(spans.contains { ($0.dbStatement?.utf8.count ?? 0) > SQLNormalizer.maxBytes })
+        let finding = try #require(Detectors.findings(in: spans).findings.first)
+        #expect(finding.count == 6)
+        #expect(finding.statement == "SELECT id, name FROM products WHERE id IN (?) AND deleted = false")
+    }
+
+    @Test("a client span with a method and no URL or route names its span alone (detector verifier 6)")
+    func callWithoutTarget() throws {
+        let span = DetectorSpan(spanID: "c", name: "orders process", kind: .consumer, durationNs: Self.ms, status: .error,
+                                httpMethod: "POST", serviceName: "orders")
+        let finding = try #require(Detectors.httpErrors([span]).first)
+        #expect(finding.call == "orders process")
     }
 
     // MARK: HTTP Error (S-025)
@@ -286,7 +309,9 @@ struct FindingTests {
         #expect(none.spokenMark(for: "b") == "HTTP Error, no response code")
         let mixed = Detectors.findings(in: [http("a", code: 503), http("b", code: 400), http("c", code: 404),
                                             http("d", code: 200, status: .error)])
-        #expect(mixed.summary.help(.httpError) == "HTTP Error: 4 calls returned 400, 404 or 503 or had status Error")
+        #expect(mixed.summary.help(.httpError) == "HTTP Error: 4 calls returned 400, 404 or 503, or had status Error")
+        let one = Detectors.findings(in: [http("a", code: 502), http("b", code: 200, status: .error)])
+        #expect(one.summary.help(.httpError) == "HTTP Error: 2 calls returned 502 or had status Error")
     }
 
     @Test("the waterfall row's words: Slow SQL over the threshold, just over it, and N+1 runs")

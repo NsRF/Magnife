@@ -60,7 +60,7 @@ public struct TraceLogs: Sendable, Hashable {
 
     /// The pane header: "24 logs", "1 log".
     public static func countTitle(_ count: Int) -> String {
-        count == 1 ? "1 log" : "\(count.formatted()) logs"
+        count == 1 ? "1 log" : "\(CountFormat.string(count)) logs"
     }
 
     public static let emptyTitle = "No Logs for This Trace"

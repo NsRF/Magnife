@@ -25,14 +25,14 @@ public struct TraceSearchResult: Sendable, Equatable {
     /// show, else "3 traces"; nothing over the newest traces or while counting.
     public var countText: String {
         guard !isNewest, let total else { return "" }
-        if total > traces.count { return "\(traces.count.formatted()) of \(total.formatted())" }
-        return total == 1 ? "1 trace" : "\(total.formatted()) traces"
+        if total > traces.count { return "\(CountFormat.string(traces.count)) of \(CountFormat.string(total))" }
+        return total == 1 ? "1 trace" : "\(CountFormat.string(total)) traces"
     }
 
     /// What VoiceOver announces after typing pauses: "12 results", "1 result".
     public var spokenCount: String {
         let count = total ?? traces.count
-        return count == 1 ? "1 result" : "\(count.formatted()) results"
+        return count == 1 ? "1 result" : "\(CountFormat.string(count)) results"
     }
 }
 

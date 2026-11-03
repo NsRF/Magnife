@@ -14,13 +14,26 @@ public struct WaterfallSpan: Sendable, Hashable, Identifiable, FetchableRecord {
     public var durationNs: Int64
     public var status: SpanStatus
     public var serviceName: String
+    /// `http_method` and `http_route`: where a finding is (`route`).
+    public var httpMethod: String?
+    public var httpRoute: String?
 
     public var id: String { spanID }
     public var endNs: Int64 { startNs + durationNs }
 
+    /// The span's route the helper's way (docs/schema.sql, traces.route):
+    /// "<method> <route>" when both exist, else the route, else the name. A
+    /// server span named "GET" with `http.route` "/v1/orders/{id}" reads
+    /// "GET /v1/orders/{id}".
+    public var route: String {
+        guard let route = httpRoute, !route.isEmpty else { return name }
+        guard let method = httpMethod, !method.isEmpty else { return route }
+        return "\(method) \(route)"
+    }
+
     public init(rowID: Int64 = 0, spanID: String, parentSpanID: String? = nil, name: String,
                 kind: SpanKind = .internal, startNs: Int64, durationNs: Int64,
-                status: SpanStatus = .unset, serviceName: String) {
+                status: SpanStatus = .unset, serviceName: String, httpMethod: String? = nil, httpRoute: String? = nil) {
         self.rowID = rowID
         self.spanID = spanID
         self.parentSpanID = parentSpanID
@@ -30,6 +43,8 @@ public struct WaterfallSpan: Sendable, Hashable, Identifiable, FetchableRecord {
         self.durationNs = durationNs
         self.status = status
         self.serviceName = serviceName
+        self.httpMethod = httpMethod
+        self.httpRoute = httpRoute
     }
 
     public init(row: Row) throws {
@@ -42,6 +57,8 @@ public struct WaterfallSpan: Sendable, Hashable, Identifiable, FetchableRecord {
         durationNs = try row.decode(forColumn: "duration_ns")
         status = SpanStatus(code: try row.decode(forColumn: "status_code"))
         serviceName = try row.decode(forColumn: "service_name")
+        httpMethod = try row.decode(forColumn: "http_method")
+        httpRoute = try row.decode(forColumn: "http_route")
     }
 }
 

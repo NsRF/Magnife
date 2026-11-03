@@ -97,7 +97,7 @@ struct TraceStatusFilterTests {
         #expect(SpanStatus.error.chipHelp == "Show traces with at least one Error span")
         #expect(SpanStatus.ok.chipHelp == "Show traces with no Error span and an OK root span")
         #expect(SpanStatus.unset.chipHelp == "Show traces with no Error span and an Unset or missing root span")
-        #expect(TraceList.subtitle(shown: 312, of: 1_204) == "312 of \(1_204.formatted()) traces")
+        #expect(TraceList.subtitle(shown: 312, of: 1_204) == "312 of 1,204 traces")
         #expect(TraceList.subtitle(shown: 1, of: 1, isPaused: true) == "Paused · 1 of 1 trace")
     }
 }

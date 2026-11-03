@@ -94,38 +94,71 @@ struct SQLNormalizerTests {
         #expect(SQLNormalizer.normalize(a) != SQLNormalizer.normalize(b), "\(SQLNormalizer.normalize(a))")
     }
 
-    @Test("a statement over 10,000 bytes is normalized from its start")
+    @Test("a shape over 10,000 bytes is cut and ends in …; the statement is read whole")
     func long() {
-        let statement = "SELECT * FROM t WHERE id IN (" + (1...5_000).map(String.init).joined(separator: ", ") + ")"
-        let shape = SQLNormalizer.normalize(statement)
-        #expect(shape.hasSuffix(" …") && shape.utf8.count < 10_100)
-        #expect(SQLNormalizer.normalize(statement + " AND x = 2") == shape)
+        let columns = "SELECT " + (0..<2_000).map { "col_\($0)" }.joined(separator: ", ") + " FROM t"
+        let shape = SQLNormalizer.normalize(columns)
+        #expect(shape.hasSuffix(" …") && shape.utf8.count == SQLNormalizer.maxBytes + " …".utf8.count)
+        #expect(SQLNormalizer.normalize(columns + " WHERE x = 2") == shape)
+        // Read whole, a long IN list still collapses, and what follows it counts.
+        let list = "SELECT * FROM t WHERE id IN (" + (1...5_000).map(String.init).joined(separator: ", ") + ")"
+        #expect(SQLNormalizer.normalize(list) == "SELECT * FROM t WHERE id IN (?)")
+        #expect(SQLNormalizer.normalize(list + " AND x = 2") == "SELECT * FROM t WHERE id IN (?) AND x = ?")
+        // A cut never splits a character.
+        let wide = "SELECT \"" + String(repeating: "é", count: 6_000) + "\" FROM t"
+        let cut = SQLNormalizer.normalize(wide)
+        #expect(cut.hasSuffix("é …") && cut.utf8.count <= SQLNormalizer.maxBytes + " …".utf8.count)
     }
 
-    @Test("an IN list cut at 10,000 bytes reads (? …, so long lists of any id width group",
-          arguments: [1_000, 10_000])
-    func longListsGroup(firstID: Int) {
-        let statement = "SELECT id FROM t WHERE id IN ("
-            + (firstID..<(firstID + 3_000)).map(String.init).joined(separator: ", ") + ")"
+    @Test("IN lists of 4- and 5-digit ids and of any length give one shape",
+          arguments: [(1_000, 3_000), (10_000, 3_000), (1, 100), (1, 1_400), (1, 1_500), (1, 3_000)])
+    func longListsGroup(firstID: Int, count: Int) {
+        let statement = "SELECT id, name FROM products WHERE id IN ("
+            + (firstID..<(firstID + count)).map(String.init).joined(separator: ", ") + ") AND deleted = false"
+        #expect(SQLNormalizer.normalize(statement) == "SELECT id, name FROM products WHERE id IN (?) AND deleted = false")
+    }
+
+    @Test("multi-row VALUES over 10,000 bytes give one shape wherever the rows start (detector verifier 2)",
+          arguments: [0, 7, 95, 1_000, 99_000])
+    func longValues(firstID: Int) {
+        let rows = (firstID..<(firstID + 900)).map { "(\($0), 'item \($0)', \($0 % 7))" }.joined(separator: ", ")
+        let statement = "INSERT INTO items (id, name, qty) VALUES " + rows
         #expect(statement.utf8.count > SQLNormalizer.maxBytes)
-        #expect(SQLNormalizer.normalize(statement) == "SELECT id FROM t WHERE id IN (? …")
+        #expect(SQLNormalizer.normalize(statement) == "INSERT INTO items (id, name, qty) VALUES (?, ?, ?)")
     }
 
-    @Test("a cut that ends on a comma or inside a value still collapses the list; other cut statements keep their tokens")
-    func cutEdges() {
+    @Test("a long string before a list never changes the shape")
+    func longLiteral() {
+        let shapes = Set([10, 9_990, 9_999, 10_005, 20_000].map { length in
+            SQLNormalizer.normalize("SELECT * FROM t WHERE note = '" + String(repeating: "x", count: length) + "' AND id IN (1, 2, 3)")
+        })
+        #expect(shapes == ["SELECT * FROM t WHERE note = ? AND id IN (?)"])
+    }
+
+    @Test("past the read limit an IN list reads (? … and a VALUES list keeps its first tuple, wherever the cut lands")
+    func readCut() {
+        let limit = 10_000
         let head = "SELECT id FROM t WHERE id IN ("
+        for firstID in [1_000, 10_000] {
+            let statement = head + (firstID..<(firstID + 3_000)).map(String.init).joined(separator: ", ") + ")"
+            #expect(SQLNormalizer.normalize(statement, readLimit: limit) == "SELECT id FROM t WHERE id IN (? …")
+        }
         let values = String(repeating: "12345, ", count: 3_000)
         for extra in 0..<7 {
             // Shifts the cut through "12345, ": after a digit, the comma, the space.
             let statement = String(repeating: " ", count: extra) + head + values
-            #expect(SQLNormalizer.normalize(statement) == "SELECT id FROM t WHERE id IN (? …", "\(extra)")
+            #expect(SQLNormalizer.normalize(statement, readLimit: limit) == "SELECT id FROM t WHERE id IN (? …", "\(extra)")
+            let rows = String(repeating: " ", count: extra) + "INSERT INTO items (id, name, qty) VALUES "
+                + (0..<900).map { "(\($0), 'item', 3)" }.joined(separator: ", ")
+            #expect(SQLNormalizer.normalize(rows, readLimit: limit) == "INSERT INTO items (id, name, qty) VALUES (?, ?, ?) …",
+                    "\(extra)")
         }
         // Not a list of values: nothing collapses.
         let columns = head + String(repeating: "a, ", count: 4_000)
-        #expect(SQLNormalizer.normalize(columns).hasPrefix(head + "a, a, a"))
+        #expect(SQLNormalizer.normalize(columns, readLimit: limit).hasPrefix(head + "a, a, a"))
         // A list that closes before the cut collapses as before.
         let closed = "SELECT * FROM t WHERE id IN (1, 2) AND note = '" + String(repeating: "x", count: 11_000) + "'"
-        #expect(SQLNormalizer.normalize(closed) == "SELECT * FROM t WHERE id IN (?) AND note = ? …")
+        #expect(SQLNormalizer.normalize(closed, readLimit: limit) == "SELECT * FROM t WHERE id IN (?) AND note = ? …")
     }
 
     @Test("only a VALUES list or a list of tuples drops its further tuples", arguments: [

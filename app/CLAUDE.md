@@ -211,7 +211,8 @@ this app starts the helper and reads its database. No server, no accounts.
   runs the checks (the seed set's and, on `APP_EDGE_STORE`, the detector edge
   set's strings) and the cost INFO lines (`INFO places`). `MAGNIFE_EDGE_STORE=<db>
   swift test --filter EdgeStoreGoldenTests` checks an edge store (`seed_store <db> --edges`);
-  `MAGNIFE_FINDINGS_DUMP=<file>` writes what each trace says as JSON.
+  `MAGNIFE_FINDINGS_DUMP=<file>` writes what each trace says as JSON
+  (with `MAGNIFE_DUMP_STORE=<db>`, `EdgeStoreGoldenTests/dumpStore`, for any store).
 - Menu bar extra (S-026): `MenuBarExtra` `.menu` style in `App.swift`, views
   in `MenuBarViews.swift`. `RecentErrors` (MagnifeKit, unit-tested) holds the
   five newest traces with an error (read in every refresh, paused too,

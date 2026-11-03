@@ -105,7 +105,7 @@ extension TraceTextCell {
         case .traceDuration:
             cell.configure(DurationFormat.string(nanoseconds: trace.durationNs))
         case .traceSpans:
-            cell.configure(trace.spanCount.formatted())
+            cell.configure(CountFormat.string(trace.spanCount))
         case .traceStatus:
             // Error pairs the octagon with the word; OK is the word; Unset is blank.
             switch trace.status {

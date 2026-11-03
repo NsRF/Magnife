@@ -1,30 +1,48 @@
 import Foundation
 
 /// Turns a SQL statement into its shape, for N+1 (S-024): literals become
-/// `?`, an IN list of values one `(?)` (one cut short by `maxBytes` reads
-/// `(?`), repeated VALUES tuples one tuple, comments go (so sqlcommenter's per-request `/*traceparent=…*/` never
+/// `?`, an IN list of values one `(?)`, repeated VALUES tuples one tuple,
+/// comments go (so sqlcommenter's per-request `/*traceparent=…*/` never
 /// splits a group), and runs of white space become one space. Identifiers,
 /// quoted identifiers, keywords and bind placeholders (`$1`, `@p0`, `:id`,
 /// `?`) stay as written, so different tables, columns or parameters never
 /// group together. One pass over the UTF-8 bytes, no regular expressions.
 public enum SQLNormalizer {
-    /// Statements longer than this are normalized from their start (a
-    /// generated statement can be megabytes); the result then ends in " …".
+    /// A shape longer than this is cut, and then ends in " …". The shape is
+    /// cut, not the statement, so the same statement with lists or literals
+    /// of other lengths always gives the same shape (PROGRESS decision 187).
     public static let maxBytes = 10_000
+    /// Statements longer than this are read from their start only (a
+    /// generated statement can be megabytes); an IN list the read ends
+    /// inside reads `(? …`, a VALUES list keeps its first tuple.
+    public static let maxReadBytes = 1 << 20
 
     public static func normalize(_ statement: String) -> String {
+        normalize(statement, readLimit: maxReadBytes)
+    }
+
+    static func normalize(_ statement: String, readLimit: Int) -> String {
         var bytes = Array(statement.utf8)
-        let cut = bytes.count > maxBytes
-        if cut { bytes.removeSubrange(maxBytes...) }
+        let readCut = bytes.count > readLimit
+        if readCut { bytes.removeSubrange(readLimit...) }
         var tokens = tokenize(bytes)
-        tokens = collapseLists(tokens, cut: cut)
+        tokens = collapseLists(tokens, cut: readCut)
         var out: [UInt8] = []
-        out.reserveCapacity(bytes.count)
+        out.reserveCapacity(min(bytes.count, maxBytes + 8))
+        var shapeCut = false
         for token in tokens {
             if token.space && !out.isEmpty { out.append(space) }
             out.append(contentsOf: token.text)
+            if out.count > maxBytes {
+                // Cut on a character's first byte, never inside one.
+                var end = maxBytes
+                while end > 0, out[end] & 0xC0 == 0x80 { end -= 1 }
+                out.removeSubrange(end...)
+                shapeCut = true
+                break
+            }
         }
-        if cut { out.append(contentsOf: Array(" …".utf8)) }
+        if readCut || shapeCut { out.append(contentsOf: Array(" …".utf8)) }
         return String(decoding: out, as: UTF8.self)
     }
 
@@ -190,8 +208,9 @@ public enum SQLNormalizer {
     /// `IN (?, ?, ?)` reads `IN (?)`; `VALUES (?, ?), (?, ?)` keeps its first
     /// tuple, and so does a tuple inside parentheses (`IN ((?, ?), (?, ?))`
     /// reads `IN ((?, ?))`); other tuples stay (`f(?), (?)`). In a statement
-    /// cut at `maxBytes`, an IN list that runs to the cut reads `IN (?`, so
-    /// long lists of any length still group (PROGRESS decision 180).
+    /// read only up to `maxReadBytes`, an IN list that runs to the cut reads
+    /// `IN (?`, and a further tuple that the cut ends is dropped too, so long
+    /// lists of any length still group (PROGRESS decisions 180, 187).
     static func collapseLists(_ tokens: [Token], cut: Bool = false) -> [Token] {
         var out: [Token] = []
         out.reserveCapacity(tokens.count)
@@ -214,6 +233,13 @@ public enum SQLNormalizer {
                 while repeats, i < tokens.count, tokens[i].isPunct(44), i + 1 < tokens.count, tokens[i + 1].isPunct(40),
                       let next = valueTupleEnd(tokens, from: i + 1) {
                     i = next
+                }
+                // The tuple the cut ended, ", (?, ?" or ", (": dropped as well.
+                if repeats, cut, i + 1 < tokens.count, tokens[i].isPunct(44), tokens[i + 1].isPunct(40),
+                   i + 2 == tokens.count || runsToCut(tokens, from: i + 1) {
+                    i = tokens.count
+                } else if repeats, cut, i + 1 == tokens.count, tokens[i].isPunct(44) {
+                    i = tokens.count
                 }
                 continue
             }

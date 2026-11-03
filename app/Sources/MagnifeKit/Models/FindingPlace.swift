@@ -50,11 +50,13 @@ public struct FindingPlace: Sendable, Hashable {
         self.firstErrorBelow = firstErrorBelow
     }
 
-    /// The finding's share of the trace, in whole percent, at most 100; nil
-    /// when it rounds to 0 or the trace has no duration. Slow SQL and N+1 only.
+    /// The finding's share of the trace, in whole percent; nil when it rounds
+    /// to 0, the trace has no duration, or the finding took longer than the
+    /// trace (runs at the same time, clock skew), where a percentage would
+    /// hide how much it was (PROGRESS decision 189). Slow SQL and N+1 only.
     public func share(of finding: Finding) -> Int? {
-        guard finding.kind != .httpError, traceDurationNs > 0 else { return nil }
-        let share = min(100, Int((Double(finding.durationNs) / Double(traceDurationNs) * 100).rounded()))
+        guard finding.kind != .httpError, traceDurationNs > 0, finding.durationNs <= traceDurationNs else { return nil }
+        let share = Int((Double(finding.durationNs) / Double(traceDurationNs) * 100).rounded())
         return share > 0 ? share : nil
     }
 }
@@ -64,7 +66,9 @@ public struct FindingPlace: Sendable, Hashable {
 /// chain 30,000 spans deep.
 public enum FindingPlaces {
     /// A span named only for its method is no route ("GET"): it is skipped
-    /// for one further up.
+    /// for one further up. Each span's name here is its `route` (the
+    /// helper's rule), so a server span named "GET" with `http.route` reads
+    /// "GET /v1/orders/{id}" and is not skipped (PROGRESS decision 193).
     static let methods: Set<String> = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "CONNECT", "TRACE"]
 
     static func isMethodOnly(_ name: String) -> Bool { methods.contains(name.uppercased()) }
@@ -125,20 +129,20 @@ public enum FindingPlaces {
         var steps = 0
         while let node = current, steps < tree.count {
             let span = tree.nodes[node].span
-            if span.kind == .server || span.kind == .consumer, !isMethodOnly(span.name) { return span.name }
+            if span.kind == .server || span.kind == .consumer, !isMethodOnly(span.route) { return span.route }
             root = node
             current = tree.nodes[node].parent
             steps += 1
         }
-        return root.map { tree.nodes[$0].span.name }.flatMap { isMethodOnly($0) ? nil : $0 }
+        return root.map { tree.nodes[$0].span.route }.flatMap { isMethodOnly($0) ? nil : $0 }
     }
 
-    /// The name at this node, or the first one above it that is not named for its method alone.
+    /// The route at this node, or the first one above it that is not named for its method alone.
     static func routeAtOrAbove(_ index: Int, in tree: Waterfall) -> String? {
         var current: Int? = index
         var steps = 0
         while let node = current, steps <= tree.count {
-            let name = tree.nodes[node].span.name
+            let name = tree.nodes[node].span.route
             if !isMethodOnly(name) { return name }
             current = tree.nodes[node].parent
             steps += 1
@@ -197,7 +201,7 @@ public enum FindingPlaces {
             }
             if let callee = calleeIndex {
                 place.callee = tree.nodes[callee].span.serviceName
-                place.calleeRoute = tree.nodes[callee].span.name
+                place.calleeRoute = tree.nodes[callee].span.route
             }
         case .server, .consumer:
             if let parent = node.parent {

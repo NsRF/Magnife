@@ -68,7 +68,7 @@ extension SelfTest {
         check("the bar counts the traces that arrived meanwhile",
               model.newTraceCount == arrived && !model.showsNewTracesButton
                 && TraceList.pausedText(newCount: model.newTraceCount)
-                    == "Paused. \(arrived.formatted()) new traces. Magnife is still receiving.",
+                    == "Paused. \(CountFormat.string(arrived)) new traces. Magnife is still receiving.",
               "\(arrived) sent, \(model.newTraceCount) counted")
         check("the sidebar keeps updating while paused", model.services.contains { $0.name == "pause-check" })
 

@@ -122,8 +122,9 @@ struct FindingsStrip: View {
                 }
                 .buttonStyle(.plain)
                 .help(finding.detailText(in: place))
+                // No accessibilityHint: on macOS it replaces the help, and the
+                // help (the span detail's text) says more (PROGRESS decision 191).
                 .accessibilityLabel(finding.accessibilityLabel(in: place))
-                .accessibilityHint(finding.accessibilityHint(in: place) ?? "")
                 .gridProbe("finding-\(finding.id)", area: "findings-strip")
             }
         }

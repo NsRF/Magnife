@@ -74,7 +74,7 @@ public struct SpanDetail: Sendable, Hashable {
 
     /// "Show All (312)" while more than 50 logs are cut, else nil.
     public var showAllLogsTitle: String? {
-        logs.count > Self.logPreviewCount ? "Show All (\(logs.count.formatted()))" : nil
+        logs.count > Self.logPreviewCount ? "Show All (\(CountFormat.string(logs.count)))" : nil
     }
 
     /// The stack trace Edit > Copy Stack Trace copies: the first exception's that has one.

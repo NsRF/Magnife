@@ -232,7 +232,7 @@ struct WaterfallTests {
         let trace = TraceSummary(traceID: "t", rootService: "checkout-api", route: "POST /orders", startNs: 0,
                                  durationNs: 240 * Self.ms, spanCount: 18)
         #expect("\(trace.route) · \(trace.waterfallSubtitle)" == "POST /orders · checkout-api · 240 ms · 18 spans")
-        #expect(TraceList.spansText(1) == "1 span" && TraceList.spansText(30_000) == "\(30_000.formatted()) spans")
+        #expect(TraceList.spansText(1) == "1 span" && TraceList.spansText(30_000) == "30,000 spans")
     }
 
     @Test("the reader's waterfall columns build the same tree as full spans")

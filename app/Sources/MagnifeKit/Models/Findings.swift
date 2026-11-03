@@ -164,9 +164,11 @@ public struct Finding: Sendable, Hashable, Identifiable {
     var isJustOverThreshold: Bool { kind == .slowSQL && Self.isJustOver(durationNs) }
 
     /// "POST /payments": the method and what was called, the method left out
-    /// when the target already starts with it (a span named "POST /payments").
+    /// when the target already starts with it. With no URL or route the
+    /// span's name alone, the helper's route rule ("orders process", never
+    /// "POST orders process"; PROGRESS decision 190).
     public var call: String {
-        let target = httpTarget ?? spanName
+        guard let target = httpTarget else { return spanName }
         guard let method = httpMethod, !method.isEmpty, !target.hasPrefix(method + " "), target != method else { return target }
         return "\(method) \(target)"
     }
@@ -385,8 +387,9 @@ public struct FindingSummary: Sendable, Hashable {
             let calls = count == 1 ? "1 call" : "\(CountFormat.string(count)) calls"
             let place = Finding.whereText(httpServices).map { ", in \($0)" } ?? ""
             guard !httpCodes.isEmpty else { return "\(kind.title): \(calls) had status Error\(place)" }
-            return "\(kind.title): \(calls) returned \(Self.codesText(httpCodes))"
-                + (httpOtherError ? " or had status Error" : "") + place
+            // "returned 502 or had status Error", "returned 404 or 500, or had status Error".
+            let orError = httpOtherError ? (httpCodes.count > 1 ? ", or had status Error" : " or had status Error") : ""
+            return "\(kind.title): \(calls) returned \(Self.codesText(httpCodes))\(orError)\(place)"
         }
     }
 
