@@ -3,6 +3,8 @@
 //
 // With no mode flag it sends the deterministic seed set used for app
 // snapshots: one trace per scenario, fixed ids, timestamps relative to now.
+// --edges sends the detector edge set the same way. --seed makes --volume,
+// --rate and --live send the same traces (ids, scenarios, scales) every run.
 package main
 
 import (
@@ -83,13 +85,15 @@ func main() {
 	grpcAddr := flag.String("grpc", "127.0.0.1:4317", "OTLP/gRPC `host:port`")
 	protocol := flag.String("protocol", "mixed", "http-protobuf, http-json, grpc, or mixed (rotates through all three, with and without gzip)")
 	compression := flag.String("compression", "gzip", "gzip or none (ignored by --protocol mixed)")
-	scenarios := flag.String("scenarios", "", "comma-separated scenarios (default: all of "+names()+")")
+	scenarios := flag.String("scenarios", "", "comma-separated scenarios (default: all of "+names()+"; edge scenarios: "+edgeNames()+")")
 	volume := flag.Int("volume", 0, "send random traces of the scenarios until `N` spans are sent")
 	huge := flag.Int("huge-trace", 0, "send one trace with `N` spans, nested several levels deep")
 	rate := flag.Int("rate", 0, "send `spans/s` of random traces for --duration")
 	duration := seconds(60 * time.Second)
 	flag.Var(&duration, "duration", "how long --rate runs, in `seconds` (60) or as a duration (90s, 2m)")
 	live := flag.Bool("live", false, "send a random trace every 1-2 s until interrupted")
+	edges := flag.Bool("edges", false, "send the detector edge set (one trace per edge scenario, fixed ids) instead of the seed set")
+	seed := flag.Uint64("seed", 0, "seed for --volume, --rate and --live, so each run sends the same traces (0: a random seed each run)")
 	workers := flag.Int("workers", 8, "concurrent requests in --volume, --rate and --huge-trace")
 	flag.Parse()
 
@@ -98,13 +102,13 @@ func main() {
 		os.Exit(2)
 	}
 	modes := 0
-	for _, on := range []bool{*volume > 0, *huge > 0, *rate > 0, *live} {
+	for _, on := range []bool{*volume > 0, *huge > 0, *rate > 0, *live, *edges} {
 		if on {
 			modes++
 		}
 	}
 	if modes > 1 {
-		fail("use only one of --volume, --huge-trace, --rate and --live")
+		fail("use only one of --volume, --huge-trace, --rate, --live and --edges")
 	}
 	list, err := pick(*scenarios)
 	if err != nil {
@@ -124,11 +128,23 @@ func main() {
 	s := &sender{exp: exp, st: st}
 	began := time.Now()
 	mode := "seed set"
+	newGen := func() *sample.Gen {
+		if *seed != 0 {
+			return sample.NewGen(*seed)
+		}
+		return sample.NewRandomGen()
+	}
 
 	switch {
+	case *edges:
+		mode = "edge set"
+		if *scenarios == "" {
+			list = sample.EdgeScenarios
+		}
+		runSeed(ctx, s, list)
 	case *volume > 0:
 		mode = fmt.Sprintf("volume %d", *volume)
-		runVolume(ctx, s, list, *volume, *workers)
+		runVolume(ctx, s, newGen(), list, *volume, *workers)
 	case *huge > 0:
 		mode = fmt.Sprintf("huge trace of %d spans", *huge)
 		b, t := sample.HugeTrace(sample.NewRandomGen(), *huge, time.Now().Add(-time.Duration(*huge)*2*time.Millisecond))
@@ -143,10 +159,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "send-sample-traces: trace %s\n", t.ID)
 	case *rate > 0:
 		mode = fmt.Sprintf("%d spans/s for %s", *rate, time.Duration(duration))
-		runRate(ctx, s, list, *rate, time.Duration(duration), *workers)
+		runRate(ctx, s, newGen(), list, *rate, time.Duration(duration), *workers)
 	case *live:
 		mode = "live"
-		runLive(ctx, s, list)
+		runLive(ctx, s, newGen(), list)
 	default:
 		runSeed(ctx, s, list)
 	}
@@ -175,9 +191,13 @@ func (s *seconds) Set(v string) error {
 	return err
 }
 
-func names() string {
+func names() string { return join(sample.Scenarios) }
+
+func edgeNames() string { return join(sample.EdgeScenarios) }
+
+func join(list []sample.Scenario) string {
 	var n []string
-	for _, s := range sample.Scenarios {
+	for _, s := range list {
 		n = append(n, s.Name)
 	}
 	return strings.Join(n, ",")
@@ -191,7 +211,10 @@ func pick(flagValue string) ([]sample.Scenario, error) {
 	for _, name := range strings.Split(flagValue, ",") {
 		sc, ok := sample.Lookup(strings.TrimSpace(name))
 		if !ok {
-			return nil, fmt.Errorf("unknown scenario %q (known: %s)", name, names())
+			sc, ok = sample.LookupEdge(strings.TrimSpace(name))
+		}
+		if !ok {
+			return nil, fmt.Errorf("unknown scenario %q (known: %s; edge scenarios: %s)", name, names(), edgeNames())
 		}
 		out = append(out, sc)
 	}
@@ -226,9 +249,12 @@ func traceScenarios(list []sample.Scenario) []sample.Scenario {
 	return out
 }
 
-// fill adds random traces to a new batch until it has about want spans.
-func fill(g *sample.Gen, list []sample.Scenario, want int, st *stats) *sample.Batch {
+// fill adds random traces to a new batch until it has about want spans,
+// and says how many traces it added. The draws per trace, in order: the
+// scenario, the start, the scale, then the scenario's own.
+func fill(g *sample.Gen, list []sample.Scenario, want int) (*sample.Batch, int) {
 	b := sample.NewBatch()
+	traces := 0
 	now := time.Now()
 	for b.SpanCount() < want {
 		sc := list[g.IntN(len(list))]
@@ -238,26 +264,42 @@ func fill(g *sample.Gen, list []sample.Scenario, want int, st *stats) *sample.Ba
 			break
 		}
 		if t.Spans > 0 {
-			st.traces.Add(1)
+			traces++
 		}
 	}
-	return b
+	return b, traces
 }
 
-func runVolume(ctx context.Context, s *sender, list []sample.Scenario, total, workers int) {
-	g := sample.NewRandomGen()
+// planVolume builds the batches of a --volume run of total spans, in order,
+// on the caller's goroutine, so a seeded g gives the same batches every run.
+// emit gets each batch with the number of traces in it, and returns false
+// to stop.
+func planVolume(g *sample.Gen, list []sample.Scenario, total int, emit func(b *sample.Batch, traces int) bool) {
+	for queued := 0; queued < total; {
+		b, traces := fill(g, list, min(spansPerRequest, total-queued))
+		queued += max(1, b.SpanCount())
+		if !emit(b, traces) {
+			return
+		}
+	}
+}
+
+// runVolume generates the batches on one goroutine; the workers only send.
+func runVolume(ctx context.Context, s *sender, g *sample.Gen, list []sample.Scenario, total, workers int) {
 	list = traceScenarios(list)
 	jobs, wait := s.pool(ctx, workers)
-	for queued := 0; queued < total && ctx.Err() == nil; {
-		b := fill(g, list, min(spansPerRequest, total-queued), s.st)
-		queued += max(1, b.SpanCount())
+	defer wait()
+	planVolume(g, list, total, func(b *sample.Batch, traces int) bool {
+		if ctx.Err() != nil {
+			return false
+		}
+		s.st.traces.Add(int64(traces))
 		jobs <- b
-	}
-	wait()
+		return true
+	})
 }
 
-func runRate(ctx context.Context, s *sender, list []sample.Scenario, rate int, d time.Duration, workers int) {
-	g := sample.NewRandomGen()
+func runRate(ctx context.Context, s *sender, g *sample.Gen, list []sample.Scenario, rate int, d time.Duration, workers int) {
 	list = traceScenarios(list)
 	jobs, wait := s.pool(ctx, workers)
 	defer wait()
@@ -273,7 +315,8 @@ func runRate(ctx context.Context, s *sender, list []sample.Scenario, rate int, d
 			elapsed := min(now.Sub(began), d)
 			due := int(float64(rate) * elapsed.Seconds())
 			for queued < due {
-				b := fill(g, list, min(spansPerRequest, due-queued), s.st)
+				b, traces := fill(g, list, min(spansPerRequest, due-queued))
+				s.st.traces.Add(int64(traces))
 				queued += max(1, b.SpanCount())
 				select {
 				case jobs <- b:
@@ -288,8 +331,7 @@ func runRate(ctx context.Context, s *sender, list []sample.Scenario, rate int, d
 	}
 }
 
-func runLive(ctx context.Context, s *sender, list []sample.Scenario) {
-	g := sample.NewRandomGen()
+func runLive(ctx context.Context, s *sender, g *sample.Gen, list []sample.Scenario) {
 	list = traceScenarios(list)
 	for {
 		sc := list[g.IntN(len(list))]

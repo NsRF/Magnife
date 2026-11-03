@@ -4,7 +4,9 @@
 # the given arguments. Try --help.
 #
 #   scripts/send-sample-traces                      # the seed set, mixed protocols
+#   scripts/send-sample-traces --edges              # the detector edge set, fixed ids
 #   scripts/send-sample-traces --volume 100000
+#   scripts/send-sample-traces --volume 12000 --seed 1  # the same traces every run
 #   scripts/send-sample-traces --rate 5000 --duration 60s
 #   scripts/send-sample-traces --huge-trace 30000 --protocol grpc
 #   scripts/send-sample-traces --live

@@ -26,6 +26,9 @@ go run ./cmd/magnife-ingest --db /tmp/magnife/magnife.sqlite --no-stdin &
 
 # Send the seed data (see scripts/send-sample-traces --help for load modes).
 scripts/send-sample-traces
+# The detector edge set, and a volume run that is the same every time.
+scripts/send-sample-traces --edges
+scripts/send-sample-traces --volume 12000 --seed 1
 ```
 
 Then point any OpenTelemetry SDK at it:
