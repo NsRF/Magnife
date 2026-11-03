@@ -320,7 +320,9 @@ public enum Detectors {
 extension Detectors {
     /// N+1: the same normalized `db_statement` (literals removed) 5 or more
     /// times in one trace gives one finding for all those spans, first by
-    /// start. Each distinct statement is normalized once.
+    /// start. Each distinct statement is normalized once. A span with a
+    /// statement and no `db_system` counts too, as in the reader's
+    /// candidates (PROGRESS decision 172; it replaces the detector audit's 4a).
     public static func nPlusOne(_ spans: [DetectorSpan]) -> [Finding] {
         var shapes: [String: String] = [:]
         var groups: [String: [DetectorSpan]] = [:]

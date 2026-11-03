@@ -1,8 +1,8 @@
 import Foundation
 
 /// Turns a SQL statement into its shape, for N+1 (S-024): literals become
-/// `?`, an IN list of values one `(?)`, repeated VALUES tuples one tuple,
-/// comments go (so sqlcommenter's per-request `/*traceparent=…*/` never
+/// `?`, an IN list of values one `(?)` (one cut short by `maxBytes` reads
+/// `(?`), repeated VALUES tuples one tuple, comments go (so sqlcommenter's per-request `/*traceparent=…*/` never
 /// splits a group), and runs of white space become one space. Identifiers,
 /// quoted identifiers, keywords and bind placeholders (`$1`, `@p0`, `:id`,
 /// `?`) stay as written, so different tables, columns or parameters never
@@ -17,7 +17,7 @@ public enum SQLNormalizer {
         let cut = bytes.count > maxBytes
         if cut { bytes.removeSubrange(maxBytes...) }
         var tokens = tokenize(bytes)
-        tokens = collapseLists(tokens)
+        tokens = collapseLists(tokens, cut: cut)
         var out: [UInt8] = []
         out.reserveCapacity(bytes.count)
         for token in tokens {
@@ -187,21 +187,22 @@ public enum SQLNormalizer {
 
     // MARK: Lists
 
-    /// `IN (?, ?, ?)` reads `IN (?)`; `VALUES (?, ?), (?, ?)` keeps its first tuple.
-    static func collapseLists(_ tokens: [Token]) -> [Token] {
+    /// `IN (?, ?, ?)` reads `IN (?)`; `VALUES (?, ?), (?, ?)` keeps its first
+    /// tuple, and so does a tuple inside parentheses (`IN ((?, ?), (?, ?))`
+    /// reads `IN ((?, ?))`); other tuples stay (`f(?), (?)`). In a statement
+    /// cut at `maxBytes`, an IN list that runs to the cut reads `IN (?`, so
+    /// long lists of any length still group (PROGRESS decision 180).
+    static func collapseLists(_ tokens: [Token], cut: Bool = false) -> [Token] {
         var out: [Token] = []
         out.reserveCapacity(tokens.count)
         var i = 0
         while i < tokens.count {
+            let afterIN = out.last?.isWord("IN") == true
             if tokens[i].isPunct(40), let end = valueTupleEnd(tokens, from: i) {
-                let afterIN = out.last?.isWord("IN") == true
+                // Only a VALUES list or a list of tuples repeats a tuple.
+                let repeats = out.last.map { $0.isWord("VALUES") || $0.isPunct(40) } ?? false
                 if afterIN {
-                    var open = tokens[i]
-                    open.text = [40]
-                    var value = literal
-                    value.space = tokens[i + 1].space
-                    out.append(open)
-                    out.append(value)
+                    out.append(contentsOf: collapsedOpening(tokens, at: i))
                     var close = tokens[end - 1]
                     close.space = false
                     out.append(close)
@@ -209,17 +210,45 @@ public enum SQLNormalizer {
                     out.append(contentsOf: tokens[i..<end])
                 }
                 i = end
-                // More tuples of values after a tuple of values: dropped.
-                while i < tokens.count, tokens[i].isPunct(44), i + 1 < tokens.count, tokens[i + 1].isPunct(40),
+                // More tuples of values after a first tuple of values: dropped.
+                while repeats, i < tokens.count, tokens[i].isPunct(44), i + 1 < tokens.count, tokens[i + 1].isPunct(40),
                       let next = valueTupleEnd(tokens, from: i + 1) {
                     i = next
                 }
                 continue
             }
+            if cut, afterIN, tokens[i].isPunct(40), runsToCut(tokens, from: i) {
+                out.append(contentsOf: collapsedOpening(tokens, at: i))
+                break
+            }
             out.append(tokens[i])
             i += 1
         }
         return out
+    }
+
+    /// `(` and one `?` in place of the list that opens at `open`.
+    private static func collapsedOpening(_ tokens: [Token], at open: Int) -> [Token] {
+        var paren = tokens[open]
+        paren.text = [40]
+        var value = literal
+        value.space = tokens[open + 1].space
+        return [paren, value]
+    }
+
+    /// `(` value (, value)* [,] up to the last token: an IN list that the cut ended.
+    private static func runsToCut(_ tokens: [Token], from open: Int) -> Bool {
+        var i = open + 1
+        guard i < tokens.count, tokens[i].isValue else { return false }
+        i += 1
+        while i < tokens.count {
+            guard tokens[i].isPunct(44) else { return false }
+            i += 1
+            if i == tokens.count { return true }
+            guard tokens[i].isValue else { return false }
+            i += 1
+        }
+        return true
     }
 
     /// The index after `(` value (, value)* `)` starting at `open`, or nil.

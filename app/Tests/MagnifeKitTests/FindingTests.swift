@@ -139,6 +139,28 @@ struct FindingTests {
         #expect(Detectors.findings(in: tables).isEmpty)
     }
 
+    @Test("statements without db_system group like the reader's candidates; they are never Slow SQL")
+    func nPlusOneStatementOnly() throws {
+        let spans = (0..<5).map { n in
+            db("s\(n)", 150 * Self.ms, system: nil, statement: "SELECT * FROM items WHERE id = \(n)", start: Int64(n))
+        }
+        let found = Detectors.findings(in: spans)
+        #expect(found.findings.map(\.kind) == [.nPlusOne])
+        #expect(try #require(found.findings.first).dbSystem == nil)
+    }
+
+    @Test("long IN lists of 4- and 5-digit ids, cut at 10,000 bytes, are one N+1")
+    func nPlusOneLongLists() throws {
+        let spans = (0..<6).map { n in
+            let first = n.isMultiple(of: 2) ? 1_000 : 10_000
+            let list = (first..<(first + 3_000)).map(String.init).joined(separator: ", ")
+            return db("l\(n)", Self.ms, statement: "SELECT id FROM t WHERE id IN (\(list))", start: Int64(n))
+        }
+        let finding = try #require(Detectors.findings(in: spans).findings.first)
+        #expect(finding.count == 6)
+        #expect(finding.statement == "SELECT id FROM t WHERE id IN (? …")
+    }
+
     // MARK: HTTP Error (S-025)
 
     private func http(_ id: String, kind: SpanKind = .server, name: String = "POST /payments", method: String? = "POST",

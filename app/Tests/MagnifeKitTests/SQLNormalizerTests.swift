@@ -102,6 +102,53 @@ struct SQLNormalizerTests {
         #expect(SQLNormalizer.normalize(statement + " AND x = 2") == shape)
     }
 
+    @Test("an IN list cut at 10,000 bytes reads (? …, so long lists of any id width group",
+          arguments: [1_000, 10_000])
+    func longListsGroup(firstID: Int) {
+        let statement = "SELECT id FROM t WHERE id IN ("
+            + (firstID..<(firstID + 3_000)).map(String.init).joined(separator: ", ") + ")"
+        #expect(statement.utf8.count > SQLNormalizer.maxBytes)
+        #expect(SQLNormalizer.normalize(statement) == "SELECT id FROM t WHERE id IN (? …")
+    }
+
+    @Test("a cut that ends on a comma or inside a value still collapses the list; other cut statements keep their tokens")
+    func cutEdges() {
+        let head = "SELECT id FROM t WHERE id IN ("
+        let values = String(repeating: "12345, ", count: 3_000)
+        for extra in 0..<7 {
+            // Shifts the cut through "12345, ": after a digit, the comma, the space.
+            let statement = String(repeating: " ", count: extra) + head + values
+            #expect(SQLNormalizer.normalize(statement) == "SELECT id FROM t WHERE id IN (? …", "\(extra)")
+        }
+        // Not a list of values: nothing collapses.
+        let columns = head + String(repeating: "a, ", count: 4_000)
+        #expect(SQLNormalizer.normalize(columns).hasPrefix(head + "a, a, a"))
+        // A list that closes before the cut collapses as before.
+        let closed = "SELECT * FROM t WHERE id IN (1, 2) AND note = '" + String(repeating: "x", count: 11_000) + "'"
+        #expect(SQLNormalizer.normalize(closed) == "SELECT * FROM t WHERE id IN (?) AND note = ? …")
+    }
+
+    @Test("only a VALUES list or a list of tuples drops its further tuples", arguments: [
+        ("SELECT f(1), (2)", "SELECT f(?), (?)"),
+        ("SELECT (1), (2) FROM t", "SELECT (?), (?) FROM t"),
+        ("SELECT * FROM t WHERE (a, b) IN ((1, 2), (3, 4))", "SELECT * FROM t WHERE (a, b) IN ((?, ?))"),
+        ("INSERT INTO t VALUES ($1, $2), ($3, $4)", "INSERT INTO t VALUES ($1, $2)"),
+        ("insert into t values (1),(2),(3)", "insert into t values (?)"),
+    ])
+    func tuples(_ statement: String, _ shape: String) {
+        #expect(SQLNormalizer.normalize(statement) == shape)
+    }
+
+    @Test("the edge set's prices statements, IN lists of 1 to 5 with a sqlcommenter comment each, are one shape")
+    func pricesGroup() {
+        let skus = (1...5).map { n in (1...n).map { "'SKU-\($0)'" }.joined(separator: ", ") }
+        let shapes = Set(skus.enumerated().map { index, list in
+            SQLNormalizer.normalize("/*traceparent='00-8cb5882e0d71db79007aea27436f3254-000000000000000\(index + 1)-01'*/ "
+                                    + "SELECT sku, price_cents FROM prices WHERE sku IN (\(list))")
+        })
+        #expect(shapes == ["SELECT sku, price_cents FROM prices WHERE sku IN (?)"])
+    }
+
     @Test("an unclosed string, quote or comment never runs past the end")
     func unclosed() {
         #expect(SQLNormalizer.normalize("SELECT 'abc") == "SELECT ?")
