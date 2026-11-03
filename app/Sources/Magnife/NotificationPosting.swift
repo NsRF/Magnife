@@ -96,7 +96,8 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     private let model: AppModel
     private let launchedAt = Date()
 
-    private init(model: AppModel) {
+    /// `install` in real runs; the self-test makes its own to deliver clicks.
+    init(model: AppModel) {
         self.model = model
     }
 
@@ -115,9 +116,15 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             didReceive response: UNNotificationResponse) async {
-        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-              let traceID = response.notification.request.content.userInfo[FailureNotificationRequest.traceIDKey] as? String
-        else { return }
+        let content = response.notification.request.content
+        await route(actionIdentifier: response.actionIdentifier,
+                    traceID: content.userInfo[FailureNotificationRequest.traceIDKey] as? String)
+    }
+
+    /// What a response does (the self-test calls it with a request's own
+    /// userInfo): a click on the banner opens its trace; dismissing does nothing.
+    func route(actionIdentifier: String, traceID: String?) async {
+        guard actionIdentifier == UNNotificationDefaultActionIdentifier, let traceID else { return }
         await Self.open(traceID, model: model, justLaunched: Date().timeIntervalSince(launchedAt) < 5)
     }
 

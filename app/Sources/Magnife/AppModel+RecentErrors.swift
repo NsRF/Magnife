@@ -62,10 +62,18 @@ extension AppModel {
     /// trace when its scope, filters and pause show it; a trace pruned since
     /// shows "Trace No Longer Stored". The caller brings the window forward.
     func openFailedTrace(_ traceID: String) {
+        // A click that launched Magnife comes before the first read: the
+        // last quit's selection must not replace this trace (M3 review 2).
+        launchSelection = nil
         closeSearch()
         showContentMode(.traces)
         if selectedTraceID == traceID, !waterfall.isEmpty {
             showFirstErrorSpan()
+        } else if selectedTraceID == traceID {
+            // Selected, but its read failed (and a paused list reads no
+            // more): open it again rather than wait (M3 review 9).
+            pendingFailedTrace = traceID
+            openSelectedTrace()
         } else {
             pendingFailedTrace = traceID
             selectedTraceID = traceID

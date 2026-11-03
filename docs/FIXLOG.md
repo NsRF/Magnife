@@ -311,3 +311,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: `isBatchRefresh` was one stored Bool set and cleared (`defer`) by each async `reload`; two reloads interleave at their awaits.
 - Fix: `RefreshPacing.isBatch`, a `@TaskLocal` set with `withValue` for one reload and inherited by its tasks.
 - Rule: per-operation context in async code is a task-local or a parameter, never a stored flag.
+
+## A notification click that launched Magnife opened the trace selected at the last quit (M3 review, S-028)
+
+- Symptom: quit with trace A selected, click a notification for trace B while Magnife is not running: Magnife opened on A.
+- Cause: the click waited only for the main window (about 160 ms) and selected B, but the first read ends later (300 to 370 ms) and `finishLaunch` then set `selectedTraceID` to the kept `launchSelection` without condition, which also dropped B's `pendingFailedTrace`.
+- Fix: `openFailedTrace` clears `launchSelection`; a selected trace whose read failed is opened again (`openSelectedTrace`) instead of waiting for a refresh a paused list never makes.
+- Rule: a launch-time restore only fills in what nothing chose meanwhile; anything people did first wins.

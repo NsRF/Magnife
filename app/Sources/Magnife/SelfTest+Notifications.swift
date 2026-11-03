@@ -172,7 +172,12 @@ extension SelfTest {
         model.selectedTraceID = nil
         for window in NSApp.windows where window.canBecomeMain { window.close() }
         _ = await waitUntil(2) { MainWindow.window == nil }
-        await NotificationRouter.open(trace.traceID, model: model, justLaunched: false)
+        // The click as the center delivers it: the posted request's own trace id, through the delegate's path.
+        let router = NotificationRouter(model: model)
+        let key = FailureNotificationRequest.traceIDKey
+        let posted = model.failureNotifier.fake?.requests.last { ($0.content.userInfo[key] as? String) == trace.traceID }
+        await router.route(actionIdentifier: UNNotificationDefaultActionIdentifier,
+                           traceID: posted?.content.userInfo[key] as? String ?? trace.traceID)
         let opened = await waitUntil(5) {
             model.openTrace?.traceID == trace.traceID && model.selectedSpanID != nil
                 && model.selectedSpanID == model.waterfall.firstErrorSpanID
@@ -181,6 +186,45 @@ extension SelfTest {
         check("and opens the trace on its earliest Error span, as from Recent Errors", opened,
               "\(model.openTrace?.route ?? "nil") \(model.selectedSpanID ?? "nil")")
         check("the span detail shows on Span", model.showsSpanDetail && model.spanDetailTab == .span)
+        model.selectedTraceID = nil
+        await router.route(actionIdentifier: UNNotificationDismissActionIdentifier, traceID: trace.traceID)
+        check("dismissing a notification opens nothing", model.selectedTraceID == nil)
+        await checkClickThatLaunched(model, trace: trace)
+        await checkReopenAfterFailedRead(model, trace: trace)
+    }
+
+    /// The click that launched Magnife (M3 review 2): it lands before the
+    /// first read, whose `finishLaunch` must not select the last quit's trace.
+    private static func checkClickThatLaunched(_ model: AppModel, trace: TraceSummary) async {
+        guard let kept = model.traces.first(where: { $0.traceID != trace.traceID }) else {
+            return check("the seed set has a second trace for the launch click", false)
+        }
+        model.launchSelection = kept.traceID
+        await NotificationRouter.open(trace.traceID, model: model, justLaunched: true)
+        model.finishLaunch()
+        let opened = await waitUntil(5) {
+            model.openTrace?.traceID == trace.traceID && model.selectedSpanID != nil
+                && model.selectedSpanID == model.waterfall.firstErrorSpanID
+        }
+        check("a click that launched Magnife opens its trace, not the one selected at the last quit",
+              opened && model.selectedTraceID == trace.traceID, model.selectedTraceID ?? "nil")
+        model.selectedTraceID = nil
+    }
+
+    /// The trace is already selected but its read failed, and the list is
+    /// paused (no refresh retries it): a click opens it again (M3 review 9).
+    private static func checkReopenAfterFailedRead(_ model: AppModel, trace: TraceSummary) async {
+        model.selectedTraceID = trace.traceID
+        _ = await waitUntil(3) { !model.waterfall.isEmpty }
+        model.pause()
+        model.waterfall = Waterfall()
+        model.openFailedTrace(trace.traceID)
+        let opened = await waitUntil(3) {
+            !model.waterfall.isEmpty && model.selectedSpanID != nil && model.selectedSpanID == model.waterfall.firstErrorSpanID
+        }
+        check("a selected trace whose read failed opens again from a notification, paused too", opened)
+        model.resume()
+        _ = await waitUntil(3) { !model.isPaused }
         model.selectedTraceID = nil
     }
 }
