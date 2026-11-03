@@ -327,7 +327,7 @@ Running log of the overnight MVP build (started 2026-11-02). Newest entries at t
   - Review 12: fixed for the reported case (a newer trace read "Just now" on the first frame); while the menu is open its times stay fixed at the opening (docs/ux.md), as before.
   - E2E S-028 [manual] lines (permission prompt, a click that launches Magnife): still not tried by hand. With the screen locked the permission request waits unanswered, so no real banner can be posted or clicked; both paths are covered by the self-test through the fake poster and the router.
   - E2E S-030 live run: with the screen locked the OS draws no frames for the window (the app used 10 to 17% CPU under the flood, against 40 to 107% in the first M3 run), so the live run cannot show the switch's cost; the self-test, whose window draws, is the measure, and it says S-030 is blocked (Blocked).
-  - False positives: none. Review 2 and 9 were PLAUSIBLE and confirmed by reading the code (the self-test checks added for them fail on the old code paths by construction); review 11 confirmed by the unit test.
+  - False positives: none. Review 2 and 9 were PLAUSIBLE and confirmed by reading the code; the self-test checks added for them exercise those paths but were not run against the old code; review 11 confirmed by the unit test.
 
 ## Blocked
 
