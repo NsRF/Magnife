@@ -45,6 +45,8 @@ extension SelfTest {
         let first = await waitUntil(3) { fake.notices.count == 1 }
         check("the first trace with an error asks for permission", fake.requestCount == asksBefore + 1)
         check("then its banner posts at once", first, "\(fake.notices.count) posted")
+        check("the same batch line counts the trace for the menu bar icon (S-026)",
+              model.recentErrors.newTraceIDs.contains(pay.traceID))
         let spans = (try? await reader.spans(traceID: pay.traceID)) ?? []
         let exception = spans.filter { $0.status == .error }.sorted { $0.startNs < $1.startNs }.flatMap(\.exceptions).first
         let notice = fake.notices.first

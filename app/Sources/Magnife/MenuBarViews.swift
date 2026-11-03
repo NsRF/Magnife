@@ -176,6 +176,8 @@ final class MenuBarTracking: NSObject {
     static weak var menu: NSMenu?
     /// Called on every open of the menu, after the model (self-test, snapshots).
     static var onOpen: ((NSMenu) -> Void)?
+    /// True from the menu's opening to its closing.
+    static var isOpen = false
     /// Whether the status item said it is in the menu bar, last time it changed (self-test).
     static var statusItemVisible: Bool?
 
@@ -191,6 +193,12 @@ final class MenuBarTracking: NSObject {
         shared = tracking
         NotificationCenter.default.addObserver(tracking, selector: #selector(menuBeganTracking(_:)),
                                                name: NSMenu.didBeginTrackingNotification, object: nil)
+        NotificationCenter.default.addObserver(tracking, selector: #selector(menuEndedTracking(_:)),
+                                               name: NSMenu.didEndTrackingNotification, object: nil)
+    }
+
+    @objc private func menuEndedTracking(_ note: Notification) {
+        if let menu = note.object as? NSMenu, menu === Self.menu { Self.isOpen = false }
     }
 
     @objc private func menuBeganTracking(_ note: Notification) {
@@ -199,6 +207,7 @@ final class MenuBarTracking: NSObject {
         Task { @MainActor in
             guard Self.isMenuBarExtra(menu) else { return }
             Self.menu = menu
+            Self.isOpen = true
             model.recentErrorsMenuOpened()
             Self.onOpen?(menu)
         }

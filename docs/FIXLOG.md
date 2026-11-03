@@ -297,3 +297,17 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: since S-030 the Route column takes the width the other columns leave (`LiveTable.fitColumns`), so the snapshot's `route.width = 300` was undone on the next tile; and the waterfall read the trace, its spans and its findings in three separate reads, each its own WAL snapshot, while the helper kept writing.
 - Fix: the snapshot drags the column split instead; `TelemetryReader.openTrace` reads all three in one `pool.read` and runs the detectors after it.
 - Rule: values shown together are read in one `pool.read`; a snapshot that sets a size checks the size it got.
+
+## The menu bar icon turned red again for a trace that had already failed (M3 review, S-026)
+
+- Symptom: a trace whose child span failed made the icon read "1"; after opening the menu, its healthy root span arrived in the next batch and the icon read "1" again for the same failure. Notifications, which use the batch lines' `error_traces`, fired once.
+- Cause: the count was `COUNT(*) FROM traces WHERE status = 2 AND updated_seq > mark`, and `updated_seq` is the last batch that touched the row, not the one that made it fail.
+- Fix: the count is the set of `error_traces` ids since the menu opened (`RecentErrors.failed`, `AppModel.noteFailedTraces`).
+- Rule: count "new" things from the event that made them so (the batch line's `error_traces`), never from a column every later write moves.
+
+## One stored flag paced overlapping refreshes wrongly (M3 review, S-026, S-030)
+
+- Symptom: a menu opening or sidebar change during a batch refresh could be paced like a batch (the icon stayed red up to a second), or a batch refresh lost its pacing half-way.
+- Cause: `isBatchRefresh` was one stored Bool set and cleared (`defer`) by each async `reload`; two reloads interleave at their awaits.
+- Fix: `RefreshPacing.isBatch`, a `@TaskLocal` set with `withValue` for one reload and inherited by its tasks.
+- Rule: per-operation context in async code is a task-local or a parameter, never a stored flag.

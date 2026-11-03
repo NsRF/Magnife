@@ -47,26 +47,29 @@ struct RecentErrorsTests {
         #expect(!RecentErrors.showSame([trace(1)], [trace(2)]))
     }
 
-    @Test("the first read starts the count; opening the menu resets it")
+    @Test("the count is the traces named failed since the menu opened; opening resets it")
     func counting() {
         var state = RecentErrors()
-        state.apply(RecentErrorsPage(traces: [trace(1)], newCount: 0, mark: nil, lastSeq: 7))
-        #expect(state.mark == 7 && state.newCount == 0 && state.traces.count == 1)
-        state.apply(RecentErrorsPage(traces: [trace(2), trace(1)], newCount: 2, mark: 7, lastSeq: 9))
-        #expect(state.newCount == 2 && state.lastSeq == 9)
+        state.apply([trace(1)])
+        #expect(state.newCount == 0 && state.traces.count == 1)
+        state.failed([traceID(2), traceID(1)])
+        #expect(state.newCount == 2)
+        // A trace named again (a resent batch) counts once.
+        state.failed([traceID(2)])
+        #expect(state.newCount == 2)
         state.opened()
-        #expect(state.mark == 9 && state.newCount == 0)
-        // A read that counted from before the menu opened changes the rows, not the count.
-        state.apply(RecentErrorsPage(traces: [trace(3)], newCount: 3, mark: 7, lastSeq: 10))
-        #expect(state.newCount == 0 && state.traces.map(\.traceID) == [traceID(3)] && state.lastSeq == 10)
-        state.apply(RecentErrorsPage(traces: [trace(3)], newCount: 1, mark: 9, lastSeq: 10))
+        #expect(state.newCount == 0)
+        // A late span on a trace that already failed is in no batch's error_traces: it never counts again
+        // (M3 review 3); the list still shows it.
+        state.apply([trace(2), trace(1)])
+        #expect(state.newCount == 0 && state.traces.map(\.traceID) == [traceID(2), traceID(1)])
+        state.failed([traceID(3)])
+        #expect(state.newCount == 1 && state.newTraceIDs == [traceID(3)])
+        state.failed([])
         #expect(state.newCount == 1)
-        // An older read never moves the last seq back.
-        state.apply(RecentErrorsPage(traces: [], newCount: 1, mark: 9, lastSeq: 8))
-        #expect(state.lastSeq == 10)
     }
 
-    @Test("the reader reads the five newest traces with an error and counts changes after a seq")
+    @Test("the reader reads the five newest traces with an error")
     func reader() async throws {
         let dir = try TempDir("recent-errors")
         defer { dir.remove() }
@@ -79,20 +82,12 @@ struct RecentErrorsTests {
             }
         }
         let reader = try await TelemetryReader.open(at: url)
-        let first = try await reader.recentErrors(changedAfter: nil)
-        #expect(first.traces.map(\.route) == ["GET /8", "GET /7", "GET /6", "GET /5", "GET /3"])
-        #expect(first.newCount == 0 && first.mark == nil && first.lastSeq == 8)
-        let counted = try await reader.recentErrors(changedAfter: 5)
-        #expect(counted.newCount == 3 && counted.mark == 5)
-        // A trace changed again counts once; one that turned OK stops counting.
+        #expect(try await reader.recentErrors().map(\.route) == ["GET /8", "GET /7", "GET /6", "GET /5", "GET /3"])
+        // One that turned OK leaves the list.
         try await writer.write { db in
-            try db.execute(sql: "UPDATE traces SET updated_seq = 9 WHERE trace_id = ?", arguments: [traceID(8)])
             try db.execute(sql: "UPDATE traces SET status = 1, updated_seq = 9 WHERE trace_id = ?", arguments: [traceID(7)])
-            try db.execute(sql: "UPDATE meta SET value = '9' WHERE key = 'last_seq'")
         }
-        let again = try await reader.recentErrors(changedAfter: 5)
-        #expect(again.newCount == 2 && again.lastSeq == 9)
-        #expect(try await reader.recentErrors(limit: 2, changedAfter: 9).traces.map(\.route) == ["GET /8", "GET /6"])
+        #expect(try await reader.recentErrors(limit: 2).map(\.route) == ["GET /8", "GET /6"])
         _ = writer
     }
 

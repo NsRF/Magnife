@@ -230,18 +230,10 @@ public final class TelemetryReader: Sendable {
         try await pool.read { try Int.fetchOne($0, sql: TelemetrySQL.tracesCreatedAfter, arguments: [seq]) ?? 0 }
     }
 
-    /// The menu bar extra's read (S-026): the newest traces with an error,
-    /// how many traces with an error changed after `mark` (none counted when
-    /// nil) and the last seq, in one read, so the next count starts exactly
-    /// where this one ended.
+    /// The menu bar extra's read (S-026): the newest traces with an error.
     @concurrent
-    public func recentErrors(limit: Int = RecentErrors.limit, changedAfter mark: Int64?) async throws -> RecentErrorsPage {
-        try await pool.read { db in
-            RecentErrorsPage(traces: try TraceSummary.fetchAll(db, sql: TelemetrySQL.recentErrorTraces, arguments: [limit]),
-                             newCount: try mark.map { try Int.fetchOne(db, sql: TelemetrySQL.errorTracesChangedAfter,
-                                                                       arguments: [$0]) ?? 0 } ?? 0,
-                             mark: mark, lastSeq: try Self.lastSeq(db))
-        }
+    public func recentErrors(limit: Int = RecentErrors.limit) async throws -> [TraceSummary] {
+        try await pool.read { try TraceSummary.fetchAll($0, sql: TelemetrySQL.recentErrorTraces, arguments: [limit]) }
     }
 
     /// What the notifications of a batch's traces with errors say (S-028):

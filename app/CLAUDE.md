@@ -54,7 +54,8 @@ this app starts the helper and reads its database. No server, no accounts.
   context menus. `TraceRows` / `LogRows` are the only views that read the
   rows, so a batch updates the table alone. Both lists and both detail
   columns stay in the window (`shownWhen`; never `isHidden`, FIXLOG).
-  Batch refreshes (`reload(fromBatches:)`, `isBatchRefresh`) show the
+  Batch refreshes (`reload(fromBatches:)`, `isBatchRefresh`, read from the
+  task-local `RefreshPacing.isBatch`, never a stored flag: refreshes overlap) show the
   subtitle and the sidebar's services at most once a second
   (`AppModel+Counts.swift`, `shownSubtitle`, `shownServices`), the menu bar
   extra's copy at most once a second, and rebuild a growing open waterfall
@@ -199,10 +200,13 @@ this app starts the helper and reads its database. No server, no accounts.
   runs the checks and the cost INFO lines.
 - Menu bar extra (S-026): `MenuBarExtra` `.menu` style in `App.swift`, views
   in `MenuBarViews.swift`. `RecentErrors` (MagnifeKit, unit-tested) holds the
-  five newest traces with an error and the count since the menu was last
-  opened (traces with status Error and `updated_seq` after the mark), read in
-  every refresh, paused too (`TelemetryReader.recentErrors`,
-  `AppModel+RecentErrors.swift`). The label is `MenuBarGlyph.image(count:)`,
+  five newest traces with an error (read in every refresh, paused too,
+  `TelemetryReader.recentErrors`) and the count since the menu was last
+  opened: the ids the batch lines named in `error_traces` since then
+  (`noteFailedTraces`, a set, so a trace counts once, when it fails; never
+  `updated_seq`, which late spans move), `AppModel+RecentErrors.swift`.
+  While the menu is closed (`MenuBarTracking.isOpen`) its times count from
+  the last list change. The label is `MenuBarGlyph.image(count:)`,
   one cached bitmap per count with its VoiceOver words as the image's
   description; never add view modifiers to the label or a fresh NSImage per
   update, and never let `isInserted` write back (FIXLOG: both looped the scene

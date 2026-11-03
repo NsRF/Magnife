@@ -1,30 +1,15 @@
 import Foundation
 
-/// One read for the menu bar extra (S-026): the newest traces with an error,
-/// how many traces with an error changed after `mark`, and the last seq.
-public struct RecentErrorsPage: Sendable, Equatable {
-    public var traces: [TraceSummary]
-    public var newCount: Int
-    /// The seq the count started from; nil when nothing was counted (the first read).
-    public var mark: Int64?
-    public var lastSeq: Int64
-
-    public init(traces: [TraceSummary], newCount: Int, mark: Int64?, lastSeq: Int64) {
-        self.traces = traces
-        self.newCount = newCount
-        self.mark = mark
-        self.lastSeq = lastSeq
-    }
-}
-
 /// The menu bar extra's Recent Errors (S-026, docs/ux.md "Menu bar extra"):
 /// the last five traces with errors, newest first, and the icon's count of
 /// traces with an error since the menu was last opened.
 ///
-/// The count is the traces with status Error whose `updated_seq` is after
-/// the seq the menu was last opened at (at launch: the first read's seq, so
-/// traces stored before launch are not new). A trace counts once however
-/// many batches change it.
+/// The count is the traces the helper's batch lines named in
+/// `error_traces` (status became Error in that batch) since the menu was
+/// last opened, so a trace counts once, when it fails: a late span on a
+/// trace that already failed never counts it again (M3 review 3), and
+/// traces stored before launch are not new. The list is read in every
+/// refresh (`TelemetryReader.recentErrors`).
 public struct RecentErrors: Sendable, Equatable {
     public static let limit = 5
     public static let title = "Recent Errors"
@@ -32,35 +17,27 @@ public struct RecentErrors: Sendable, Equatable {
 
     /// The newest traces with an error, newest first.
     public private(set) var traces: [TraceSummary] = []
-    /// Traces with an error since the menu was last opened: the red icon's count.
-    public private(set) var newCount = 0
-    /// The seq the menu was last opened at; nil until the first read.
-    public private(set) var mark: Int64?
-    /// The newest seq read.
-    public private(set) var lastSeq: Int64 = 0
+    /// The traces that failed since the menu was last opened.
+    public private(set) var newTraceIDs: Set<String> = []
 
-    public init(mark: Int64? = nil) {
-        self.mark = mark
+    public init() {}
+
+    /// Traces with errors since the menu was last opened: the red icon's count.
+    public var newCount: Int { newTraceIDs.count }
+
+    /// A read of the newest traces with an error.
+    public mutating func apply(_ traces: [TraceSummary]) {
+        self.traces = traces
     }
 
-    /// A read's result. The first read starts the count at its seq. A count
-    /// read from another mark (the menu opened during the read) is dropped,
-    /// so opening the menu always resets it.
-    public mutating func apply(_ page: RecentErrorsPage) {
-        traces = page.traces
-        lastSeq = max(lastSeq, page.lastSeq)
-        guard let mark else {
-            self.mark = page.lastSeq
-            newCount = 0
-            return
-        }
-        if page.mark == mark { newCount = page.newCount }
+    /// A batch line's `error_traces`: the traces whose status became Error in it.
+    public mutating func failed(_ traceIDs: [String]) {
+        newTraceIDs.formUnion(traceIDs)
     }
 
     /// The menu opened: the count and the red icon reset.
     public mutating func opened() {
-        mark = lastSeq
-        newCount = 0
+        newTraceIDs = []
     }
 
     /// The count next to the red icon: nil at zero, "99+" above 99.

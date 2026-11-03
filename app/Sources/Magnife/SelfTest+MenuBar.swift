@@ -17,11 +17,16 @@ extension SelfTest {
               model.recentErrors.traces.map(\.traceID) == failed.prefix(RecentErrors.limit).map(\.traceID)
                 && !failed.isEmpty, "\(model.recentErrors.traces.map(\.route)) of \(failed.count)")
 
-        // Every stored trace with an error counts as new from seq 0.
-        model.recentErrors = RecentErrors(mark: 0)
-        await model.reload()
-        check("the count is the traces with errors since the mark", model.newErrorCount == failed.count,
+        // The seed set's failures, as the helper's batch lines name them (`error_traces`).
+        model.recentErrorsMenuOpened()
+        model.noteFailedTraces(failed.map(\.traceID))
+        let counted = await waitUntil(2) { model.newErrorCount == failed.count }
+        check("the count is the traces that failed since the menu was last opened", counted,
               "\(model.newErrorCount) of \(failed.count)")
+        // A trace that already failed and gets another span (or a resent batch) counts once.
+        model.noteFailedTraces([failed[0].traceID])
+        try? await Task.sleep(for: .seconds(1.1))
+        check("a trace that failed counts once however often it is named", model.newErrorCount == failed.count)
         let red = await waitUntil(2) { MenuBarProbe.statusButton?.image?.isTemplate == false }
         let image = MenuBarProbe.statusButton?.image
         check("the icon turns red with the count drawn beside it",
@@ -46,9 +51,11 @@ extension SelfTest {
                 && items.allSatisfy { $0.hasSuffix(" ago") || $0.hasSuffix("Just now") }, "\(items)")
         let template = await waitUntil(2) { MenuBarProbe.statusButton?.image?.isTemplate == true }
         check("opening the menu resets the count and the icon",
-              model.newErrorCount == 0 && model.recentErrors.mark == model.recentErrors.lastSeq && template)
+              model.newErrorCount == 0 && model.recentErrors.newCount == 0 && template)
+        check("the open menu's times count from its opening", MenuBarTracking.isOpen && opened.timeIntervalSinceNow > -5)
         await MenuBarProbe.close(menu)
         check("the menu closes", !(MenuBarProbe.statusButton?.isHighlighted ?? false))
+        check("closed, the menu is known to be closed", await waitUntil(1) { !MenuBarTracking.isOpen })
         await checkMenuBarCounting(model, reader: reader)
         await checkMenuBarCost(model)
         await checkMenuBarPause(model)
@@ -64,20 +71,24 @@ extension SelfTest {
             return check("APP_SEED_GRPC and APP_SEED_HTTP name the seed helper (tools/selftest.sh)", false)
         }
         model.recentErrorsMenuOpened()
-        let mark = model.recentErrors.mark ?? 0
+        let mark = (try? await reader.lastSeq()) ?? 0
         model.pause()
         let result = await run(sender, ["--protocol", "http-protobuf", "--scenarios", "exception", "--volume", "6",
                                         "--grpc", grpc, "--http", http])
         let sent = result.output.firstMatch(of: /(\d+) spans in (\d+) traces/).flatMap { Int($0.2) } ?? 0
-        var arrived = 0
+        // The seed helper's batch lines go to seed.zsh, not to this model: name the
+        // traces that failed after the mark as its `error_traces` would.
+        var arrived: [String] = []
         for _ in 0..<50 {
-            arrived = (try? await reader.recentErrors(changedAfter: mark).newCount) ?? 0
-            if arrived >= sent { break }
+            arrived = ((try? await reader.latestTraces(limit: 100_000)) ?? [])
+                .filter { $0.status == .error && $0.updatedSeq > mark }.map(\.traceID)
+            if arrived.count >= sent { break }
             try? await Task.sleep(for: .milliseconds(100))
         }
-        await model.reload()
+        model.noteFailedTraces(arrived)
+        let counted = await waitUntil(2) { model.newErrorCount == arrived.count }
         check("traces with errors that arrive while paused count up",
-              sent > 0 && arrived >= sent && model.newErrorCount == arrived, "sent \(sent), counted \(model.newErrorCount)")
+              sent > 0 && arrived.count >= sent && counted, "sent \(sent), counted \(model.newErrorCount)")
         let red = await waitUntil(2) { MenuBarProbe.statusButton?.image?.isTemplate == false }
         check("the icon is red again with them", red)
         model.resume()
@@ -88,12 +99,11 @@ extension SelfTest {
     /// menu are rebuilt each time they change (once per refresh in a burst).
     private static func checkMenuBarCost(_ model: AppModel) async {
         let traces = model.recentErrors.traces
-        let mark = model.recentErrors.mark
         let heartbeat = Heartbeat()
         heartbeat.start()
         for count in 1...20 {
-            model.recentErrors.apply(RecentErrorsPage(traces: count.isMultiple(of: 2) ? traces : traces.reversed(),
-                                                      newCount: count, mark: mark, lastSeq: model.recentErrors.lastSeq))
+            model.recentErrors.apply(count.isMultiple(of: 2) ? traces : traces.reversed())
+            model.recentErrors.failed(["cost-\(count)"])
             try? await Task.sleep(for: .milliseconds(50))
         }
         let stall = heartbeat.stop()

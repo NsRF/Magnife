@@ -5,12 +5,18 @@ import MagnifeKit
 /// read with every refresh (paused too), and the path a Recent Errors item
 /// takes into the main window.
 extension AppModel {
-    /// Reads the newest traces with an error and the count since the mark,
-    /// off the main actor. A failed read keeps what the menu shows.
+    /// Reads the newest traces with an error, off the main actor. A failed
+    /// read keeps what the menu shows.
     func refreshRecentErrors(_ reader: TelemetryReader) async {
-        guard let page = try? await reader.recentErrors(changedAfter: recentErrors.mark),
-              self.reader === reader else { return }
-        recentErrors.apply(page)
+        guard let traces = try? await reader.recentErrors(), self.reader === reader else { return }
+        recentErrors.apply(traces)
+    }
+
+    /// A batch line's traces whose status became Error (paused too): the
+    /// icon's count. Paced like a batch refresh: at most once a second.
+    func noteFailedTraces(_ ids: [String]) {
+        guard !ids.isEmpty else { return }
+        RefreshPacing.$isBatch.withValue(true) { recentErrors.failed(ids) }
     }
 
     /// Copies what the menu and the icon show, only when it changed: each
@@ -30,8 +36,15 @@ extension AppModel {
             }
             return
         }
-        let changed = !RecentErrors.showSame(recentErrors.traces, recentErrorTraces) || newErrorCount != recentErrors.newCount
-        if !RecentErrors.showSame(recentErrors.traces, recentErrorTraces) { recentErrorTraces = recentErrors.traces }
+        let listChanged = !RecentErrors.showSame(recentErrors.traces, recentErrorTraces)
+        let changed = listChanged || newErrorCount != recentErrors.newCount
+        if listChanged {
+            // While the menu is closed its times count from now, so the first
+            // frame of the next opening never reads a newer trace as "Just now"
+            // (M3 review 12); opening fixes them at that moment.
+            if !MenuBarTracking.isOpen { recentErrorsOpenedAt = Date() }
+            recentErrorTraces = recentErrors.traces
+        }
         if newErrorCount != recentErrors.newCount { newErrorCount = recentErrors.newCount }
         if changed { recentErrorsThrottle.fired(at: now) }
     }

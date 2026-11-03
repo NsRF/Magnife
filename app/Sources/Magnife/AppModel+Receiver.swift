@@ -81,7 +81,8 @@ extension AppModel {
                 requestRefresh()
             }
             if receiverRestarted && !batch.traces.isEmpty { receiverRestarted = false }
-            // Paused too: notifications keep coming (docs/ux.md, S-010 States).
+            // Paused too: the icon counts and notifications keep coming (docs/ux.md, S-010 States).
+            noteFailedTraces(batch.errorTraces)
             notifyFailures(batch.errorTraces)
         case .helper(.pruned):
             // Pruned rows leave the lists and the sidebar counts drop (S-015);

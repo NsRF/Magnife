@@ -58,8 +58,9 @@ final class AppModel {
     var shownServices: [ServiceSummary] = []
     @ObservationIgnored var countThrottle = Throttle()
     @ObservationIgnored var countTask: Task<Void, Never>?
-    /// True while a refresh started by the helper's batches applies its read.
-    @ObservationIgnored var isBatchRefresh = false
+    /// True while a refresh started by the helper's batches applies its read
+    /// (a task-local value: overlapping refreshes each keep their own, M3 review 6).
+    var isBatchRefresh: Bool { RefreshPacing.isBatch }
     /// One color slot per service, in the order first seen (S-004).
     private(set) var serviceColors = ServiceColors()
     /// The list's rows: pages from the database, newest first (S-004).
@@ -559,8 +560,13 @@ final class AppModel {
             return
         }
         refreshDatabaseSize()
-        isBatchRefresh = fromBatches
-        defer { isBatchRefresh = false }
+        await RefreshPacing.$isBatch.withValue(fromBatches) {
+            await applyRefresh(reader)
+        }
+    }
+
+    /// One refresh's reads, paced as `RefreshPacing.isBatch` says.
+    private func applyRefresh(_ reader: TelemetryReader) async {
         do {
             try await reloadList(reader)
             // The Logs list is read while it shows; switching to it reads it at once.

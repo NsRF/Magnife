@@ -11,9 +11,10 @@ extension Snapshot {
     /// Recent Errors item chosen, the window brought forward (S-027).
     static func captureMenuBar(_ model: AppModel, dir: String, mode: String) async {
         let page = SnapshotPage.menuBar.rawValue
-        // Every trace with an error counts as new: the count starts before the seed set.
-        model.recentErrors = RecentErrors(mark: 0)
+        // Every trace with an error counts as new, as if the batch lines that stored them came now.
         await model.reload()
+        model.noteFailedTraces(model.recentErrors.traces.map(\.traceID))
+        try? await Task.sleep(for: .seconds(1))
         try? await Task.sleep(for: .seconds(0.5))
         captureStatusItem(to: "\(dir)/\(page)-icon-\(mode).png")
         guard let menu = await MenuBarProbe.open() else { return print("SNAPSHOT no menu bar extra menu") }

@@ -274,8 +274,6 @@ enum TelemetrySQL {
     static let recentErrorTraces = """
         SELECT \(traceColumns) FROM traces WHERE status = 2 ORDER BY start_ns DESC, trace_id DESC LIMIT ?
         """
-    /// Traces with an error that a batch after ?1 changed: the menu bar icon's count.
-    static let errorTracesChangedAfter = "SELECT COUNT(*) FROM traces WHERE status = 2 AND updated_seq > ?"
 
     /// Failure notifications (S-028): the traces of a batch's `error_traces`
     /// (a JSON array of ids) that are still Error, by primary key.

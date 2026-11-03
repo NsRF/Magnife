@@ -14,7 +14,7 @@ extension AppModel {
             (self.subtitle, self.services)
         } onChange: { [weak self] in
             // Called before the change lands: read the new values on the next turn.
-            let paced = MainActor.assumeIsolated { self?.isBatchRefresh ?? false }
+            let paced = RefreshPacing.isBatch
             Task { @MainActor [weak self] in self?.countsChanged(paced: paced) }
         }
         if shownSubtitle != subtitle { shownSubtitle = subtitle }
@@ -41,4 +41,14 @@ extension AppModel {
             self.followCounts()
         }
     }
+}
+
+/// Whether what changes now comes from the helper's batches (decision 160:
+/// pacing applies to what batches change, not to what people do). A task
+/// local, set for the length of one refresh and inherited by the tasks it
+/// starts: a refresh people asked for that overlaps a batch refresh is
+/// never paced, and a batch refresh never loses its pacing half-way
+/// (M3 review 6, where one stored flag was shared by both).
+nonisolated enum RefreshPacing {
+    @TaskLocal static var isBatch = false
 }
