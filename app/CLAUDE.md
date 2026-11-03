@@ -263,7 +263,7 @@ this app starts the helper and reads its database. No server, no accounts.
 - `build.sh` builds, runs `../ingest/build.sh` when it exists, copies the
   helper into `Contents/Helpers/`, signs inside out (helper, then app; never
   `--deep`), and installs `~/Applications/Magnife.app`.
-- `Icon/AppIcon.icon` the app icon, an Icon Composer file (JSON plus SVG layers). `build.sh` compiles it with `tools/make_icon.sh`; `tools/icon_review.sh` renders every look into one PNG.
+- `Icon/AppIcon.icon` the app icon (S-032), an Icon Composer file: `lens.svg` (the lens ring and handle) over `bars.svg` (three offset bars, a tiny waterfall) on a deep indigo automatic gradient; both layers turn light lavender in the dark look (`fill-specializations`), so the glyph reads on black. Filled shapes only, drawn by hand (no SF Symbol). `build.sh` compiles it with `tools/make_icon.sh`; `tools/icon_review.sh` renders every look into one PNG. The menu bar glyph (`MenuBarGlyph.drawGlyph`) is the same lens and bars as line art.
 - `tools/seed.zsh` seeds test databases through the real pipeline
   (docs/STORIES.md, "Seed data"): it starts the bundled helper standalone
   (`--no-stdin`, ports 0) on a fresh /tmp database, runs

@@ -246,6 +246,36 @@ enum SelfTest {
         check("APP_HELPER=none starts no helper", AppModel.helperExecutable(environment: ["APP_HELPER": "none"]) == nil)
         check("the bundled helper path",
               AppModel.helperExecutable(environment: [:])?.path.hasSuffix("Contents/Helpers/magnife-ingest") == true)
+        checkAppIcon()
+    }
+
+    /// S-032: the bundle carries the compiled icon (Assets.car for macOS 26,
+    /// AppIcon.icns for older Finder views), and Finder's icon for the app at
+    /// 16 and 32 pt is Magnife's, not the generic application icon.
+    private static func checkAppIcon() {
+        let resources = Bundle.main.bundleURL.appending(path: "Contents/Resources")
+        let files = ["Assets.car", "AppIcon.icns"].filter {
+            FileManager.default.fileExists(atPath: resources.appending(path: $0).path)
+        }
+        check("the bundle has Assets.car and AppIcon.icns, named by CFBundleIconName",
+              files.count == 2 && Bundle.main.object(forInfoDictionaryKey: "CFBundleIconName") as? String == "AppIcon",
+              "\(files)")
+        let icon = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
+        let generic = NSWorkspace.shared.icon(for: .application)
+        func pixels(_ image: NSImage, _ side: Int) -> Data? {
+            guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8,
+                                             samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                             bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+            NSGraphicsContext.restoreGraphicsState()
+            return rep.bitmapData.map { Data(bytes: $0, count: rep.bytesPerRow * side) }
+        }
+        for side in [16, 32] {
+            let ours = pixels(icon, side)
+            check("Finder shows Magnife's own icon at \(side) px", ours != nil && ours != pixels(generic, side))
+        }
     }
 
     /// Last: closes every window and checks the app is still running. A quit

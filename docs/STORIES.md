@@ -370,7 +370,7 @@ Status: done
 As the user, I find Magnife in the Dock and Launchpad by its icon.
 Acceptance:
 - [manual] The app icon follows the macOS icon grid and reads at 16 pt in Finder and the Dock.
-Status: todo
+Status: done
 
 ## Seed data
 Snapshots use a fixture of OTLP payloads replayed into the helper, so every value comes from telemetry the app receives:
