@@ -377,7 +377,7 @@ UX:
 UX:
 - Flow: a trace arrives with a database span over 100 ms -> its row shows a "Slow SQL" badge -> open it: the findings strip under the waterfall header lists it, the span shows the finding icon -> click the strip line to select the span -> the span detail opens with Findings first
 - Surface: badge in the Route cell of the list row; strip under the waterfall header; Findings section at the top of the span detail (all inline on views already on screen)
-- States: rule: span with `db_system` and duration over 100 ms; several slow queries show one badge and one strip line each; strip shows 3 lines, then "Show All Findings (7)"; the statement is monospace, 3 lines, then "Show All"; no statement: "This postgresql query took 340 ms."; a trace still receiving spans gains badges in place
+- States: rule: span with `db_system` and duration over 100 ms; several slow queries show one badge and one strip line each; strip shows 3 lines, then "Show All Findings (7)"; the statement is monospace, 3 lines, then "Show All"; no statement: "This postgresql query took 340 ms."; just over: a query over 100 ms that rounds to "100 ms" reads "just over 100 ms" in the strip line, the span detail and the tooltip, "just over 100 milliseconds" for VoiceOver, never "took 100 ms. Queries over 100 ms are flagged."; a trace still receiving spans gains badges in place
 - Words: badge "Slow SQL" (icon `cylinder`, tooltip "Slow SQL: 3 queries over 100 ms"); strip line "Slow SQL · 340 ms · SELECT * FROM orders WHERE …"; span detail header "Findings", title "Slow SQL", text "This query took 340 ms. Queries over 100 ms are flagged.", then the statement
 - Access: the badge pairs icon and words in orange, never color alone; at the default list width (Route about 98 pt) a badge shows its icon alone, so the route keeps its room, and the word shows as soon as the whole route fits beside it (a wider list column); the tooltip and VoiceOver always carry the words (PROGRESS decision 134, M3 review); the list row reads "…, Error, findings: Slow SQL"; the waterfall row adds "Slow SQL"; strip lines are buttons ("Select span: Slow SQL, 340 milliseconds")
 
@@ -385,7 +385,7 @@ UX:
 UX:
 - Flow: a trace runs the same normalized statement 5 or more times -> "N+1" badge on the row -> open it: one strip line names the statement and count, every repeated span shows the N+1 icon -> click the line to select the first of those spans
 - Surface: same three places as S-023
-- States: rule: same normalized `db_statement` (literals replaced with `?`) 5 or more times in one trace gives one finding for all those spans; a span can carry Slow SQL and N+1 at once (both icons, both sections); two different repeated statements give two strip lines
+- States: rule: same normalized `db_statement` (literals replaced with `?`) 5 or more times in one trace gives one finding for all those spans; a span can carry Slow SQL and N+1 at once (both icons, both sections); two different repeated statements give two strip lines; counts in finding words group with "," whatever the Mac's region ("1,200 times", "Show All Findings (1,200)"), like durations, whose decimal mark is always "."
 - Words: badge "N+1" (icon `repeat`, tooltip "N+1: a statement ran 8 times"); strip line "N+1 · 8 times · SELECT * FROM items WHERE id = ?"; span detail title "N+1", text "This statement ran 8 times in this trace.", then the normalized statement
 - Access: as S-023; the waterfall row adds "N+1, 1 of 8"
 
@@ -393,7 +393,7 @@ UX:
 UX:
 - Flow: an HTTP span returns 400 or higher, or has status Error -> "HTTP Error" badge on the row -> open it: one strip line per span with method, URL or route and code -> click to select the span
 - Surface: same three places as S-023
-- States: rule: span with `http_method` or `http_status_code`, and a code of 400 or higher or status Error; client spans show the URL, server spans the route, else the span name; no code: "has status Error and no response code"; the span's status message, when set, follows the text
+- States: rule: span with `http_method` or `http_status_code`, and a code of 400 or higher or status Error; client spans show the URL, server spans the route, else the span name (an empty URL or route counts as none); no code: "has status Error and no response code"; the span's status message, when set, follows the text
 - Words: badge "HTTP Error" (icon `network`, tooltip "HTTP Error: 2 calls returned 400 or higher, or had status Error"); strip line "HTTP Error · 500 · POST /payments"; span detail title "HTTP Error", text "POST /payments returned 500." or "POST https://api.stripe.com/v1/charges has status Error and no response code."
 - Access: as S-023; the code is read as a number ("returned 500")
 

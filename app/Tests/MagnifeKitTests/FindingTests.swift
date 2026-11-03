@@ -68,6 +68,45 @@ struct FindingTests {
         #expect(tail.count == 301 && tail.hasSuffix("…") && !tail.contains("\n"))
     }
 
+    @Test("a query just over 100 ms says so, in the strip, the span detail and VoiceOver",
+          arguments: [100 * ms + 1, 100_400_000])
+    func justOverThreshold(durationNs: Int64) throws {
+        let finding = try #require(Detectors.findings(in: [db("a", durationNs, statement: "SELECT 1")]).findings.first)
+        #expect(finding.durationText == "just over 100 ms")
+        #expect(finding.line == "Slow SQL · just over 100 ms · SELECT 1")
+        #expect(finding.detailText == "This query took just over 100 ms. Queries over 100 ms are flagged.")
+        #expect(finding.accessibilityLabel == "Select span: Slow SQL, just over 100 milliseconds")
+    }
+
+    @Test("100.5 ms rounds to 101 ms; exactly 100 ms is no finding")
+    func overThreshold() throws {
+        let finding = try #require(Detectors.findings(in: [db("a", 100_500_000, statement: "SELECT 1")]).findings.first)
+        #expect(finding.line == "Slow SQL · 101 ms · SELECT 1")
+        #expect(finding.detailText == "This query took 101 ms. Queries over 100 ms are flagged.")
+        #expect(Detectors.findings(in: [db("a", 100 * Self.ms)]).isEmpty)
+    }
+
+    @Test("counts group with a comma whatever the Mac's region")
+    func countFormat() throws {
+        // What the old words gave on a Mac set to these regions.
+        for region in ["pt_BR", "en_BR", "de_DE"] {
+            #expect(1_200.formatted(.number.locale(Locale(identifier: region))) == "1.200")
+        }
+        #expect(CountFormat.string(1_200) == "1,200")
+        #expect(CountFormat.string(5) == "5")
+        #expect(CountFormat.string(1_234_567) == "1,234,567")
+        let found = Detectors.findings(in: items(1_200, ms: 1))
+        let finding = try #require(found.findings.first)
+        #expect(finding.line == "N+1 · 1,200 times · SELECT * FROM order_items WHERE order_id = ?")
+        #expect(finding.detailText == "This statement ran 1,200 times in this trace.")
+        #expect(finding.accessibilityLabel == "Select span: N+1, 1,200 times")
+        #expect(finding.spokenMark(for: "i1199") == "N+1, 1,200 of 1,200")
+        #expect(found.summary.help(.nPlusOne) == "N+1: a statement ran 1,200 times")
+        let slow = Detectors.findings(in: (0..<1_200).map { db("s\($0)", 150 * Self.ms, start: Int64($0)) })
+        #expect(slow.showAllTitle == "Show All Findings (1,200)")
+        #expect(slow.summary.help(.slowSQL) == "Slow SQL: 1,200 queries over 100 ms")
+    }
+
     @Test("findings by trace keep each trace's own")
     func byTrace() {
         let found = Detectors.findingsByTrace([db("a", 150 * Self.ms, trace: "t1"), db("b", 1 * Self.ms, trace: "t2")])
@@ -215,6 +254,14 @@ struct FindingTests {
         #expect(try call(http("e", kind: .server, name: "GET", method: "GET", code: 404, route: nil, url: nil)) == "GET")
         #expect(try call(http("f", kind: .client, name: "fetch", method: nil, code: 500, route: nil, url: "http://a/b"))
                 == "http://a/b")
+    }
+
+    @Test("an empty URL or route counts as none, so the call falls back to the other, then the span name")
+    func emptyURLFallsBackToRoute() throws {
+        func call(_ span: DetectorSpan) throws -> String { try #require(Detectors.findings(in: [span]).findings.first).call }
+        #expect(try call(http("a", kind: .client, name: "GET", method: "GET", code: 500, route: "/x", url: "")) == "GET /x")
+        #expect(try call(http("b", kind: .server, name: "GET", method: "GET", code: 500, route: "", url: "/y")) == "GET /y")
+        #expect(try call(http("c", kind: .client, name: "GET /z", method: "GET", code: 500, route: "", url: "")) == "GET /z")
     }
 
     @Test("several failed calls: one strip line each, and the badge counts them")

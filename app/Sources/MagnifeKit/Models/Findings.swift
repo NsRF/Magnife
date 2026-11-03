@@ -114,13 +114,32 @@ public struct Finding: Sendable, Hashable, Identifiable {
     public var line: String {
         switch kind {
         case .slowSQL:
-            [kind.title, DurationFormat.string(nanoseconds: durationNs), Self.oneLine(statement ?? spanName)]
+            [kind.title, durationText, Self.oneLine(statement ?? spanName)]
                 .joined(separator: " · ")
         case .nPlusOne:
-            [kind.title, "\(count.formatted()) times", Self.oneLine(statement ?? spanName)].joined(separator: " · ")
+            [kind.title, "\(CountFormat.string(count)) times", Self.oneLine(statement ?? spanName)].joined(separator: " · ")
         case .httpError:
             ([kind.title] + (httpStatusCode.map { [String($0)] } ?? []) + [Self.oneLine(call)]).joined(separator: " · ")
         }
+    }
+
+    /// The duration in the finding's words: "340 ms". A Slow SQL query over
+    /// 100 ms that rounds to "100 ms" reads "just over 100 ms", so the words
+    /// never say it took the threshold (PROGRESS decision 182).
+    public var durationText: String {
+        let text = DurationFormat.string(nanoseconds: durationNs)
+        return isJustOverThreshold ? "just over \(text)" : text
+    }
+
+    /// `durationText` for VoiceOver: "340 milliseconds", "just over 100 milliseconds".
+    public var spokenDuration: String {
+        let text = DurationFormat.spoken(nanoseconds: durationNs)
+        return isJustOverThreshold ? "just over \(text)" : text
+    }
+
+    private var isJustOverThreshold: Bool {
+        kind == .slowSQL && durationNs > Detectors.slowSQLThresholdNs
+            && DurationFormat.string(nanoseconds: durationNs) == DurationFormat.string(nanoseconds: Detectors.slowSQLThresholdNs)
     }
 
     /// "POST /payments": the method and what was called, the method left out
@@ -142,12 +161,12 @@ public struct Finding: Sendable, Hashable, Identifiable {
     public var detailText: String {
         switch kind {
         case .slowSQL:
-            let took = DurationFormat.string(nanoseconds: durationNs)
+            let took = durationText
             let threshold = DurationFormat.string(nanoseconds: Detectors.slowSQLThresholdNs)
             let query = statement == nil ? "This \(dbSystem ?? "database") query" : "This query"
             return "\(query) took \(took). Queries over \(threshold) are flagged."
         case .nPlusOne:
-            return "This statement ran \(count.formatted()) times in this trace."
+            return "This statement ran \(CountFormat.string(count)) times in this trace."
         case .httpError:
             // The span's status message, when set, follows the text (docs/ux.md, S-025 States).
             let message = statusMessage.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -161,8 +180,8 @@ public struct Finding: Sendable, Hashable, Identifiable {
     /// The strip line for VoiceOver: "Select span: Slow SQL, 340 milliseconds".
     public var accessibilityLabel: String {
         switch kind {
-        case .slowSQL: "Select span: \(kind.title), \(DurationFormat.spoken(nanoseconds: durationNs))"
-        case .nPlusOne: "Select span: \(kind.title), \(count.formatted()) times"
+        case .slowSQL: "Select span: \(kind.title), \(spokenDuration)"
+        case .nPlusOne: "Select span: \(kind.title), \(CountFormat.string(count)) times"
         case .httpError: "Select span: \(kind.title), \(httpOutcome.dropLast())"
         }
     }
@@ -171,7 +190,8 @@ public struct Finding: Sendable, Hashable, Identifiable {
     public func spokenMark(for spanID: String) -> String {
         switch kind {
         case .slowSQL, .httpError: kind.title
-        case .nPlusOne: "\(kind.title), \((spanIDs.firstIndex(of: spanID) ?? 0) + 1) of \(count)"
+        case .nPlusOne:
+            "\(kind.title), \(CountFormat.string((spanIDs.firstIndex(of: spanID) ?? 0) + 1)) of \(CountFormat.string(count))"
         }
     }
 
@@ -246,7 +266,7 @@ public struct TraceFindings: Sendable, Hashable {
 
     /// "Show All Findings (7)" while lines are cut, else nil.
     public var showAllTitle: String? {
-        findings.count > Self.stripPreviewCount ? "Show All Findings (\(findings.count.formatted()))" : nil
+        findings.count > Self.stripPreviewCount ? "Show All Findings (\(CountFormat.string(findings.count)))" : nil
     }
 }
 
@@ -270,12 +290,12 @@ public struct FindingSummary: Sendable, Hashable {
         let threshold = DurationFormat.string(nanoseconds: Detectors.slowSQLThresholdNs)
         switch kind {
         case .slowSQL:
-            return "\(kind.title): \(count == 1 ? "1 query" : "\(count.formatted()) queries") over \(threshold)"
+            return "\(kind.title): \(count == 1 ? "1 query" : "\(CountFormat.string(count)) queries") over \(threshold)"
         case .nPlusOne:
-            return count == 1 ? "\(kind.title): a statement ran \(mostRepeats.formatted()) times"
-                : "\(kind.title): \(count.formatted()) statements ran \(Detectors.nPlusOneMinimum) or more times"
+            return count == 1 ? "\(kind.title): a statement ran \(CountFormat.string(mostRepeats)) times"
+                : "\(kind.title): \(CountFormat.string(count)) statements ran \(Detectors.nPlusOneMinimum) or more times"
         case .httpError:
-            return "\(kind.title): \(count == 1 ? "1 call" : "\(count.formatted()) calls") returned "
+            return "\(kind.title): \(count == 1 ? "1 call" : "\(CountFormat.string(count)) calls") returned "
                 + "\(Detectors.httpErrorMinimumCode) or higher, or had status Error"
         }
     }
@@ -351,16 +371,18 @@ extension Detectors {
 extension Detectors {
     /// HTTP Error: a span with `http_method` or `http_status_code`, and a
     /// code of 400 or higher or status Error, one finding each. A client
-    /// span names its URL, a server span its route, else the span's name.
+    /// span names its URL, a server span its route, else the span's name;
+    /// an empty URL or route counts as none (PROGRESS decision 184).
     public static func httpErrors(_ spans: [DetectorSpan]) -> [Finding] {
         spans.compactMap { span in
             guard span.httpMethod != nil || span.httpStatusCode != nil,
                   (span.httpStatusCode ?? 0) >= httpErrorMinimumCode || span.status == .error else { return nil }
             let outgoing = span.kind == .client || span.kind == .producer
-            let target = outgoing ? span.httpURL ?? span.httpRoute : span.httpRoute ?? span.httpURL
+            let url = span.httpURL.flatMap { $0.isEmpty ? nil : $0 }
+            let route = span.httpRoute.flatMap { $0.isEmpty ? nil : $0 }
             return Finding(kind: .httpError, spanIDs: [span.spanID], startNs: span.startNs, durationNs: span.durationNs,
                            statement: nil, spanName: span.name, httpMethod: span.httpMethod,
-                           httpTarget: target.flatMap { $0.isEmpty ? nil : $0 }, httpStatusCode: span.httpStatusCode,
+                           httpTarget: outgoing ? url ?? route : route ?? url, httpStatusCode: span.httpStatusCode,
                            statusMessage: span.status == .error ? span.statusMessage : "")
         }
     }
