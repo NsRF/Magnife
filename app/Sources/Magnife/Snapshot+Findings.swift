@@ -17,28 +17,29 @@ extension Snapshot {
         model.selectedTraceID = nil
     }
 
-    /// 02-trace-list-findings-wide: the Route column dragged to 300 pt, where
-    /// a badge has room for its word beside the whole route (at the 520 pt
-    /// list's 98 pt Route column it shows its icon alone, decision 134).
+    /// 02-trace-list-findings-wide: the list column dragged 240 pt wider, so
+    /// the Route column (which takes the width the other columns leave,
+    /// LiveTable.fitColumns) has room for a badge's word beside the whole
+    /// route (at the 520 pt list's 98 pt Route column it shows its icon
+    /// alone, decision 134).
     static func captureWideList(_ model: AppModel, dir: String, mode: String) async {
         guard let window = NSApp.windows.first(where: { $0.canBecomeMain && !$0.isSheet }),
-              let table = tableView(in: window.contentView),
-              let route = table.tableColumns.first(where: { $0.title == "Route" }) else {
-            return print("SNAPSHOT no Route column")
+              let split = columnSplit(in: window.contentView), split.arrangedSubviews.count == 3 else {
+            return print("SNAPSHOT no column split")
         }
-        let width = route.width
-        route.width = 300
+        let divider = split.arrangedSubviews[1].frame.maxX
+        split.setPosition(divider + 240, ofDividerAt: 1)
         try? await Task.sleep(for: .seconds(0.8))
         capture(to: "\(dir)/\(SnapshotPage.traceList.rawValue)-findings-wide-\(mode).png")
-        route.width = width
+        split.setPosition(divider, ofDividerAt: 1)
         try? await Task.sleep(for: .seconds(0.4))
     }
 
-    /// The trace list's table: the one with a Route column.
-    private static func tableView(in view: NSView?) -> NSTableView? {
+    /// The window's three-column split (sidebar, list, detail).
+    private static func columnSplit(in view: NSView?) -> NSSplitView? {
         guard let view else { return nil }
-        if let table = view as? NSTableView, table.tableColumns.contains(where: { $0.title == "Route" }) { return table }
-        for subview in view.subviews { if let found = tableView(in: subview) { return found } }
+        if let split = view as? NSSplitView, split.arrangedSubviews.count == 3 { return split }
+        for subview in view.subviews { if let found = columnSplit(in: subview) { return found } }
         return nil
     }
 

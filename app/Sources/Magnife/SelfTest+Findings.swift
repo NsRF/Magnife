@@ -80,6 +80,9 @@ extension SelfTest {
         }
         check("S-023: only the slow query's row shows the Slow SQL icon", marked == ["SELECT Orders"], "\(marked)")
         check("S-023: VoiceOver reads \"Slow SQL\" on that row", spoken)
+        // One read for the tree and its findings (M3 review): every span a finding names is a row.
+        check("S-023: every span a finding names is in the waterfall it was read with",
+              model.openTraceFindings.findings.allSatisfy { $0.spanIDs.allSatisfy { waterfall.index(of: $0) != nil } })
 
         guard let finding = model.openTraceFindings.findings.first else { return }
         model.selectedSpanID = waterfall.rootSpanID

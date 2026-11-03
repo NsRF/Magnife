@@ -127,11 +127,10 @@ extension AppModel {
     @concurrent
     nonisolated private static func readWaterfall(_ reader: TelemetryReader, traceID: String, after previous: Waterfall?)
         async throws -> (trace: TraceSummary?, tree: Waterfall, findings: TraceFindings, collapsed: Set<String>) {
-        let trace = try await reader.trace(id: traceID)
-        let spans = try await reader.waterfallSpans(traceID: traceID)
-        let findings = try await reader.traceFindings(traceID: traceID)
-        let tree = await Waterfall.build(spans)
-        return (trace, tree, findings, tree.autoCollapsed(after: previous))
+        // One snapshot: the findings never name a span the tree lacks.
+        let read = try await reader.openTrace(traceID: traceID)
+        let tree = await Waterfall.build(read.spans)
+        return (read.trace, tree, read.findings, tree.autoCollapsed(after: previous))
     }
 
     /// The outline shows `generation`: the self-test's open time ends here.

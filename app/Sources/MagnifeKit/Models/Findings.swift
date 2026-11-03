@@ -184,6 +184,20 @@ public struct Finding: Sendable, Hashable, Identifiable {
     }
 }
 
+/// One read of an open trace (`TelemetryReader.openTrace`): the row, the
+/// waterfall's spans and the findings, all from the same snapshot.
+public struct OpenTraceRead: Sendable {
+    public var trace: TraceSummary?
+    public var spans: [WaterfallSpan]
+    public var findings: TraceFindings
+
+    public init(trace: TraceSummary?, spans: [WaterfallSpan], findings: TraceFindings) {
+        self.trace = trace
+        self.spans = spans
+        self.findings = findings
+    }
+}
+
 /// Every finding of one trace, and which spans carry which.
 public struct TraceFindings: Sendable, Hashable {
     /// In kind order, then by the first span's start.

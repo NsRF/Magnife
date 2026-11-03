@@ -290,3 +290,10 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Fix: one palette in MagnifeKit (`ColorPalette`: each color in light, dark and both Increase Contrast variants, the system color where it passes, else the same hue darkened or lightened until it does), unit-tested against the window's measured backgrounds (`ColorPaletteTests`) and resolved in each appearance by the self-test (`checkAppearance`). Views take `ServicePalette` / `StatusColors`; `tools/color-lint.sh` (run by `selftest.sh`) fails on a named or numeric color in a view.
 - Rule: never put a system color name or a hex value in a view; every color comes from the contrast-tested palette, and a new color gets its light, dark and Increase Contrast values with a test.
 
+
+## The findings-wide snapshot showed no badge words, and findings could name spans the waterfall lacked (M3 review, S-023 to S-025)
+
+- Symptom: `02-trace-list-findings-wide` looked exactly like `02-trace-list` (icons only); under load an open trace's strip line could point at a span missing from its tree, so clicking it did nothing.
+- Cause: since S-030 the Route column takes the width the other columns leave (`LiveTable.fitColumns`), so the snapshot's `route.width = 300` was undone on the next tile; and the waterfall read the trace, its spans and its findings in three separate reads, each its own WAL snapshot, while the helper kept writing.
+- Fix: the snapshot drags the column split instead; `TelemetryReader.openTrace` reads all three in one `pool.read` and runs the detectors after it.
+- Rule: values shown together are read in one `pool.read`; a snapshot that sets a size checks the size it got.

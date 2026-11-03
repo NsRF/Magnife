@@ -292,6 +292,35 @@ struct FindingTests {
             #expect(!plan.contains { $0.hasPrefix("SCAN spans") }, "\(plan)")
         }
     }
+
+    @Test("an open trace reads its row, its spans and its findings in one read; a statement alone is a database span")
+    func openTrace() async throws {
+        let dir = try TempDir("open-trace")
+        defer { dir.remove() }
+        let url = dir.file("magnife.sqlite")
+        let writer = try makeWriter(at: url)
+        let base: Int64 = 1_730_000_000_000_000_000
+        try await writer.write { db in
+            try insertTrace(db, id: traceID(1), startNs: base, durationNs: 900 * Self.ms, spanCount: 6)
+            // No db_system: an instrumentation that sends only the statement still groups (S-024).
+            for n in 1...5 {
+                try insertDetectorSpan(db, trace: traceID(1), span: String(format: "00000000000000%02x", n),
+                                       parent: String(traceID(1).prefix(16)), start: base + Int64(n), duration: Self.ms,
+                                       statement: "SELECT * FROM items WHERE id = \(n)")
+            }
+        }
+        let reader = try await TelemetryReader.open(at: url)
+        let read = try await reader.openTrace(traceID: traceID(1))
+        #expect(read.trace?.traceID == traceID(1))
+        #expect(read.spans.count == 6)
+        #expect(read.findings.findings.map(\.kind) == [.nPlusOne])
+        // Every span a finding names is in the spans read with it.
+        let ids = Set(read.spans.map(\.spanID))
+        #expect(read.findings.findings.allSatisfy { $0.spanIDs.allSatisfy(ids.contains) })
+        #expect(try await reader.findingSummaries(traceIDs: [traceID(1)])[traceID(1)]?.counts == [.nPlusOne: 1])
+        let missing = try await reader.openTrace(traceID: traceID(9))
+        #expect(missing.trace == nil && missing.spans.isEmpty && missing.findings.findings.isEmpty)
+    }
 }
 
 /// A span with the promoted columns the detectors read.

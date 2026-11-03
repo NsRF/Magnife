@@ -186,7 +186,9 @@ this app starts the helper and reads its database. No server, no accounts.
 - Findings (S-023+): detectors are pure MagnifeKit functions
   (`Models/Findings.swift`, `Detectors`) over `DetectorSpan` (promoted
   `db_*` / `http_*` columns only, never attribute JSON); they run inside the
-  reader's `traceFindings` (read with the waterfall, `openTraceFindings`) and
+  reader's `openTrace` (the trace row, the waterfall's spans and the
+  detector spans in one read, so findings never name a span the tree
+  lacks; `openTraceFindings`) and
   `findingSummaries` (the list's badges, one read for the stale rows,
   `FindingCache` keyed by `updated_seq`, `AppModel+Findings.swift`). Views in
   `FindingViews.swift`: `RouteCell` badges (icon alone unless the whole route
@@ -333,7 +335,7 @@ this app starts the helper and reads its database. No server, no accounts.
   layout keys back when it ends (`AppDefaults.restoreLayout`).
   `03-trace-detail-waterfall-focus` and `-span-focus` show the keyboard focus (S-022).
   `03-trace-detail-slow-sql`, `-n-plus-one` and `-http-error` show a strip line clicked (S-023 to S-025) and
-  `02-trace-list-findings-wide` the badges' words in a widened Route column.
+  `02-trace-list-findings-wide` the badges' words in a list column dragged wider.
 - Never test against the real database in `~/Library/Application Support/Magnife/`.
 - Then check the grid: `tools/grid-lint.sh` and `swift tools/check-layout.swift /tmp/Magnife-shots/*-layout.json`. Both print PASS.
 - A change is done when the build has no errors, the grid checks pass, and you looked at the light and dark snapshots.

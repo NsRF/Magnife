@@ -379,7 +379,7 @@ UX:
 - Surface: badge in the Route cell of the list row; strip under the waterfall header; Findings section at the top of the span detail (all inline on views already on screen)
 - States: rule: span with `db_system` and duration over 100 ms; several slow queries show one badge and one strip line each; strip shows 3 lines, then "Show All Findings (7)"; the statement is monospace, 3 lines, then "Show All"; no statement: "This postgresql query took 340 ms."; a trace still receiving spans gains badges in place
 - Words: badge "Slow SQL" (icon `cylinder`, tooltip "Slow SQL: 3 queries over 100 ms"); strip line "Slow SQL · 340 ms · SELECT * FROM orders WHERE …"; span detail header "Findings", title "Slow SQL", text "This query took 340 ms. Queries over 100 ms are flagged.", then the statement
-- Access: the badge pairs icon and words in orange, never color alone; the list row reads "…, Error, findings: Slow SQL"; the waterfall row adds "Slow SQL"; strip lines are buttons ("Select span: Slow SQL, 340 milliseconds")
+- Access: the badge pairs icon and words in orange, never color alone; at the default list width (Route about 98 pt) a badge shows its icon alone, so the route keeps its room, and the word shows as soon as the whole route fits beside it (a wider list column); the tooltip and VoiceOver always carry the words (PROGRESS decision 134, M3 review); the list row reads "…, Error, findings: Slow SQL"; the waterfall row adds "Slow SQL"; strip lines are buttons ("Select span: Slow SQL, 340 milliseconds")
 
 ### S-024 See N+1 queries flagged
 UX:

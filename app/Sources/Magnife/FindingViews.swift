@@ -42,9 +42,9 @@ struct RouteCell: View {
     }
 }
 
-/// One finding kind: the orange icon and its name, on an orange-tinted
-/// capsule. The word stays in the primary text color: system orange text
-/// is too faint on a light background (as Warn's word, decision 73).
+/// One finding kind: the icon and its name in orange (docs/ux.md S-023
+/// Access), on an orange-tinted capsule. `StatusColors.finding` is the
+/// palette's text orange (4.5:1, S-031), so the word reads in light and dark.
 struct FindingBadge: View {
     let kind: FindingKind
     var showsWord = true
@@ -52,9 +52,9 @@ struct FindingBadge: View {
     var body: some View {
         HStack(spacing: Space.xs) {
             Image(systemName: kind.symbol)
-                .foregroundStyle(StatusColors.finding)
             if showsWord { Text(kind.title) }
         }
+        .foregroundStyle(StatusColors.finding)
         .font(.callout)
         .lineLimit(1)
         .fixedSize()

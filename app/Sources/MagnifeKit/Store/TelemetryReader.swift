@@ -309,6 +309,20 @@ public final class TelemetryReader: Sendable {
 
     // MARK: Findings (S-023+)
 
+    /// The trace that opens or grows (S-005, S-023+): its row, its
+    /// waterfall's spans and its findings from one read, so the strip and
+    /// the rows' icons only ever name spans the tree has. The detectors run
+    /// here, off the main actor, after the read.
+    @concurrent
+    public func openTrace(traceID: String) async throws -> OpenTraceRead {
+        let read = try await pool.read { db in
+            (try TraceSummary.fetchOne(db, sql: TelemetrySQL.traceByID, arguments: [traceID]),
+             try WaterfallSpan.fetchAll(db, sql: TelemetrySQL.waterfallSpansOfTrace, arguments: [traceID]),
+             try DetectorSpan.fetchAll(db, sql: TelemetrySQL.detectorSpansOfTrace, arguments: [traceID]))
+        }
+        return OpenTraceRead(trace: read.0, spans: read.1, findings: Detectors.findings(in: read.2))
+    }
+
     /// The open trace's findings: the spans a detector can flag are read and
     /// the detectors run here, off the main actor.
     @concurrent
