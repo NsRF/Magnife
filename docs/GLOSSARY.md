@@ -78,6 +78,7 @@ Direct, precise, quiet. Talk to "you", say "click", and name OTel concepts the w
 | Show Environment Variables | Open the toolbar popover with the language tabs | Setup, Onboarding, Connect App |
 | Open Magnife | Bring the main window forward from the menu bar extra | Show Window, Launch |
 | Show in Finder | Reveal the database file | Reveal, Open Folder |
+| Check for Updates… | Ask the update feed for a newer Magnife (Magnife menu; only in builds with Sparkle) | Update Now, Software Update, Check for New Version |
 | Open Settings / Open System Settings | Go to Magnife's Settings, or to macOS's for notifications | Preferences, Configure |
 | Delete | Confirm deleting data older than a shortened period | OK, Yes, Prune |
 

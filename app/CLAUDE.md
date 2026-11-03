@@ -286,6 +286,18 @@ this app starts the helper and reads its database. No server, no accounts.
 - `build.sh` builds, runs `../ingest/build.sh` when it exists, copies the
   helper into `Contents/Helpers/`, signs inside out (helper, then app; never
   `--deep`), and installs `~/Applications/Magnife.app`.
+- Software updates (M4): Sparkle 2 is the package trait `Sparkle`, off by
+  default (no Sparkle linked, no `SU*` keys, no Check for Updates…).
+  `MAGNIFE_SPARKLE=1 ./build.sh` (or `scripts/install-local.sh`) builds with it:
+  `tools/sparkle-bundle.sh` copies `Sparkle.framework` into
+  `Contents/Frameworks`, writes `SUFeedURL` / `SUPublicEDKey` (placeholders
+  unless `SPARKLE_FEED_URL` / `SPARKLE_PUBLIC_ED_KEY`) and
+  `SUEnableAutomaticChecks` false, and signs Sparkle inside out.
+  `UpdaterController` starts Sparkle only with a real feed and key
+  (`UpdateConfiguration`, MagnifeKit) and never in snapshot or self-test runs;
+  `#if MAGNIFE_SPARKLE` guards every Sparkle line. Ad hoc Sparkle builds drop
+  the app's hardened runtime (library validation). `APP_SELFTEST_ONLY=updates`
+  checks the menu both ways. Release steps: `../docs/RELEASE.md`.
 - `Icon/AppIcon.icon` the app icon (S-032), an Icon Composer file: `lens.svg` (the lens ring and handle) over `bars.svg` (three offset bars, a tiny waterfall) on a deep indigo automatic gradient; both layers turn light lavender in the dark look (`fill-specializations`), so the glyph reads on black. Filled shapes only, drawn by hand (no SF Symbol). `build.sh` compiles it with `tools/make_icon.sh`; `tools/icon_review.sh` renders every look into one PNG. The menu bar glyph (`MenuBarGlyph.drawGlyph`) is the same lens and bars as line art.
 - `tools/seed.zsh` seeds test databases through the real pipeline
   (docs/STORIES.md, "Seed data"): it starts the bundled helper standalone

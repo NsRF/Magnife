@@ -13,6 +13,7 @@ import SwiftUI
 //   Magnife --selftest             run the self-test on a /tmp store and quit with 0 or 1 (tools/selftest.sh)
 //   APP_ACCENT=<id> Magnife        run with another accent from Theme.all (UI/Theme.swift)
 //   APP_GRID=1 Magnife             draw the 8 pt grid and the layout probes over the window
+//   MAGNIFE_SPARKLE=1 ./build.sh   a build with Sparkle and Magnife > Check for Updates… (UpdaterController)
 
 @main
 struct MagnifeApp: App {
@@ -21,6 +22,10 @@ struct MagnifeApp: App {
     @ObservedObject private var menu = MenuState.shared
     /// Settings > General, "Show Magnife in the menu bar" (S-026, on by default).
     @AppStorage(MenuBarSettings.showsKey, store: AppDefaults.shared) private var showsMenuBarExtra = true
+    #if MAGNIFE_SPARKLE
+    /// Magnife > Check for Updates… follows Sparkle's canCheckForUpdates.
+    @ObservedObject private var updater = UpdaterController.shared
+    #endif
 
     var body: some Scene {
         // A WindowGroup, not a Window: closing the last window keeps Magnife
@@ -37,6 +42,14 @@ struct MagnifeApp: App {
         .commands {
             SidebarCommands()
             ToolbarCommands()
+            #if MAGNIFE_SPARKLE
+            // After About Magnife (docs/ux.md, Menu bar). Builds without the
+            // Sparkle trait have no such item.
+            CommandGroup(after: .appInfo) {
+                Button(UpdaterController.checkTitle) { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
+            }
+            #endif
             // One window: its selection lives in AppModel. Clicking the Dock icon reopens it.
             CommandGroup(replacing: .newItem) {
                 // Saved filters (S-021, docs/ux.md File menu).
@@ -195,6 +208,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.start()
         LaunchProbe.watch(model: model)
         MainWindow.openAtLaunch()
+        // A no-op unless built with the Sparkle trait and a real feed and key.
+        UpdaterController.shared.start()
     }
 
     /// The window can close; the receiver keeps running until Quit Magnife.

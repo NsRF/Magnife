@@ -64,6 +64,10 @@
 #   INSTALL_DIR    destination folder (default ~/Applications)
 #   BUILD_DIR      SwiftPM scratch + staging (default ~/Library/Developer/Magnife/install-local)
 #   HELPER_BIN     use this prebuilt magnife-ingest instead of running ingest/build.sh
+#   MAGNIFE_SPARKLE=1   with Sparkle 2 and Magnife > Check for Updates… (off by default;
+#                  SPARKLE_FEED_URL, SPARKLE_PUBLIC_ED_KEY as in app/build.sh). Ad hoc,
+#                  the app is then signed without the hardened runtime: library
+#                  validation refuses an ad hoc framework in an ad hoc app.
 set -euo pipefail
 
 name="Magnife"
@@ -100,6 +104,12 @@ dest="${dest:A}"
 app="$dest/$name.app"
 
 step() { print -P "%B==>%b $*"; }
+# Sparkle is a package trait: off, SwiftPM neither fetches nor links it.
+sparkle=${MAGNIFE_SPARKLE:-0}
+swift_flags=()
+if [[ $sparkle == 1 ]]; then
+  swift_flags=(--traits Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks)
+fi
 
 # 1. The helper ------------------------------------------------------------
 if [[ -n "${HELPER_BIN:-}" ]]; then
@@ -117,7 +127,7 @@ lipo -info "$helper_src"
 
 # 2. The app ---------------------------------------------------------------
 step "Building $name ($config)"
-swift build -c $config --package-path "$appsrc" --scratch-path "$scratch" 2>&1 \
+swift build -c $config --package-path "$appsrc" --scratch-path "$scratch" "${swift_flags[@]}" 2>&1 \
   | grep -E "error|warning:|Build complete" | grep -v "^\[" || true
 bin="$scratch/$config/$name"
 [[ -x "$bin" ]] || { echo "error: build failed (no $bin)" >&2; exit 1; }
@@ -125,7 +135,7 @@ bin="$scratch/$config/$name"
 stale=$(find "$appsrc/Sources" -name '*.swift' -newer "$bin" | head -1)
 if [[ -n "$stale" ]]; then
   echo "error: build failed: binary is older than $stale" >&2
-  swift build -c $config --package-path "$appsrc" --scratch-path "$scratch" 2>&1 | grep -E "error" | head -20 >&2
+  swift build -c $config --package-path "$appsrc" --scratch-path "$scratch" "${swift_flags[@]}" 2>&1 | grep -E "error" | head -20 >&2
   exit 1
 fi
 
@@ -137,6 +147,9 @@ mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Helpers" "$staged/Contents/R
 cp "$bin" "$staged/Contents/MacOS/$name"
 cp "$helper_src" "$staged/Contents/Helpers/magnife-ingest"
 sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$appsrc/Info.plist.in" > "$staged/Contents/Info.plist"
+if [[ $sparkle == 1 ]]; then
+  "$appsrc/tools/sparkle-bundle.sh" "$scratch/$config/Sparkle.framework" "$staged"
+fi
 plutil -lint -s "$staged/Contents/Info.plist"
 car="$appsrc/Resources/Assets.car"
 icns="$appsrc/Resources/AppIcon.icns"
@@ -156,7 +169,12 @@ xattr -cr "$staged"
 step "Signing ad hoc (helper, then app)"
 sign() { codesign --force --options runtime --timestamp=none --sign - "$@" 2>&1 | grep -v "replacing existing signature" || true; }
 sign --identifier "$bundle_id.ingest" "$staged/Contents/Helpers/magnife-ingest"
-sign "$staged"
+if [[ $sparkle == 1 ]]; then
+  "$appsrc/tools/sparkle-bundle.sh" --sign - "$staged"
+  codesign --force --timestamp=none --sign - "$staged" 2>&1 | grep -v "replacing existing signature" || true
+else
+  sign "$staged"
+fi
 codesign --verify --strict "$staged/Contents/Helpers/magnife-ingest" || { echo "error: helper signature check failed" >&2; exit 1; }
 codesign --verify --strict --deep "$staged" || { echo "error: app signature check failed" >&2; exit 1; }
 codesign -dv "$staged/Contents/Helpers/magnife-ingest" 2>&1 | grep -E "^Identifier=|flags=" | sed 's/^/    helper: /'
@@ -216,7 +234,7 @@ fi
 version=$(plutil -extract CFBundleShortVersionString raw -o - "$app/Contents/Info.plist")
 build=$(plutil -extract CFBundleVersion raw -o - "$app/Contents/Info.plist")
 echo
-echo "Installed $app ($version, build $build; signed ad hoc, helper $bundle_id.ingest)"
+echo "Installed $app ($version, build $build; signed ad hoc, helper $bundle_id.ingest${${sparkle:#0}:+, with Sparkle})"
 echo "Launch it with:"
 echo "    open \"$app\""
 echo "    \"$app/Contents/MacOS/$name\"        # from a terminal, helper stderr in this shell"

@@ -80,7 +80,7 @@ Every action has a menu item. Items that do not apply are disabled, not hidden, 
 
 **Magnife**
 - About Magnife
-- Check for Updates… (added with the Sparkle release work, absent before it)
+- Check for Updates… (only in builds with the Sparkle trait, `MAGNIFE_SPARKLE=1`; absent in the default build; disabled until Info.plist has a real feed and key; no keyboard shortcut, like Apple's apps)
 - —
 - Settings… ⌘,
 - —

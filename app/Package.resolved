@@ -1,5 +1,5 @@
 {
-  "originHash" : "3cb21e2c88b5723fbaf7d2c658748da3dba53d8be94171e37800cca7eeb18ef4",
+  "originHash" : "06e95ef683af184358ad46f37d47bbd5885270a8952ab1a7652b6503575a0498",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "92a554cd0d5e8d67cb18993c6054e73fe42c066c",
         "version" : "7.12.0"
+      }
+    },
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "ab7d71291238df6e0492143b120c9b696a35f603",
+        "version" : "2.10.1"
       }
     }
   ],

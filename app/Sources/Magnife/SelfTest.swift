@@ -71,6 +71,8 @@ enum SelfTest {
                 await checkRetention(model)
             } else if only == "appearance" {
                 await checkAppearance(model)
+            } else if only == "updates" {
+                checkUpdates()
             } else if only == "span-detail" {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
@@ -100,6 +102,7 @@ enum SelfTest {
                 await checkSupervisor()
                 await checkReceiver()
                 checkApp()
+                checkUpdates()
                 await checkWindowClose()
                 // With the window closed: a Recent Errors item brings it back (S-027).
                 await checkMenuBar(model)
