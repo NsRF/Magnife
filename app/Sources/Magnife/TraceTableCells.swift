@@ -55,6 +55,12 @@ final class TraceTextCell: NSTableCellView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// A service dot draws itself in the current appearance (S-031).
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        icon.needsDisplay = true
+    }
+
     func configure(_ text: String, color: NSColor = .labelColor, image: NSImage? = nil, imageTint: NSColor? = nil,
                    tooltip: String? = nil) {
         if label.stringValue != text { label.stringValue = text }
@@ -70,8 +76,6 @@ final class TraceTextCell: NSTableCellView {
 }
 
 extension TraceTextCell {
-    static let dot = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
-        .withSymbolConfiguration(.init(textStyle: .body, scale: .small))
     private static let octagon = NSImage(systemSymbolName: "exclamationmark.octagon.fill", accessibilityDescription: nil)
 
     /// The cell for a column of the trace list, made or reused.
@@ -97,8 +101,7 @@ extension TraceTextCell {
         guard let cell = cell as? TraceTextCell else { return }
         switch cell.identifier {
         case .traceService:
-            cell.configure(trace.rootService, image: dot,
-                           imageTint: ServicePalette.nsColor(slot: colors.slot(for: trace.rootService)))
+            cell.configure(trace.rootService, image: ServiceDots.image(.row, slot: colors.slot(for: trace.rootService)))
         case .traceDuration:
             cell.configure(DurationFormat.string(nanoseconds: trace.durationNs))
         case .traceSpans:
@@ -106,7 +109,7 @@ extension TraceTextCell {
         case .traceStatus:
             // Error pairs the octagon with the word; OK is the word; Unset is blank.
             switch trace.status {
-            case .error: cell.configure(trace.status.title, color: .systemRed, image: octagon, imageTint: .systemRed)
+            case .error: cell.configure(trace.status.title, color: StatusColors.errorNS, image: octagon, imageTint: StatusColors.errorNS)
             case .ok: cell.configure(trace.status.title)
             case .unset: cell.configure("")
             }

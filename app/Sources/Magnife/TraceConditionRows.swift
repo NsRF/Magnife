@@ -58,7 +58,7 @@ struct ConditionRow: View {
                     .frame(minWidth: 80, maxWidth: .infinity)
                     .overlay {
                         if row.needsNumber {
-                            RoundedRectangle(cornerRadius: Radius.small - 3).strokeBorder(.red, lineWidth: 1)
+                            RoundedRectangle(cornerRadius: Radius.small - 3).strokeBorder(StatusColors.error, lineWidth: 1)
                                 .allowsHitTesting(false)
                         }
                     }
@@ -66,7 +66,7 @@ struct ConditionRow: View {
                 if row.needsNumber {
                     Text(ConditionDraft.numberError)
                         .font(.callout)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(StatusColors.error)
                         .fixedSize()
                 }
             } else {

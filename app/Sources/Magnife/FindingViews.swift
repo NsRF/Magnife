@@ -52,7 +52,7 @@ struct FindingBadge: View {
     var body: some View {
         HStack(spacing: Space.xs) {
             Image(systemName: kind.symbol)
-                .foregroundStyle(.orange)
+                .foregroundStyle(StatusColors.finding)
             if showsWord { Text(kind.title) }
         }
         .font(.callout)
@@ -61,7 +61,7 @@ struct FindingBadge: View {
         // The icon alone needs no capsule: the route keeps that room.
         .padding(.horizontal, showsWord ? Space.xs : 0)
         .padding(.vertical, showsWord ? 1 : 0)
-        .background(showsWord ? AnyShapeStyle(.orange.quaternary) : AnyShapeStyle(.clear), in: Capsule())
+        .background(showsWord ? AnyShapeStyle(StatusColors.finding.quaternary) : AnyShapeStyle(.clear), in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(kind.title)
     }
@@ -110,7 +110,7 @@ struct FindingsStrip: View {
                 } label: {
                     HStack(spacing: Space.xs) {
                         Image(systemName: finding.kind.symbol)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(StatusColors.finding)
                         Text(finding.line)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -142,7 +142,7 @@ struct FindingList: View {
                             .fontWeight(.semibold)
                     } icon: {
                         Image(systemName: finding.kind.symbol)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(StatusColors.finding)
                     }
                     .accessibilityAddTraits(.isHeader)
                     Text(finding.detailText)

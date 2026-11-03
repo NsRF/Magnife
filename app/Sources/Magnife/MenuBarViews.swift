@@ -95,7 +95,7 @@ enum MenuBarGlyph {
         flip.translateX(by: 0, yBy: size.height)
         flip.scaleX(by: 1, yBy: -1)
         flip.concat()
-        let color: NSColor = badge == nil ? .black : .systemRed
+        let color: NSColor = badge == nil ? .black : StatusColors.errorFillNS // color: ok a template image uses only alpha
         drawGlyph(color: color)
         if let badge {
             let attributed = NSAttributedString(string: badge, attributes: [.font: countFont, .foregroundColor: color])

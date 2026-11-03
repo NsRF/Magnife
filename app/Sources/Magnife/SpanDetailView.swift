@@ -190,7 +190,7 @@ struct SpanDetailHeader: View {
             // Error pairs the octagon with the word, never red alone.
             Label(detail.span.status.title, systemImage: "exclamationmark.octagon.fill")
                 .labelStyle(.titleAndIcon)
-                .foregroundStyle(.red)
+                .foregroundStyle(StatusColors.error)
         } else {
             Text(detail.span.status.title)
                 .foregroundStyle(.secondary)

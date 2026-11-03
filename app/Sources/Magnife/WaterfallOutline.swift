@@ -239,7 +239,7 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
         guard let item = item as? SpanItem, let column = tableColumn else { return nil }
         let index = item.index
         let span = waterfall.nodes[index].span
-        let color = ServicePalette.nsColor(slot: colors.slot(for: span.serviceName))
+        let slot = colors.slot(for: span.serviceName)
         if column.identifier == .spanName {
             let cell = outlineView.makeView(withIdentifier: .spanName, owner: nil) as? SpanNameCell ?? SpanNameCell()
             cell.identifier = .spanName
@@ -248,7 +248,7 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
             let found = findings.findings(forSpan: span.spanID)
             let marks = found.map { $0.spokenMark(for: span.spanID) }
             cell.configure(name: span.name, service: waterfall.shownService(of: index),
-                           duration: DurationFormat.string(nanoseconds: span.durationNs), color: color,
+                           duration: DurationFormat.string(nanoseconds: span.durationNs), colorSlot: slot,
                            isError: span.status == .error, findings: findings.kinds(forSpan: span.spanID),
                            hiddenCount: hiddenCount, isOrphan: node.isOrphan,
                            label: ([waterfall.accessibilityLabel(of: index)] + marks).joined(separator: ", "))
@@ -258,7 +258,7 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
         cell.identifier = .spanBar
         let bar = waterfall.barFractions(of: index)
         let hidden = collapsed.contains(span.spanID) ? waterfall.nodes[index].descendantCount : 0
-        cell.configure(start: bar.start, width: bar.width, color: span.status == .error ? .systemRed : color,
+        cell.configure(start: bar.start, width: bar.width, color: span.status == .error ? StatusColors.errorFillNS : ServicePalette.nsColor(slot: slot),
                        note: hidden == 0 ? nil : TraceList.spansText(hidden))
         return cell
     }

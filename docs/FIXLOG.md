@@ -282,3 +282,11 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: not found: SwiftUI decided not to open the WindowGroup's window (no saved state; `~/Library/Saved Application State` itself had gone missing at the time).
 - Fix: `MainWindow.openAtLaunch()` opens the window when none showed up within a second of launch (S-029: a launch always shows the window).
 - Rule: a launch that must show a window checks that it did.
+
+## Finding words and several service colors were unreadable on a light background (S-031)
+
+- Symptom: in light mode the orange finding words ("Slow SQL", "N+1", "HTTP Error") measured 2.3:1 against the white list, the red "Error" word 3.6:1, and the green, teal, mint, cyan and yellow service dots and bars about 2:1 (1.4:1 for yellow), under docs/ux.md's 4.5:1 for text and 3:1 for bars. Dark mode passed except red text on the sidebar (3.5:1).
+- Cause: views used the system's `.red`, `.orange`, `.systemRed` and the ten system colors as they are. Those are tuned as fills for dark mode and for large shapes, not as text or thin bars on white.
+- Fix: one palette in MagnifeKit (`ColorPalette`: each color in light, dark and both Increase Contrast variants, the system color where it passes, else the same hue darkened or lightened until it does), unit-tested against the window's measured backgrounds (`ColorPaletteTests`) and resolved in each appearance by the self-test (`checkAppearance`). Views take `ServicePalette` / `StatusColors`; `tools/color-lint.sh` (run by `selftest.sh`) fails on a named or numeric color in a view.
+- Rule: never put a system color name or a hex value in a view; every color comes from the contrast-tested palette, and a new color gets its light, dark and Increase Contrast values with a test.
+

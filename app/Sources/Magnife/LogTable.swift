@@ -101,8 +101,8 @@ final class LogTableCoordinator: LiveTableCoordinator {
             if column == .logTime {
                 cell.configure(item.line.time, color: .secondaryLabelColor)
             } else {
-                cell.configure(item.record.serviceName, image: TraceTextCell.dot,
-                               imageTint: ServicePalette.nsColor(slot: colors.slot(for: item.record.serviceName)))
+                cell.configure(item.record.serviceName,
+                               image: ServiceDots.image(.row, slot: colors.slot(for: item.record.serviceName)))
             }
         }
     }

@@ -150,7 +150,7 @@ private struct AccentSwatch: View {
         if let tint = theme.tint {
             AnyShapeStyle(tint)
         } else {
-            AnyShapeStyle(AngularGradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .pink, .red],
+            AnyShapeStyle(AngularGradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .pink, .red], // color: ok the Multicolor swatch, as in System Settings
                                           center: .center))
         }
     }

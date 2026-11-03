@@ -87,7 +87,7 @@ struct SlowerThanField: View {
                 .focused($focused)
                 .overlay {
                     if !model.slowerThanIsValid {
-                        RoundedRectangle(cornerRadius: Radius.small - 3).strokeBorder(.red, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: Radius.small - 3).strokeBorder(StatusColors.error, lineWidth: 1)
                             .allowsHitTesting(false)
                     }
                 }
@@ -98,7 +98,7 @@ struct SlowerThanField: View {
                 // Wraps in the room left, so it never widens the column.
                 Text(DurationInput.errorText)
                     .font(.callout)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(StatusColors.error)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityHidden(true)
@@ -160,7 +160,7 @@ struct StatusChip: View {
                 if isOn { Image(systemName: "checkmark") }
                 if status == .error {
                     Image(systemName: "exclamationmark.octagon.fill")
-                        .foregroundStyle(isOn ? AnyShapeStyle(Palette.onAccent) : AnyShapeStyle(.red))
+                        .foregroundStyle(isOn ? AnyShapeStyle(Palette.onAccent) : AnyShapeStyle(StatusColors.error))
                 }
                 Text(status.title)
             }

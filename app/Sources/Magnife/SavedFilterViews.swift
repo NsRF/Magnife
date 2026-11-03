@@ -105,7 +105,7 @@ struct SaveFilterSheet: View {
                 if let message = model.saveFilterNameProblem?.message {
                     Text(message)
                         .font(.callout)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(StatusColors.error)
                 }
             }
             HStack(spacing: Space.sm) {

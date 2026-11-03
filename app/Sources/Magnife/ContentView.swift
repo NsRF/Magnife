@@ -180,7 +180,7 @@ struct ServiceRow: View {
                     .labelStyle(.titleAndIcon)
                     .font(.callout)
                     .monospacedDigit()
-                    .foregroundStyle(.red)
+                    .foregroundStyle(StatusColors.error)
                     .help(service.errorCountText)
             }
         }

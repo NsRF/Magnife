@@ -13,7 +13,7 @@ final class SpanNameCell: NSTableCellView {
     private let marks = FindingKind.allCases.map { kind in
         let view = NSImageView()
         view.image = NSImage(systemSymbolName: kind.symbol, accessibilityDescription: kind.title)
-        view.contentTintColor = .systemOrange
+        view.contentTintColor = StatusColors.findingNS
         view.isHidden = true
         return view
     }
@@ -36,10 +36,9 @@ final class SpanNameCell: NSTableCellView {
 
     init() {
         super.init(frame: .zero)
-        let small = NSImage.SymbolConfiguration(pointSize: 7, weight: .regular)
-        dot.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?.withSymbolConfiguration(small)
+        dot.image = ServiceDots.image(.waterfall, slot: 0)
         octagon.image = NSImage(systemSymbolName: "exclamationmark.octagon.fill", accessibilityDescription: "Error")
-        octagon.contentTintColor = .systemRed
+        octagon.contentTintColor = StatusColors.errorNS
         for label in [name, service] {
             // One line that ends in "…", never a clipped word.
             label.maximumNumberOfLines = 1
@@ -114,13 +113,19 @@ final class SpanNameCell: NSTableCellView {
     /// The octagon shows (self-test).
     var showsError: Bool { !octagon.isHidden }
 
+    /// The dot image draws itself in the current appearance.
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        dot.needsDisplay = true
+    }
+
     /// The finding icons shown, in order (self-test).
     var shownFindings: [FindingKind] { zip(FindingKind.allCases, marks).filter { !$0.1.isHidden }.map(\.0) }
 
-    func configure(name text: String, service shown: String?, duration time: String, color: NSColor, isError: Bool,
+    func configure(name text: String, service shown: String?, duration time: String, colorSlot: Int, isError: Bool,
                    findings: [FindingKind] = [], hiddenCount: Int, isOrphan: Bool, label: String) {
         duration.stringValue = time
-        dot.contentTintColor = color
+        dot.image = ServiceDots.image(.waterfall, slot: colorSlot)
         octagon.isHidden = !isError
         for (kind, mark) in zip(FindingKind.allCases, marks) { mark.isHidden = !findings.contains(kind) }
         name.stringValue = text
@@ -194,11 +199,17 @@ enum Timeline {
 final class SpanBarView: NSView {
     var start = 0.0
     var width = 0.0
-    var color = NSColor.systemBlue
+    var color = ServicePalette.nsColor(slot: 0)
     var note: String?
     var isEmphasized = false
 
     override var isFlipped: Bool { true }
+
+    /// Light, dark and Increase Contrast redraw the bar in their colors at once.
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         let track = Timeline.track(in: bounds)
@@ -211,6 +222,13 @@ final class SpanBarView: NSView {
         let rect = NSRect(x: x, y: (bounds.height - Timeline.barHeight) / 2, width: barWidth, height: Timeline.barHeight)
         color.setFill()
         NSBezierPath(roundedRect: rect, xRadius: Radius.bar, yRadius: Radius.bar).fill()
+        // Increase Contrast: a 1 pt border in the label color (S-031).
+        if effectiveAppearance.isHighContrast {
+            let border = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: Radius.bar, yRadius: Radius.bar)
+            border.lineWidth = 1
+            StatusColors.contrastEdgeNS.setStroke()
+            border.stroke()
+        }
         guard let note else { return }
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular),

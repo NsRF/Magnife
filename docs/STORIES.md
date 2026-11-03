@@ -364,7 +364,7 @@ As the user, Magnife follows my Mac's appearance.
 Screens: 01-empty-state … 09-settings
 Acceptance:
 - [snap] Every page has a dark snapshot with readable contrast for statuses, findings and waterfall bars.
-Status: todo
+Status: done
 
 ### S-032 Recognize Magnife by its icon
 As the user, I find Magnife in the Dock and Launchpad by its icon.

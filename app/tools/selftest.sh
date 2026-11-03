@@ -51,4 +51,6 @@ if (( reentrant > 0 )); then
   print "FAIL AppKit warned of a reentrant operation in an NSTableView delegate $reentrant times"
   code=1
 fi
+# Colors come from the palette, never written in a view (S-031).
+$here/color-lint.sh || code=1
 exit $code

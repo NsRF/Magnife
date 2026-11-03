@@ -165,6 +165,7 @@ enum Snapshot {
                     }
                 }
             }
+            if pages.contains(.traceDetail) { await captureDisplayOptions(model, dir: dir) }
             if pages.contains(.settings) {
                 await SnapshotPage.settings.prepare(model)
                 let main = NSApp.windows.first { $0.canBecomeMain && !$0.isSheet }

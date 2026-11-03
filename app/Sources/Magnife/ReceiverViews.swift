@@ -70,6 +70,7 @@ private struct CloseButton: View {
 
 /// One notice: an icon with its text (never color alone) and an action.
 struct Banner<Action: View>: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let text: String
     let symbol: String
     @ViewBuilder let action: Action
@@ -85,7 +86,8 @@ struct Banner<Action: View>: View {
         .padding(.horizontal, Space.md)
         .padding(.vertical, Space.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.bar)
+        // Reduce Transparency: a solid window background instead of the bar's material (S-031).
+        .background(reduceTransparency || DisplayOverrides.reduceTransparency ? AnyShapeStyle(.windowBackground) : AnyShapeStyle(.bar))
         .overlay(alignment: .bottom) { Divider() }
         .gridArea("banner", inset: Space.md)
         .accessibilityElement(children: .contain)

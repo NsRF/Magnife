@@ -350,11 +350,29 @@ this app starts the helper and reads its database. No server, no accounts.
   services were first seen) and `ServicePalette`. Red means Error and orange
   a finding; neither is a service color. Error always pairs the octagon icon
   with the word.
+- Every color besides the system's semantic ones comes from MagnifeKit
+  `ColorPalette` (S-031): the ten service colors, `errorText`, `errorFill`,
+  `finding`, `warning`, each in light, dark and both Increase Contrast
+  variants, unit-tested for 4.5:1 text / 3:1 graphics (7:1 / 4.5:1 with
+  Increase Contrast) against the window's backgrounds (`ColorPaletteTests`).
+  Views use `ServicePalette` and `StatusColors` (`UI/ServicePalette.swift`),
+  AppKit dots `ServiceDots.image(_:slot:)`. Never `.red`, `.orange`,
+  `.systemRed` or a hex in a view: `tools/color-lint.sh` (run by
+  `selftest.sh`) fails on them; `// color: ok <why>` for a real exception.
+  Increase Contrast adds a 1 pt label-color border to waterfall bars and a
+  ring to service dots (`StatusColors.contrastEdge`, clear otherwise);
+  `NSAppearance.isHighContrast` reads the system setting, and
+  `DisplayOverrides` fakes it and Reduce Transparency for snapshots
+  (`03-trace-detail-contrast`, `05-logs-contrast`, `06-command-k-solid`,
+  `02-trace-list-paused-solid`); `APP_SELFTEST_ONLY=appearance` checks the
+  palette in each appearance and renders the border and ring. Under Reduce
+  Transparency the Search panel and banners get a solid background
+  (`PanelSurface`).
 - Spacing comes from `Space` in `UI/Grid.swift`, on a 4 pt grid. Mark custom pages and cards with `.gridArea` and `.gridProbe`.
 - Windows open calm: `.noInitialFocus()` on every window and sheet, `.fitsContent()` on sheets and Settings tabs. Both in `UI/WindowBehavior.swift`.
 - Settings: one tab per topic in `SettingsView.swift`, one grouped Form per tab. Add a case to `SettingsTab` for a new tab.
 - Window chrome (title bar, toolbar, sidebar, menus, sheets) stays system. Buttons use system styles, like `.borderedProminent`.
-- Colors: `.primary`, `.secondary`, `.tint`, and system colors. Never fixed grays or white for text.
+- Colors: `.primary`, `.secondary`, `.tint`, semantic system colors (labelColor, separatorColor), and the palette above. Never fixed grays or white for text.
 - Every action has a menu bar item and a keyboard shortcut.
 - `Label` for icon and text pairs. SF Symbols for icons.
 - `ContentUnavailableView` for empty states.

@@ -139,15 +139,15 @@ struct LogLevelLabel: View {
     /// unreadable on a light background (orange is the findings color).
     private static func iconStyle(_ level: SeverityLevel) -> Color {
         switch level {
-        case .error, .fatal: .red
-        case .warn: .yellow
+        case .error, .fatal: StatusColors.error
+        case .warn: StatusColors.warning
         default: .secondary
         }
     }
 
     private static func wordStyle(_ level: SeverityLevel) -> Color {
         switch level {
-        case .error, .fatal: .red
+        case .error, .fatal: StatusColors.error
         case .warn: .primary
         default: .secondary
         }

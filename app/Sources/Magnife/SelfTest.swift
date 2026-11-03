@@ -69,6 +69,8 @@ enum SelfTest {
                 await checkLaunch(model)
             } else if only == "retention" {
                 await checkRetention(model)
+            } else if only == "appearance" {
+                await checkAppearance(model)
             } else if only == "span-detail" {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
@@ -90,6 +92,7 @@ enum SelfTest {
                 await checkSpanLogs(model)
                 await checkTraceLogs(model)
                 await checkFindings(model)
+                await checkAppearance(model)
                 await checkLogs(model)
                 await checkLogFilters(model)
                 await checkRetention(model)

@@ -116,6 +116,7 @@ struct NewTracesButton: View {
 }
 
 /// A service's color dot. Decoration: VoiceOver reads the name next to it.
+/// Under Increase Contrast it gets a ring in the label color (S-031).
 struct ServiceDot: View {
     @Environment(AppModel.self) private var model
     let name: String
@@ -124,6 +125,8 @@ struct ServiceDot: View {
         Image(systemName: "circle.fill")
             .imageScale(.small)
             .foregroundStyle(ServicePalette.color(slot: model.serviceColors.slot(for: name)))
+            // Clear unless Increase Contrast is on.
+            .overlay { Image(systemName: "circle").imageScale(.small).foregroundStyle(StatusColors.contrastEdge) }
             .accessibilityHidden(true)
     }
 }
@@ -149,7 +152,7 @@ struct StatusLabel: View {
         switch status {
         case .error:
             Label(status.title, systemImage: "exclamationmark.octagon.fill")
-                .foregroundStyle(.red)
+                .foregroundStyle(StatusColors.error)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(status.title)
         case .ok:

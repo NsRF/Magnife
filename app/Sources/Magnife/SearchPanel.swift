@@ -27,7 +27,9 @@ struct SearchOverlay: View {
 
 struct SearchPanel: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     static let width: CGFloat = 640
+    private let shape = RoundedRectangle(cornerRadius: Radius.card + Space.xs, style: .continuous)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -44,7 +46,7 @@ struct SearchPanel: View {
             footer
         }
         .frame(maxWidth: Self.width)
-        .glassEffect(.regular, in: .rect(cornerRadius: Radius.card + Space.xs))
+        .modifier(PanelSurface(shape: shape, solid: reduceTransparency || DisplayOverrides.reduceTransparency))
         .gridArea("search-panel", inset: Space.lg)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Search")
@@ -218,7 +220,7 @@ struct SearchResultRow: View {
             HStack(spacing: Space.xs) {
                 if trace.status == .error {
                     Image(systemName: "exclamationmark.octagon.fill")
-                        .foregroundStyle(isSelected ? AnyShapeStyle(Palette.onAccent) : AnyShapeStyle(.red))
+                        .foregroundStyle(isSelected ? AnyShapeStyle(Palette.onAccent) : AnyShapeStyle(StatusColors.error))
                 }
                 Text(trace.route)
                     .fontWeight(.medium)
