@@ -295,6 +295,7 @@ Depends: S-005
 Acceptance:
 - [unit] A span with `db.system` and a duration over 100 ms (decided by the agent) gets a Slow SQL finding.
 - [snap] The trace row shows a finding badge; the span is marked in the waterfall; the span detail says why.
+- [unit] Every finding (S-023 to S-025) says where it is: its service, the route or span it sits under, and what it cost (duration, count, share of the trace); never "endpoint" (detector audit, decisions 185 and 186).
 Status: done
 
 ### S-024 See N+1 queries flagged
@@ -379,7 +380,7 @@ Snapshots use a fixture of OTLP payloads replayed into the helper, so every valu
 - Traces: one healthy request, one with an exception and stack trace, one with a slow SQL span, one with an N+1 (8 identical statements), one with an HTTP 500 call.
 - Logs at Debug, Info, Warn and Error, most linked to spans, a few with no trace id; the HTTP 500 trace also has one with no span id, one from a span never sent, and one with a structured (JSON) body.
 - One saved filter, "Checkout errors", created through S-021.
-- Detector edge set, outside the seed set: `scripts/send-sample-traces --edges` sends 6 traces (51 spans, no logs, fixed ids) at the Slow SQL, N+1 and HTTP Error boundaries (99.9 / 100.0 / 100.4 / 101 ms queries, 4 and 5 runs, 304 / 400 / 404 / 502 / 503, no response code, a 200 with status Error). `--scenarios` takes its names (`edge-slow-boundary`, …) too.
+- Detector edge set, outside the seed set: `scripts/send-sample-traces --edges` sends 6 traces (51 spans, no logs, fixed ids) at the Slow SQL, N+1 and HTTP Error boundaries (99.9 / 100.0 / 100.4 / 101 ms queries, 4 and 5 runs, 304 / 400 / 404 / 502 / 503, no response code, a 200 with status Error). `--scenarios` takes its names (`edge-slow-boundary`, …) too. `tools/selftest.sh` seeds it as its own store (`seed_store <db> --edges`, `APP_EDGE_STORE`) and `swift test` checks it with `MAGNIFE_EDGE_STORE=<db>` (`EdgeStoreGoldenTests`).
 - Golden volume: `scripts/send-sample-traces --volume 12000 --seed 1` sends the same 1,611 traces (12,001 spans) every run; `--seed` works for `--rate` and `--live` too. Without it each run is random.
 
 ## Dropped

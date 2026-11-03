@@ -18,11 +18,13 @@ public struct DetectorSpan: Sendable, Hashable, FetchableRecord {
     public var httpStatusCode: Int?
     public var httpRoute: String?
     public var httpURL: String?
+    /// The span's service: where a finding is (detector audit 6).
+    public var serviceName: String
 
     public init(traceID: String = "", spanID: String, name: String = "", kind: SpanKind = .client, startNs: Int64 = 0,
                 durationNs: Int64, status: SpanStatus = .unset, statusMessage: String = "",
                 dbSystem: String? = nil, dbStatement: String? = nil, httpMethod: String? = nil,
-                httpStatusCode: Int? = nil, httpRoute: String? = nil, httpURL: String? = nil) {
+                httpStatusCode: Int? = nil, httpRoute: String? = nil, httpURL: String? = nil, serviceName: String = "") {
         self.traceID = traceID
         self.spanID = spanID
         self.name = name
@@ -37,6 +39,7 @@ public struct DetectorSpan: Sendable, Hashable, FetchableRecord {
         self.httpStatusCode = httpStatusCode
         self.httpRoute = httpRoute
         self.httpURL = httpURL
+        self.serviceName = serviceName
     }
 
     public init(row: Row) throws {
@@ -54,6 +57,7 @@ public struct DetectorSpan: Sendable, Hashable, FetchableRecord {
         httpStatusCode = try row.decode(forColumn: "http_status_code")
         httpRoute = try row.decode(forColumn: "http_route")
         httpURL = try row.decode(forColumn: "http_url")
+        serviceName = try row.decode(forColumn: "service_name")
     }
 }
 
@@ -106,6 +110,16 @@ public struct Finding: Sendable, Hashable, Identifiable {
     public var httpTarget: String?
     public var httpStatusCode: Int?
     public var statusMessage: String = ""
+    /// The flagged span's service (N+1: the first span's).
+    public var serviceName: String = ""
+    /// N+1: the services of the repeated spans, sorted, each once.
+    public var services: [String] = []
+    /// N+1: the shortest and the longest run.
+    public var minRunNs: Int64 = 0
+    public var maxRunNs: Int64 = 0
+    /// The span has status Error (Slow SQL and HTTP Error); its message is `statusMessage`.
+    public var isError = false
+    public var spanKind: SpanKind = .unspecified
 
     public var id: String { "\(kind.rawValue)/\(spanIDs.first ?? "")" }
 
@@ -127,8 +141,18 @@ public struct Finding: Sendable, Hashable, Identifiable {
     /// 100 ms that rounds to "100 ms" reads "just over 100 ms", so the words
     /// never say it took the threshold (PROGRESS decision 182).
     public var durationText: String {
+        kind == .slowSQL ? Self.slowSQLText(durationNs) : DurationFormat.string(nanoseconds: durationNs)
+    }
+
+    /// A Slow SQL duration in words: "340 ms", "just over 100 ms".
+    static func slowSQLText(_ durationNs: Int64) -> String {
         let text = DurationFormat.string(nanoseconds: durationNs)
-        return isJustOverThreshold ? "just over \(text)" : text
+        return isJustOver(durationNs) ? "just over \(text)" : text
+    }
+
+    static func isJustOver(_ durationNs: Int64) -> Bool {
+        durationNs > Detectors.slowSQLThresholdNs
+            && DurationFormat.string(nanoseconds: durationNs) == DurationFormat.string(nanoseconds: Detectors.slowSQLThresholdNs)
     }
 
     /// `durationText` for VoiceOver: "340 milliseconds", "just over 100 milliseconds".
@@ -137,10 +161,7 @@ public struct Finding: Sendable, Hashable, Identifiable {
         return isJustOverThreshold ? "just over \(text)" : text
     }
 
-    private var isJustOverThreshold: Bool {
-        kind == .slowSQL && durationNs > Detectors.slowSQLThresholdNs
-            && DurationFormat.string(nanoseconds: durationNs) == DurationFormat.string(nanoseconds: Detectors.slowSQLThresholdNs)
-    }
+    var isJustOverThreshold: Bool { kind == .slowSQL && Self.isJustOver(durationNs) }
 
     /// "POST /payments": the method and what was called, the method left out
     /// when the target already starts with it (a span named "POST /payments").
@@ -186,14 +207,25 @@ public struct Finding: Sendable, Hashable, Identifiable {
         }
     }
 
-    /// What the waterfall row adds for VoiceOver for this span: "Slow SQL", "N+1, 1 of 8".
+    /// What the waterfall row adds for VoiceOver for this span: "Slow SQL, over 100 milliseconds",
+    /// "N+1, run 1 of 8", "HTTP Error, 500" (detector audit 8, Row VoiceOver).
     public func spokenMark(for spanID: String) -> String {
         switch kind {
-        case .slowSQL, .httpError: kind.title
+        case .slowSQL:
+            "\(kind.title), over \(DurationFormat.spoken(nanoseconds: Detectors.slowSQLThresholdNs))"
         case .nPlusOne:
-            "\(kind.title), \(CountFormat.string((spanIDs.firstIndex(of: spanID) ?? 0) + 1)) of \(CountFormat.string(count))"
+            "\(kind.title), run \(CountFormat.string(run(of: spanID))) of \(CountFormat.string(count))"
+        case .httpError:
+            switch httpStatusCode {
+            case nil: "\(kind.title), no response code"
+            case let code? where code < Detectors.httpErrorMinimumCode: "\(kind.title), \(code), status Error"
+            case let code?: "\(kind.title), \(code)"
+            }
         }
     }
+
+    /// N+1: which run this span is, from 1, in start order.
+    func run(of spanID: String) -> Int { (spanIDs.firstIndex(of: spanID) ?? 0) + 1 }
 
     /// A statement on one line, its runs of white space as one space, and
     /// at most 300 characters: the strip line shows one line.
@@ -224,6 +256,8 @@ public struct TraceFindings: Sendable, Hashable {
     public private(set) var findings: [Finding] = []
     /// The findings of each span, by span id, as indexes into `findings`.
     private var bySpan: [String: [Int]] = [:]
+    /// Where each finding is, by finding id, once worked out from the waterfall (`attach`).
+    public private(set) var places: [String: FindingPlace] = [:]
 
     public init() {}
 
@@ -236,6 +270,13 @@ public struct TraceFindings: Sendable, Hashable {
 
     public var isEmpty: Bool { findings.isEmpty }
     public var count: Int { findings.count }
+
+    /// Where a finding is; nil until places are attached, and then every
+    /// string is the one without a place.
+    public func place(for finding: Finding) -> FindingPlace? { places[finding.id] }
+
+    /// Takes the places `FindingPlaces.build` worked out for these findings.
+    public mutating func attach(_ places: [String: FindingPlace]) { self.places = places }
 
     /// The findings that name this span, in kind order.
     public func findings(forSpan spanID: String) -> [Finding] {
@@ -251,10 +292,36 @@ public struct TraceFindings: Sendable, Hashable {
 
     /// The trace list's badges: one per kind, with its count.
     public var summary: FindingSummary {
+        var summary = FindingSummary()
         var counts: [FindingKind: Int] = [:]
-        for finding in findings { counts[finding.kind, default: 0] += 1 }
-        let repeats = findings.filter { $0.kind == .nPlusOne }.map(\.count).max() ?? 0
-        return FindingSummary(counts: counts, mostRepeats: repeats)
+        var codes = Set<Int>()
+        for finding in findings {
+            counts[finding.kind, default: 0] += 1
+            switch finding.kind {
+            case .slowSQL where finding.durationNs > summary.slowestNs:
+                summary.slowestNs = finding.durationNs
+                summary.slowestService = finding.serviceName
+            case .nPlusOne where finding.count > summary.mostRepeats:
+                summary.mostRepeats = finding.count
+                summary.repeatsTotalNs = finding.durationNs
+                summary.repeatsServices = finding.services
+            case .httpError:
+                if let code = finding.httpStatusCode, code >= Detectors.httpErrorMinimumCode {
+                    codes.insert(code)
+                } else {
+                    summary.httpOtherError = true
+                }
+            default: break
+            }
+        }
+        // The services of the failed calls, in the order the calls started.
+        for finding in findings.filter({ $0.kind == .httpError }).sorted(by: { ($0.startNs, $0.id) < ($1.startNs, $1.id) })
+        where !finding.serviceName.isEmpty && !summary.httpServices.contains(finding.serviceName) {
+            summary.httpServices.append(finding.serviceName)
+        }
+        summary.counts = counts
+        summary.httpCodes = codes.sorted()
+        return summary
     }
 
     /// The strip shows this many lines, then "Show All Findings (7)" (docs/ux.md, S-023 States).
@@ -272,9 +339,22 @@ public struct TraceFindings: Sendable, Hashable {
 
 /// A trace row's badges: the kinds found and how many of each.
 public struct FindingSummary: Sendable, Hashable {
-    public var counts: [FindingKind: Int]
+    public var counts: [FindingKind: Int] {
+        didSet { counts = counts.filter { $0.value > 0 } }
+    }
     /// N+1: the most times one statement ran, for the tooltip.
     public var mostRepeats: Int
+    /// Slow SQL: the slowest query and its service.
+    public var slowestNs: Int64 = 0
+    public var slowestService = ""
+    /// N+1: the most repeated statement's total and services.
+    public var repeatsTotalNs: Int64 = 0
+    public var repeatsServices: [String] = []
+    /// HTTP Error: the codes of 400 or higher, sorted, each once; whether a
+    /// call had status Error with no such code; the services, by first call.
+    public var httpCodes: [Int] = []
+    public var httpOtherError = false
+    public var httpServices: [String] = []
 
     public init(counts: [FindingKind: Int] = [:], mostRepeats: Int = 0) {
         self.counts = counts.filter { $0.value > 0 }
@@ -284,25 +364,45 @@ public struct FindingSummary: Sendable, Hashable {
     public var kinds: [FindingKind] { counts.keys.sorted() }
     public var isEmpty: Bool { counts.isEmpty }
 
-    /// The badge's tooltip: "Slow SQL: 3 queries over 100 ms".
+    /// The badge's tooltip, saying what and where (detector audit 8, List
+    /// badge tooltip): "Slow SQL: 1 query over 100 ms, 851 ms in checkout-api".
     public func help(_ kind: FindingKind) -> String {
         let count = counts[kind] ?? 0
         let threshold = DurationFormat.string(nanoseconds: Detectors.slowSQLThresholdNs)
         switch kind {
         case .slowSQL:
-            return "\(kind.title): \(count == 1 ? "1 query" : "\(CountFormat.string(count)) queries") over \(threshold)"
+            let slowest = Finding.slowSQLText(slowestNs) + (slowestService.isEmpty ? "" : " in \(slowestService)")
+            return count == 1 ? "\(kind.title): 1 query over \(threshold), \(slowest)"
+                : "\(kind.title): \(CountFormat.string(count)) queries over \(threshold), the slowest \(slowest)"
         case .nPlusOne:
-            return count == 1 ? "\(kind.title): a statement ran \(CountFormat.string(mostRepeats)) times"
-                : "\(kind.title): \(CountFormat.string(count)) statements ran \(Detectors.nPlusOneMinimum) or more times"
+            let place = Finding.whereText(repeatsServices).map { " in \($0)" } ?? ""
+            return count == 1
+                ? "\(kind.title): a statement ran \(CountFormat.string(mostRepeats)) times\(place), "
+                    + "\(DurationFormat.string(nanoseconds: repeatsTotalNs)) in all"
+                : "\(kind.title): \(CountFormat.string(count)) statements ran \(Detectors.nPlusOneMinimum) or more times, "
+                    + "the most \(CountFormat.string(mostRepeats)) times\(place)"
         case .httpError:
-            return "\(kind.title): \(count == 1 ? "1 call" : "\(CountFormat.string(count)) calls") returned "
-                + "\(Detectors.httpErrorMinimumCode) or higher, or had status Error"
+            let calls = count == 1 ? "1 call" : "\(CountFormat.string(count)) calls"
+            let place = Finding.whereText(httpServices).map { ", in \($0)" } ?? ""
+            guard !httpCodes.isEmpty else { return "\(kind.title): \(calls) had status Error\(place)" }
+            return "\(kind.title): \(calls) returned \(Self.codesText(httpCodes))"
+                + (httpOtherError ? " or had status Error" : "") + place
         }
     }
 
-    /// What the row adds for VoiceOver: "findings: Slow SQL".
+    /// "500", "400 or 404", "400, 404 or 500".
+    static func codesText(_ codes: [Int]) -> String {
+        let words = codes.map(String.init)
+        guard words.count > 1 else { return words.first ?? "" }
+        return words.dropLast().joined(separator: ", ") + " or " + words[words.count - 1]
+    }
+
+    /// What the row adds for VoiceOver: "findings: Slow SQL, N+1", "findings: 3 HTTP Error".
     public var spoken: String? {
-        isEmpty ? nil : "findings: " + kinds.map(\.title).joined(separator: ", ")
+        isEmpty ? nil : "findings: " + kinds.map { kind in
+            let count = counts[kind] ?? 0
+            return count > 1 ? "\(CountFormat.string(count)) \(kind.title)" : kind.title
+        }.joined(separator: ", ")
     }
 }
 
@@ -331,8 +431,11 @@ public enum Detectors {
         spans.compactMap { span in
             guard span.dbSystem != nil, span.durationNs > slowSQLThresholdNs else { return nil }
             let statement = span.dbStatement.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+            let isError = span.status == .error
             return Finding(kind: .slowSQL, spanIDs: [span.spanID], startNs: span.startNs, durationNs: span.durationNs,
-                           statement: statement, dbSystem: span.dbSystem, spanName: span.name)
+                           statement: statement, dbSystem: span.dbSystem, spanName: span.name,
+                           statusMessage: isError ? span.statusMessage : "", serviceName: span.serviceName,
+                           isError: isError, spanKind: span.kind)
         }
     }
 }
@@ -361,9 +464,12 @@ extension Detectors {
         return groups.compactMap { shape, group in
             guard group.count >= nPlusOneMinimum else { return nil }
             let ordered = group.sorted { ($0.startNs, $0.spanID) < ($1.startNs, $1.spanID) }
+            let runs = ordered.map(\.durationNs)
             return Finding(kind: .nPlusOne, spanIDs: ordered.map(\.spanID), startNs: ordered[0].startNs,
-                           durationNs: ordered.reduce(0) { $0 + $1.durationNs }, statement: shape, count: ordered.count,
-                           dbSystem: ordered[0].dbSystem, spanName: ordered[0].name)
+                           durationNs: runs.reduce(0, +), statement: shape, count: ordered.count,
+                           dbSystem: ordered[0].dbSystem, spanName: ordered[0].name, serviceName: ordered[0].serviceName,
+                           services: Set(ordered.map(\.serviceName)).filter { !$0.isEmpty }.sorted(),
+                           minRunNs: runs.min() ?? 0, maxRunNs: runs.max() ?? 0, spanKind: ordered[0].kind)
         }
     }
 }
@@ -383,7 +489,8 @@ extension Detectors {
             return Finding(kind: .httpError, spanIDs: [span.spanID], startNs: span.startNs, durationNs: span.durationNs,
                            statement: nil, spanName: span.name, httpMethod: span.httpMethod,
                            httpTarget: outgoing ? url ?? route : route ?? url, httpStatusCode: span.httpStatusCode,
-                           statusMessage: span.status == .error ? span.statusMessage : "")
+                           statusMessage: span.status == .error ? span.statusMessage : "", serviceName: span.serviceName,
+                           isError: span.status == .error, spanKind: span.kind)
         }
     }
 }

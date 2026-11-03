@@ -38,7 +38,7 @@ there too. `AppModel` awaits them and assigns results on the main actor. Results
 carry the seq they read; the rules that drop an older result live in value types
 (`TraceListState.applying` for the list) or next to the read (`updated_seq` for the
 open trace). Values shown together come from one `pool.read` (one WAL snapshot):
-the open trace's row, waterfall spans and findings are `TelemetryReader.openTrace`.
+the open trace's row, waterfall spans and findings are `TelemetryReader.openTrace`. Where each finding is (`FindingPlaces.build`, pure) is worked out from that tree after the read; the status messages it quotes under an HTTP Error come from one more read (`TelemetryReader.placedFindings`), which can only be newer.
 Whether a refresh came from the helper's batches (and so is paced) is the
 task-local `RefreshPacing.isBatch`, never a stored flag, since refreshes overlap.
 

@@ -35,9 +35,9 @@ struct FindingTests {
                                             db("c", 5 * Self.ms, start: 30)])
         #expect(found.findings.map(\.spanIDs) == [["a"], ["b"]])
         #expect(found.summary.counts == [.slowSQL: 2])
-        #expect(found.summary.help(.slowSQL) == "Slow SQL: 2 queries over 100 ms")
-        #expect(Detectors.findings(in: [db("a", 150 * Self.ms)]).summary.help(.slowSQL) == "Slow SQL: 1 query over 100 ms")
-        #expect(found.summary.spoken == "findings: Slow SQL")
+        #expect(found.summary.help(.slowSQL) == "Slow SQL: 2 queries over 100 ms, the slowest 200 ms")
+        #expect(Detectors.findings(in: [db("a", 150 * Self.ms)]).summary.help(.slowSQL) == "Slow SQL: 1 query over 100 ms, 150 ms")
+        #expect(found.summary.spoken == "findings: 2 Slow SQL")
     }
 
     @Test("Slow SQL words: strip line, span detail text, VoiceOver")
@@ -100,11 +100,11 @@ struct FindingTests {
         #expect(finding.line == "N+1 · 1,200 times · SELECT * FROM order_items WHERE order_id = ?")
         #expect(finding.detailText == "This statement ran 1,200 times in this trace.")
         #expect(finding.accessibilityLabel == "Select span: N+1, 1,200 times")
-        #expect(finding.spokenMark(for: "i1199") == "N+1, 1,200 of 1,200")
-        #expect(found.summary.help(.nPlusOne) == "N+1: a statement ran 1,200 times")
+        #expect(finding.spokenMark(for: "i1199") == "N+1, run 1,200 of 1,200")
+        #expect(found.summary.help(.nPlusOne) == "N+1: a statement ran 1,200 times, 1.20 s in all")
         let slow = Detectors.findings(in: (0..<1_200).map { db("s\($0)", 150 * Self.ms, start: Int64($0)) })
         #expect(slow.showAllTitle == "Show All Findings (1,200)")
-        #expect(slow.summary.help(.slowSQL) == "Slow SQL: 1,200 queries over 100 ms")
+        #expect(slow.summary.help(.slowSQL) == "Slow SQL: 1,200 queries over 100 ms, the slowest 150 ms")
     }
 
     @Test("findings by trace keep each trace's own")
@@ -150,9 +150,9 @@ struct FindingTests {
         #expect(finding.detailText == "This statement ran 8 times in this trace.")
         #expect(finding.shownStatement == "SELECT * FROM order_items WHERE order_id = ?")
         #expect(finding.accessibilityLabel == "Select span: N+1, 8 times")
-        #expect(finding.spokenMark(for: "i0") == "N+1, 1 of 8")
-        #expect(finding.spokenMark(for: "i2") == "N+1, 3 of 8")
-        #expect(found.summary.help(.nPlusOne) == "N+1: a statement ran 8 times")
+        #expect(finding.spokenMark(for: "i0") == "N+1, run 1 of 8")
+        #expect(finding.spokenMark(for: "i2") == "N+1, run 3 of 8")
+        #expect(found.summary.help(.nPlusOne) == "N+1: a statement ran 8 times, 56 ms in all")
         #expect(found.summary.spoken == "findings: N+1")
     }
 
@@ -166,8 +166,8 @@ struct FindingTests {
         #expect(found.findings.map(\.kind) == [.slowSQL, .nPlusOne, .nPlusOne])
         #expect(found.kinds(forSpan: "u0") == [.slowSQL, .nPlusOne])
         #expect(found.summary.counts == [.slowSQL: 1, .nPlusOne: 2])
-        #expect(found.summary.help(.nPlusOne) == "N+1: 2 statements ran 5 or more times")
-        #expect(found.summary.spoken == "findings: Slow SQL, N+1")
+        #expect(found.summary.help(.nPlusOne) == "N+1: 2 statements ran 5 or more times, the most 6 times")
+        #expect(found.summary.spoken == "findings: Slow SQL, 2 N+1")
     }
 
     @Test("spans without a statement never make an N+1; different tables never group")
@@ -230,7 +230,7 @@ struct FindingTests {
         #expect(server.line == "HTTP Error · 500 · POST /payments")
         #expect(server.detailText == "POST /payments returned 500.")
         #expect(server.accessibilityLabel == "Select span: HTTP Error, POST /payments returned 500")
-        #expect(server.spokenMark(for: "a") == "HTTP Error")
+        #expect(server.spokenMark(for: "a") == "HTTP Error, 500")
 
         let client = try #require(Detectors.findings(in: [
             http("b", kind: .client, name: "POST", code: nil, status: .error, message: "connection reset",
@@ -268,10 +268,60 @@ struct FindingTests {
     func httpSeveral() {
         let found = Detectors.findings(in: [http("a", code: 500), http("b", kind: .client, code: 502, url: "http://x/y")])
         #expect(found.findings.map(\.kind) == [.httpError, .httpError])
-        #expect(found.summary.help(.httpError) == "HTTP Error: 2 calls returned 400 or higher, or had status Error")
+        #expect(found.summary.help(.httpError) == "HTTP Error: 2 calls returned 500 or 502")
         #expect(Detectors.findings(in: [http("a", code: 500)]).summary.help(.httpError)
-                == "HTTP Error: 1 call returned 400 or higher, or had status Error")
-        #expect(found.summary.spoken == "findings: HTTP Error")
+                == "HTTP Error: 1 call returned 500")
+        #expect(found.summary.spoken == "findings: 2 HTTP Error")
+    }
+
+    @Test("a call with status Error and no code of 400 or higher: the badge says so, and the row and VoiceOver too")
+    func httpStatusErrorOnly() throws {
+        let found = Detectors.findings(in: [http("a", code: 200, status: .error), http("b", code: nil, status: .error)])
+        #expect(found.summary.help(.httpError) == "HTTP Error: 2 calls had status Error")
+        let ok = try #require(found.findings.first { $0.httpStatusCode == 200 })
+        #expect(ok.rowHelp(for: "a") == "HTTP Error: 200, status Error")
+        #expect(ok.spokenMark(for: "a") == "HTTP Error, 200, status Error")
+        let none = try #require(found.findings.first { $0.httpStatusCode == nil })
+        #expect(none.rowHelp(for: "b") == "HTTP Error: no response code, status Error")
+        #expect(none.spokenMark(for: "b") == "HTTP Error, no response code")
+        let mixed = Detectors.findings(in: [http("a", code: 503), http("b", code: 400), http("c", code: 404),
+                                            http("d", code: 200, status: .error)])
+        #expect(mixed.summary.help(.httpError) == "HTTP Error: 4 calls returned 400, 404 or 503 or had status Error")
+    }
+
+    @Test("the waterfall row's words: Slow SQL over the threshold, just over it, and N+1 runs")
+    func rowHelp() throws {
+        let slow = try #require(Detectors.findings(in: [db("a", 340 * Self.ms)]).findings.first)
+        #expect(slow.rowHelp(for: "a") == "Slow SQL: 340 ms, over 100 ms")
+        #expect(slow.spokenMark(for: "a") == "Slow SQL, over 100 milliseconds")
+        let justOver = try #require(Detectors.findings(in: [db("a", 100_400_000)]).findings.first)
+        #expect(justOver.rowHelp(for: "a") == "Slow SQL: just over 100 ms")
+        let repeated = try #require(Detectors.findings(in: items(8)).findings.first)
+        #expect(repeated.rowHelp(for: "i0") == "N+1: run 1 of 8, 56 ms in all")
+        #expect(repeated.rowHelp(for: "i7") == "N+1: run 8 of 8, 56 ms in all")
+    }
+
+    @Test("detector spans carry their service, and N+1 its services, runs and the badge's where")
+    func services() throws {
+        var spans: [DetectorSpan] = []
+        for n in 0..<6 {
+            let service = n < 3 ? "orders" : "checkout-api"
+            spans.append(DetectorSpan(spanID: "s\(n)", name: "SELECT items", startNs: Int64(n),
+                                      durationNs: Int64(n + 1) * Self.ms, dbSystem: "postgresql",
+                                      dbStatement: "SELECT * FROM items WHERE id = \(n)", serviceName: service))
+        }
+        spans.append(DetectorSpan(spanID: "slow", name: "SELECT big", durationNs: 200 * Self.ms, status: .error,
+                                  statusMessage: "timeout", dbSystem: "postgresql", serviceName: "orders"))
+        let found = Detectors.findings(in: spans)
+        let repeated = try #require(found.findings.first { $0.kind == .nPlusOne })
+        #expect(repeated.services == ["checkout-api", "orders"] && repeated.serviceName == "orders")
+        #expect(repeated.minRunNs == Self.ms && repeated.maxRunNs == 6 * Self.ms)
+        let slow = try #require(found.findings.first { $0.kind == .slowSQL })
+        #expect(slow.isError && slow.statusMessage == "timeout" && slow.serviceName == "orders")
+        // The text without a place is as before.
+        #expect(slow.detailText == "This postgresql query took 200 ms. Queries over 100 ms are flagged.")
+        #expect(found.summary.help(.nPlusOne) == "N+1: a statement ran 6 times in checkout-api and orders, 21 ms in all")
+        #expect(found.summary.help(.slowSQL) == "Slow SQL: 1 query over 100 ms, 200 ms in orders")
     }
 
     // MARK: Strip

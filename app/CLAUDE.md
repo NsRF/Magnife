@@ -200,8 +200,18 @@ this app starts the helper and reads its database. No server, no accounts.
   fits beside the word), `FindingsStrip` under the waterfall header
   (`selectFinding`), `FindingList` first in the span detail; the waterfall
   row's orange icons are `SpanNameCell.marks`. N+1 groups statements by
-  `SQLNormalizer.normalize` (MagnifeKit, table-tested in `SQLNormalizerTests`). `APP_SELFTEST_ONLY=findings`
-  runs the checks and the cost INFO lines.
+  `SQLNormalizer.normalize` (MagnifeKit, table-tested in `SQLNormalizerTests`). Where each
+  finding is (`FindingPlace`, `FindingPlaces.build`, pure, from the open trace's tree:
+  service, "under" route, caller and callee, the first Error under an HTTP
+  Error, share of the trace) is attached in `TelemetryReader.placedFindings`,
+  which `readWaterfall` calls; the words per surface are `Finding.line(in:)`,
+  `detailText(in:)`, `accessibilityLabel(in:)`, `rowHelp(for:)`, `spokenMark(for:)`
+  (`Models/FindingWords.swift`) and `FindingSummary.help`. Never write "endpoint":
+  "in <service>, under <route>". `APP_SELFTEST_ONLY=findings`
+  runs the checks (the seed set's and, on `APP_EDGE_STORE`, the detector edge
+  set's strings) and the cost INFO lines (`INFO places`). `MAGNIFE_EDGE_STORE=<db>
+  swift test --filter EdgeStoreGoldenTests` checks an edge store (`seed_store <db> --edges`);
+  `MAGNIFE_FINDINGS_DUMP=<file>` writes what each trace says as JSON.
 - Menu bar extra (S-026): `MenuBarExtra` `.menu` style in `App.swift`, views
   in `MenuBarViews.swift`. `RecentErrors` (MagnifeKit, unit-tested) holds the
   five newest traces with an error (read in every refresh, paused too,
@@ -283,7 +293,7 @@ this app starts the helper and reads its database. No server, no accounts.
   N+1, slow SQL, HTTP 500 with an exception, an exception; 20 logs, 8 with
   no trace id), waits until the batch lines add up, and keeps the helper
   running while the app reads (the read-only reader needs the `-wal` file),
-  then stops it. `snap.sh` and `selftest.sh` source it. The app never writes,
+  then stops it (`--edges`: the detector edge set, 6 traces, 51 spans). `snap.sh` and `selftest.sh` source it. The app never writes,
   so every value on screen comes from telemetry the helper received.
 - `../docs/` the brief, glossary, stories, research, and progress log.
 

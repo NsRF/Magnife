@@ -81,12 +81,12 @@ struct FindingsStrip: View {
             VStack(alignment: .leading, spacing: Space.xs) {
                 if model.showsAllFindings {
                     ScrollView {
-                        lines(findings.shownInStrip(all: true))
+                        lines(findings.shownInStrip(all: true), in: findings)
                     }
                     .frame(maxHeight: Self.expandedMaxHeight)
                     .scrollBounceBehavior(.basedOnSize)
                 } else {
-                    lines(findings.shownInStrip(all: false))
+                    lines(findings.shownInStrip(all: false), in: findings)
                 }
                 if let title = findings.showAllTitle {
                     Button(model.showsAllFindings ? "Show Less" : title) { model.showsAllFindings.toggle() }
@@ -102,16 +102,18 @@ struct FindingsStrip: View {
         }
     }
 
-    private func lines(_ findings: ArraySlice<Finding>) -> some View {
+    /// Each line says what and where; its tooltip is the span detail's text (detector audit 8).
+    private func lines(_ shown: ArraySlice<Finding>, in findings: TraceFindings) -> some View {
         VStack(alignment: .leading, spacing: Space.xs) {
-            ForEach(findings) { finding in
+            ForEach(shown) { finding in
+                let place = findings.place(for: finding)
                 Button {
                     model.selectFinding(finding)
                 } label: {
                     HStack(spacing: Space.xs) {
                         Image(systemName: finding.kind.symbol)
                             .foregroundStyle(StatusColors.finding)
-                        Text(finding.line)
+                        Text(finding.line(in: place))
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -119,8 +121,9 @@ struct FindingsStrip: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(finding.line)
-                .accessibilityLabel(finding.accessibilityLabel)
+                .help(finding.detailText(in: place))
+                .accessibilityLabel(finding.accessibilityLabel(in: place))
+                .accessibilityHint(finding.accessibilityHint(in: place) ?? "")
                 .gridProbe("finding-\(finding.id)", area: "findings-strip")
             }
         }
@@ -132,6 +135,8 @@ struct FindingsStrip: View {
 /// then "Show All".
 struct FindingList: View {
     let findings: [Finding]
+    /// Where each one is, by finding id (`TraceFindings.places`).
+    var places: [String: FindingPlace] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.md) {
@@ -145,7 +150,7 @@ struct FindingList: View {
                             .foregroundStyle(StatusColors.finding)
                     }
                     .accessibilityAddTraits(.isHeader)
-                    Text(finding.detailText)
+                    Text(finding.detailText(in: places[finding.id]))
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                     if let statement = finding.shownStatement {

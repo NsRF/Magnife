@@ -123,7 +123,8 @@ final class SpanNameCell: NSTableCellView {
     var shownFindings: [FindingKind] { zip(FindingKind.allCases, marks).filter { !$0.1.isHidden }.map(\.0) }
 
     func configure(name text: String, service shown: String?, duration time: String, colorSlot: Int, isError: Bool,
-                   findings: [FindingKind] = [], hiddenCount: Int, isOrphan: Bool, label: String) {
+                   findings: [FindingKind] = [], findingHelp: [String] = [], hiddenCount: Int, isOrphan: Bool,
+                   label: String) {
         duration.stringValue = time
         dot.image = ServiceDots.image(.waterfall, slot: colorSlot)
         octagon.isHidden = !isError
@@ -135,7 +136,8 @@ final class SpanNameCell: NSTableCellView {
         let named = shown.map { "\(text) · \($0)" } ?? text
         var help = hiddenCount == 0 ? named : "\(named) (\(TraceList.spansText(hiddenCount)))"
         if isOrphan { help += " · \(Waterfall.orphanHelp)" }
-        if !findings.isEmpty { help += " · " + findings.map(\.title).joined(separator: ", ") }
+        // Each finding's own words: "Slow SQL: 851 ms, over 100 ms · N+1: run 3 of 6, 138 ms in all".
+        if !findingHelp.isEmpty { help += " · " + findingHelp.joined(separator: " · ") }
         toolTip = help
         name.toolTip = help
         setAccessibilityLabel(hiddenCount == 0 ? label : "\(label), \(TraceList.spansText(hiddenCount))")

@@ -130,7 +130,9 @@ extension AppModel {
         // One snapshot: the findings never name a span the tree lacks.
         let read = try await reader.openTrace(traceID: traceID)
         let tree = await Waterfall.build(read.spans)
-        return (read.trace, tree, read.findings, tree.autoCollapsed(after: previous))
+        // Where each finding is, from the tree (detector audit 7); one more read for the Error messages under HTTP Errors.
+        let findings = try await reader.placedFindings(read.findings, in: tree, trace: read.trace, traceID: traceID)
+        return (read.trace, tree, findings, tree.autoCollapsed(after: previous))
     }
 
     /// The outline shows `generation`: the self-test's open time ends here.

@@ -250,6 +250,7 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
             cell.configure(name: span.name, service: waterfall.shownService(of: index),
                            duration: DurationFormat.string(nanoseconds: span.durationNs), colorSlot: slot,
                            isError: span.status == .error, findings: findings.kinds(forSpan: span.spanID),
+                           findingHelp: found.map { $0.rowHelp(for: span.spanID) },
                            hiddenCount: hiddenCount, isOrphan: node.isOrphan,
                            label: ([waterfall.accessibilityLabel(of: index)] + marks).joined(separator: ", "))
             return cell

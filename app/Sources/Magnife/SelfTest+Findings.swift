@@ -15,12 +15,14 @@ extension SelfTest {
         await checkNPlusOne(model)
         await checkHTTPErrors(model)
         await checkLiveFinding(model)
+        await checkPlacedStrip(model)
+        await checkEdgeFindings()
         await checkDetectorCost()
         model.selectedTraceID = nil
     }
 
     /// The seed trace with this route, wherever it is in the store.
-    private static func findingTrace(_ model: AppModel, route: String) async -> TraceSummary? {
+    static func findingTrace(_ model: AppModel, route: String) async -> TraceSummary? {
         try? await model.reader?.latestTraces(limit: 5_000).first { $0.route == route }
     }
 
@@ -49,7 +51,9 @@ extension SelfTest {
         check("S-023: the list's badges: Slow SQL on the report and the job, none on the healthy trace",
               seed[slow.traceID]?.kinds == [.slowSQL] && seed[job.traceID]?.kinds == [.slowSQL]
                 && seed[healthy.traceID]?.isEmpty == true)
-        check("S-023: the badge's tooltip", seed[slow.traceID]?.help(.slowSQL) == "Slow SQL: 1 query over 100 ms")
+        check("S-023: the badge's tooltip says the slowest query and its service",
+              seed[slow.traceID]?.help(.slowSQL) == "Slow SQL: 1 query over 100 ms, 851 ms in checkout-api",
+              seed[slow.traceID]?.help(.slowSQL) ?? "none")
         await model.waitForTraceFindings()
         let rows = model.traces
         let read = (try? await reader.findingSummaries(traceIDs: rows.map(\.traceID))) ?? [:]
@@ -76,10 +80,12 @@ extension SelfTest {
                   let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SpanNameCell else { continue }
             let span = waterfall.nodes[item.index].span
             if cell.shownFindings == [.slowSQL] { marked.append(span.name) }
-            if (cell.accessibilityLabel() ?? "").hasSuffix(", Slow SQL") != (cell.shownFindings == [.slowSQL]) { spoken = false }
+            if (cell.accessibilityLabel() ?? "").hasSuffix(", Slow SQL, over 100 milliseconds") != (cell.shownFindings == [.slowSQL]) {
+                spoken = false
+            }
         }
         check("S-023: only the slow query's row shows the Slow SQL icon", marked == ["SELECT Orders"], "\(marked)")
-        check("S-023: VoiceOver reads \"Slow SQL\" on that row", spoken)
+        check("S-023: VoiceOver reads \"Slow SQL, over 100 milliseconds\" on that row", spoken)
         // One read for the tree and its findings (M3 review): every span a finding names is a row.
         check("S-023: every span a finding names is in the waterfall it was read with",
               model.openTraceFindings.findings.allSatisfy { $0.spanIDs.allSatisfy { waterfall.index(of: $0) != nil } })
@@ -92,9 +98,10 @@ extension SelfTest {
         let opened = await waitUntil(2) { model.spanDetail?.span.spanID == finding.spanIDs.first }
         check("S-023: a strip line selects its span and opens its span detail on Span",
               opened && model.selectedSpanID == finding.spanIDs.first && model.showsSpanDetail && model.spanDetailTab == .span)
-        check("S-023: the span detail lists the finding",
-              model.openTraceFindings.findings(forSpan: model.selectedSpanID ?? "").map(\.detailText)
-                == ["This query took 851 ms. Queries over 100 ms are flagged."])
+        let placed = model.openTraceFindings
+        let details = placed.findings(forSpan: model.selectedSpanID ?? "").map { $0.detailText(in: placed.place(for: $0)) }
+        check("S-023: the span detail lists the finding, where it is and its share of the trace",
+              details == [PlacedGoldens.s1Detail], "\(details)")
     }
 
     /// S-024: the seed set's 8 identical SELECTs under the orders server span.
@@ -111,7 +118,8 @@ extension SelfTest {
               finding?.line == "N+1 · 8 times · SELECT * FROM order_items WHERE order_id = ?", finding?.line ?? "none")
         let summary = (try? await reader.findingSummaries(traceIDs: [trace.traceID]))?[trace.traceID]
         check("S-024: the row's badge and tooltip", summary?.kinds == [.nPlusOne]
-              && summary?.help(.nPlusOne) == "N+1: a statement ran 8 times")
+              && summary?.help(.nPlusOne) == "N+1: a statement ran 8 times in orders, 58 ms in all",
+              summary?.help(.nPlusOne) ?? "none")
 
         model.selectedTraceID = nil
         model.selectedTraceID = trace.traceID
@@ -129,8 +137,8 @@ extension SelfTest {
             labels.append(cell.accessibilityLabel() ?? "")
         }
         check("S-024: every repeated span shows the N+1 icon", marked.sorted() == finding.spanIDs.sorted(), "\(marked.count) rows")
-        check("S-024: VoiceOver reads \"N+1, 1 of 8\" on the first",
-              labels.first?.hasSuffix(", N+1, 1 of 8") == true && labels.last?.hasSuffix(", N+1, 8 of 8") == true,
+        check("S-024: VoiceOver reads \"N+1, run 1 of 8\" on the first",
+              labels.first?.hasSuffix(", N+1, run 1 of 8") == true && labels.last?.hasSuffix(", N+1, run 8 of 8") == true,
               labels.first ?? "none")
         model.selectFinding(finding)
         let opened = await waitUntil(2) { model.spanDetail?.span.spanID == finding.spanIDs.first }
@@ -152,12 +160,11 @@ extension SelfTest {
               "\(findings.findings.map(\.line))")
         check("S-025: the failed INSERT has status Error but is no HTTP call, so it is not flagged",
               findings.findings.allSatisfy { $0.kind == .httpError } && findings.count == 3)
-        check("S-025: the span detail says what returned what",
-              findings.findings.last?.detailText == "POST /payments returned 500.", findings.findings.last?.detailText ?? "none")
         let summary = (try? await reader.findingSummaries(traceIDs: [trace.traceID, healthy.traceID])) ?? [:]
         check("S-025: the row's badge and tooltip; the healthy trace's 2xx calls carry none",
-              summary[trace.traceID]?.help(.httpError) == "HTTP Error: 3 calls returned 400 or higher, or had status Error"
-                && summary[healthy.traceID]?.isEmpty == true)
+              summary[trace.traceID]?.help(.httpError) == "HTTP Error: 3 calls returned 500, in web and checkout-api"
+                && summary[trace.traceID]?.spoken == "findings: 3 HTTP Error" && summary[healthy.traceID]?.isEmpty == true,
+              summary[trace.traceID]?.help(.httpError) ?? "none")
 
         model.selectedTraceID = nil
         model.selectedTraceID = trace.traceID
@@ -171,9 +178,13 @@ extension SelfTest {
             guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SpanNameCell else { continue }
             let flagged = cell.shownFindings == [.httpError]
             if flagged { marked += 1 }
-            if (cell.accessibilityLabel() ?? "").hasSuffix(", Error, HTTP Error") != flagged { spoken = false }
+            if (cell.accessibilityLabel() ?? "").hasSuffix(", Error, HTTP Error, 500") != flagged { spoken = false }
         }
         check("S-025: the three failed calls show the network icon, after the Error octagon", marked == 3 && spoken)
+        let placed = model.openTraceFindings
+        let details = placed.findings.map { $0.detailText(in: placed.place(for: $0)) }
+        check("S-025: the span detail says who called what, what it returned and what failed under it",
+              details.last == PlacedGoldens.seed["POST /checkout/pay"]?.details.last, details.last ?? "none")
     }
 
     /// A trace still receiving spans gains its badge in place (docs/ux.md, S-023 States).
@@ -243,6 +254,19 @@ extension SelfTest {
         checkTiming("the detectors on 12,000 spans in 200 traces", ms: smallTime, budget: 50)
         checkTiming("the detectors on one 300,000-span trace", ms: largeTime, budget: 1_500)
 
+        // Where each finding is (detector audit 7): worked out from the open trace's tree.
+        let load = DetectorLoad.places()
+        var places: [String: FindingPlace] = [:]
+        var placeTimes: [Double] = []
+        for _ in 0..<3 {
+            placeTimes.append(await DetectorLoad.time { places = FindingPlaces.build(load.findings, in: load.tree, trace: nil) })
+        }
+        let placeTime = placeTimes.min() ?? 0
+        print("INFO places: 30,000 spans in 5 levels, one N+1 of "
+              + "\(CountFormat.string(load.findings.findings.first { $0.kind == .nPlusOne }?.count ?? 0)) runs and "
+              + "\(load.findings.findings.filter { $0.kind == .slowSQL }.count) Slow SQL, \(String(format: "%.1f", placeTime)) ms")
+        checkTiming("where 37 findings are in a 30,000-span trace", ms: placeTime, budget: 50, ok: places.count == 37)
+
         guard let path = ProcessInfo.processInfo.environment["APP_SEARCH_STORE"],
               let reader = try? await TelemetryReader.open(at: URL(fileURLWithPath: path)),
               let page = try? await reader.latestTraces(limit: TraceList.pageSize) else {
@@ -281,6 +305,43 @@ enum DetectorLoad {
                 return DetectorSpan(traceID: trace, spanID: "s\(n)", name: "work", startNs: Int64(n), durationNs: 1_000)
             }
         }
+    }
+
+    /// The places' cost input (as `FindingPlaceLoad` in the unit tests): 30,000
+    /// spans in five levels (root, 10 loads, 100 steps, 100 repositories,
+    /// 29,789 leaves); 22,001 leaves run one statement, 36 are slow.
+    static func places() -> (tree: Waterfall, findings: TraceFindings) {
+        var spans = [WaterfallSpan(spanID: "root", name: "GET /load", kind: .server, startNs: 0, durationNs: 2_000_000_000,
+                                   serviceName: "api")]
+        var detector: [DetectorSpan] = []
+        var leaf = 0
+        for a in 0..<10 {
+            spans.append(WaterfallSpan(spanID: "a\(a)", parentSpanID: "root", name: "Load\(a)", startNs: Int64(a), durationNs: 1,
+                                       serviceName: "api"))
+            for b in 0..<10 {
+                let step = "b\(a)-\(b)", repository = "r\(a)-\(b)"
+                spans.append(WaterfallSpan(spanID: step, parentSpanID: "a\(a)", name: "Step", startNs: Int64(b), durationNs: 1,
+                                           serviceName: "api"))
+                spans.append(WaterfallSpan(spanID: repository, parentSpanID: step, name: "Repository", startNs: Int64(b),
+                                           durationNs: 1, serviceName: "api"))
+                for _ in 0..<298 where spans.count < 30_000 {
+                    let id = "l\(leaf)"
+                    spans.append(WaterfallSpan(spanID: id, parentSpanID: repository, name: "SELECT items", kind: .client,
+                                               startNs: Int64(leaf), durationNs: 1, serviceName: "api"))
+                    if leaf < 22_001 {
+                        detector.append(DetectorSpan(spanID: id, name: "SELECT items", startNs: Int64(leaf), durationNs: 1_000,
+                                                     dbSystem: "postgresql", dbStatement: "SELECT * FROM items WHERE id = \(leaf)",
+                                                     serviceName: "api"))
+                    } else if leaf < 22_037 {
+                        detector.append(DetectorSpan(spanID: id, name: "SELECT report", startNs: Int64(leaf),
+                                                     durationNs: 150_000_000, dbSystem: "postgresql",
+                                                     dbStatement: "SELECT * FROM report_\(leaf)", serviceName: "api"))
+                    }
+                    leaf += 1
+                }
+            }
+        }
+        return (Waterfall(spans: spans), Detectors.findings(in: detector))
     }
 
     /// Milliseconds `work` takes.

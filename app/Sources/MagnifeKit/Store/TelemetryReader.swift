@@ -315,6 +315,38 @@ public final class TelemetryReader: Sendable {
         return OpenTraceRead(trace: read.0, spans: read.1, findings: Detectors.findings(in: read.2))
     }
 
+    /// The status messages of these spans of one trace, by span id, in one read.
+    @concurrent
+    public func statusMessages(traceID: String, spanIDs: [String]) async throws -> [String: String] {
+        guard !spanIDs.isEmpty else { return [:] }
+        let ids = String(decoding: try JSONEncoder().encode(spanIDs), as: UTF8.self)
+        return try await pool.read { db in
+            var messages: [String: String] = [:]
+            for row in try Row.fetchAll(db, sql: TelemetrySQL.statusMessagesOfSpans, arguments: [traceID, ids]) {
+                messages[row["span_id"]] = row["status_message"]
+            }
+            return messages
+        }
+    }
+
+    /// The findings of an open trace with where each one is (detector audit
+    /// 7): the places are worked out from its tree, and the status messages of
+    /// the Error spans they name under an HTTP Error are read in one read.
+    /// `AppModel.readWaterfall`, the self-test and the edge store tests use it.
+    @concurrent
+    public func placedFindings(_ findings: TraceFindings, in tree: Waterfall, trace: TraceSummary?,
+                               traceID: String) async throws -> TraceFindings {
+        guard !findings.isEmpty else { return findings }
+        var places = FindingPlaces.build(findings, in: tree, trace: trace)
+        let ids = FindingPlaces.errorSpanIDs(places)
+        if !ids.isEmpty {
+            places = FindingPlaces.withMessages(places, try await statusMessages(traceID: traceID, spanIDs: ids))
+        }
+        var placed = findings
+        placed.attach(places)
+        return placed
+    }
+
     /// The open trace's findings: the spans a detector can flag are read and
     /// the detectors run here, off the main actor.
     @concurrent

@@ -133,10 +133,18 @@ enum TelemetrySQL {
         FROM spans WHERE trace_id = ? ORDER BY start_ns, id
         """
 
-    /// The columns the detectors read (S-023+): promoted columns only, no JSON.
+    /// The columns the detectors read (S-023+): promoted columns only, no JSON;
+    /// `service_name` says where a finding is (detector audit 6).
     static let detectorColumns = """
         trace_id, span_id, name, kind, start_ns, duration_ns, status_code, status_message,
-        db_system, db_statement, http_method, http_status_code, http_route, http_url
+        db_system, db_statement, http_method, http_status_code, http_route, http_url, service_name
+        """
+
+    /// The status messages of some spans of one trace (a JSON array of span
+    /// ids): the "Under it, … has status Error: …" of an HTTP Error.
+    static let statusMessagesOfSpans = """
+        SELECT span_id, status_message FROM spans
+        WHERE trace_id = ? AND span_id IN (SELECT value FROM json_each(?))
         """
 
     /// The spans a detector can flag: database spans (a system or a
