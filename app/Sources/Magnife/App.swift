@@ -109,7 +109,7 @@ struct MagnifeApp: App {
                 Button(menu.contentMode == .logs ? "Show Newest Logs" : "Show Newest Traces") {
                     delegate.model.showNewestRows()
                 }
-                .disabled(menu.newTraceCount == 0)
+                .disabled(!menu.hasNewRows)
                 Divider()
                 // The selected log's trace, from the Logs view (S-013) or Trace Logs (S-012).
                 Button("Open Trace") { delegate.model.openSelectedLogTrace() }
@@ -191,8 +191,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SidebarTabKeys.install(model: model)
         MenuBarTracking.install(model: model)
         LaunchProbe.mark("did_finish_launching")
+        StallLog.install()
         model.start()
         LaunchProbe.watch(model: model)
+        MainWindow.openAtLaunch()
     }
 
     /// The window can close; the receiver keeps running until Quit Magnife.

@@ -27,9 +27,10 @@ enum TestRun {
         return URL(fileURLWithPath: path, isDirectory: true)
     }()
 
-    /// A fresh subdirectory of the run's directory (removed first if it exists).
+    /// A fresh subdirectory of the run's directory (removed first if it
+    /// exists), named `.noindex` so Spotlight leaves its databases alone.
     static func scratch(_ name: String) -> URL {
-        let url = directory.appending(path: name, directoryHint: .isDirectory)
+        let url = directory.appending(path: name + ".noindex", directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: url)
         return url
     }

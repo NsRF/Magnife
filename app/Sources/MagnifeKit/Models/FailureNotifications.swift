@@ -116,13 +116,14 @@ public struct FailureCoalescer: Sendable {
     /// Follow-ups that are due go first.
     public mutating func add(_ trace: FailedTrace, at now: Date) -> [FailureNotice] {
         var notices = flush(at: now)
-        if var burst = bursts[trace.service] {
-            guard !burst.traceIDs.contains(trace.traceID) else { return notices }
-            burst.count += 1
-            burst.unposted += 1
-            burst.newest = trace
-            burst.traceIDs.insert(trace.traceID)
-            bursts[trace.service] = burst
+        if let seen = bursts[trace.service]?.traceIDs.contains(trace.traceID) {
+            guard !seen else { return notices }
+            // In place: a copy of the burst would copy its set of ids for every
+            // failure, quadratic under a flood (S-030).
+            bursts[trace.service]?.count += 1
+            bursts[trace.service]?.unposted += 1
+            bursts[trace.service]?.newest = trace
+            bursts[trace.service]?.traceIDs.insert(trace.traceID)
             return notices
         }
         burstCount += 1

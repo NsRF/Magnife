@@ -53,6 +53,13 @@ final class AppModel {
     var services: [ServiceSummary] = [] {
         didSet { if services != oldValue { serviceColors = ServiceColors(services: services) } }
     }
+    /// The subtitle and the sidebar's services as shown, at most once a second under load (AppModel+Counts.swift).
+    var shownSubtitle = ""
+    var shownServices: [ServiceSummary] = []
+    @ObservationIgnored var countThrottle = Throttle()
+    @ObservationIgnored var countTask: Task<Void, Never>?
+    /// True while a refresh started by the helper's batches applies its read.
+    @ObservationIgnored var isBatchRefresh = false
     /// One color slot per service, in the order first seen (S-004).
     private(set) var serviceColors = ServiceColors()
     /// The list's rows: pages from the database, newest first (S-004).
@@ -219,6 +226,9 @@ final class AppModel {
         }
     }
     @ObservationIgnored var waterfallTask: Task<Void, Never>?
+    /// When the open waterfall was last rebuilt, and the rebuild waiting for its 500 ms (S-030).
+    @ObservationIgnored var lastWaterfallRebuild: ContinuousClock.Instant?
+    @ObservationIgnored var waterfallRefreshTask: Task<Void, Never>?
     /// True while the selected trace's first read is in flight.
     @ObservationIgnored var isOpeningTrace = false
     /// The generation the outline shows, and when a trace was selected (self-test timing).
@@ -270,6 +280,8 @@ final class AppModel {
     /// The Logs list's `resumeRows`.
     @ObservationIgnored var resumeLogRows: Int?
     @ObservationIgnored var isLoadingMoreLogs = false
+    /// The Logs counts as last read, so a refresh counts only newer logs (S-030).
+    @ObservationIgnored var logCountMark: LogCountMark?
     @ObservationIgnored lazy var logScroller: TraceListScroller = {
         let scroller = TraceListScroller()
         scroller.onChange = { [weak self] away in self?.logListScrolled(awayFromTop: away) }
@@ -302,6 +314,8 @@ final class AppModel {
         didSet { publishRecentErrors() }
     }
     var recentErrorTraces: [TraceSummary] = []
+    @ObservationIgnored var recentErrorsThrottle = Throttle()
+    @ObservationIgnored var recentErrorsTask: Task<Void, Never>?
     /// Notifications for traces with errors (S-028), with their setting.
     let failureNotifier = FailureNotifier()
     var newErrorCount = 0
@@ -444,6 +458,7 @@ final class AppModel {
         MenuState.shared.update(showsSpanDetail: showsSpanDetail)
         MenuState.shared.update(contentMode: contentMode)
         restoreLaunchState()
+        followCounts()
         Task { await openStore() }
         Task { [weak self] in
             while !Task.isCancelled {
@@ -518,7 +533,7 @@ final class AppModel {
         }
         refreshTask = Task { [weak self] in
             try? await Task.sleep(for: Self.refreshDelay)
-            await self?.reload()
+            await self?.reload(fromBatches: true)
             guard let self else { return }
             self.refreshTask = nil
             if self.refreshAgain {
@@ -534,7 +549,8 @@ final class AppModel {
     }
 
     /// Reads services and the list (S-004), and the selected trace's spans.
-    func reload() async {
+    /// From batches, the counts it changes show at most once a second.
+    func reload(fromBatches: Bool = false) async {
         guard let reader else {
             services = []
             traces = []
@@ -543,6 +559,8 @@ final class AppModel {
             return
         }
         refreshDatabaseSize()
+        isBatchRefresh = fromBatches
+        defer { isBatchRefresh = false }
         do {
             try await reloadList(reader)
             // The Logs list is read while it shows; switching to it reads it at once.

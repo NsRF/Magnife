@@ -42,8 +42,12 @@ extension AppModel {
             traceLogs = TraceLogs()
             selectedTraceLogID = nil
         }
+        // The same trace again: only the logs that arrived since are read (S-030).
+        let shown = traceLogs.traceID == traceID && !traceLogs.isEmpty ? traceLogs : nil
         traceLogsTask = Task { [weak self] in
-            guard let logs = try? await reader.traceLogs(traceID: traceID) else { return }
+            let read = shown.map { shown in { try await reader.traceLogs(after: shown) } }
+                ?? { try await reader.traceLogs(traceID: traceID) }
+            guard let logs = try? await read() else { return }
             guard let self, !Task.isCancelled, self.selectedTraceID == traceID else { return }
             if logs != self.traceLogs { self.traceLogs = logs }
             if let id = self.selectedTraceLogID, !logs.lines.contains(where: { $0.id == id }) {

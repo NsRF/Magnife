@@ -35,6 +35,17 @@ struct FailureNotificationTests {
         #expect(FailedTrace(traceID: "t", route: "r", service: "s").detail == "Error")
     }
 
+    @Test("a flood of 20,000 failures from one service coalesces in linear time (S-030)")
+    func flood() {
+        var coalescer = FailureCoalescer()
+        let started = ContinuousClock.now
+        var posted = 0
+        for n in 1...20_000 { posted += coalescer.add(failed(n), at: start.addingTimeInterval(Double(n) / 10_000)).count }
+        #expect(ContinuousClock.now - started < .seconds(1))
+        #expect(posted == 1)
+        #expect(coalescer.flush(at: start.addingTimeInterval(12)).first?.title == "20000 traces with errors")
+    }
+
     @Test("a burst within 10 seconds posts one banner, then one follow-up naming the count")
     func burst() {
         var coalescer = FailureCoalescer()

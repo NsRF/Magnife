@@ -247,3 +247,38 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: two feedback loops between the status item and the scene. (1) `.accessibilityLabel` on the label's `Image(nsImage:)` made every scene update touch the status button again. (2) In snapshot runs, `MenuBarExtra(isInserted:)` bound to `@AppStorage` was written back by SwiftUI from the status item's KVO state on each update, and that write updated the scene again.
 - Fix: the label is a cached, prerendered bitmap per count (`MenuBarGlyph.image(count:)`) whose `accessibilityDescription` carries the VoiceOver words; `isInserted` reads the setting in the scene's body (so the scene follows it) and never writes SwiftUI's reports back into it (only the Settings toggle changes it).
 - Rule: a `MenuBarExtra` label is a plain value that only changes with the model (same NSImage object for the same state, no view modifiers on it), and a binding passed to the scene is never written back by the system into state the scene reads.
+
+## "reentrant operation in its NSTableView delegate" from the live lists (S-030)
+
+- Symptom: AppKit's warning "Application performed a reentrant operation in its NSTableView delegate" in most self-test runs (11 in one run), when the trace list or the Logs list jumped by hundreds of rows, emptied for a new scope, or read its next page; nothing visible went wrong.
+- Cause: both lists were SwiftUI `Table`s. SwiftUI diffs a Table's rows inside its own graph update, and AppKit can start that update while the table is inside one of its delegate callbacks (a row view being made during layout runs the window's SwiftUI graph, which then inserts rows into the same table). No code of ours ran in between, so emptying the list first, animations off and two-step updates only made it rarer.
+- Fix: the trace list and the Logs list are NSTableViews (`LiveTable.swift`, `TraceTable.swift`, `LogTable.swift`): rows go in only from `updateNSView`, as one `RowUpdate` (MagnifeKit, unit-tested), never inside a table callback (`callbackDepth` defers it), paced to one insert per 250 ms; cells are AppKit views or hosting views given values. `tools/selftest.sh` now fails a run that prints the warning.
+- Rule: a list that changes while people use it is an AppKit table fed from outside its callbacks; its cells never read the model or run the window's SwiftUI graph.
+
+## Main-thread "stalls" that were App Nap (S-030)
+
+- Symptom: timing checks failed in full runs and passed alone; the load check saw 300-800 ms stalls while `sample` showed the main thread idle 90% of the time.
+- Cause: behind other windows macOS puts the self-test's app in App Nap and defers its timers by hundreds of milliseconds; every heartbeat (`Task.sleep(5 ms)`) measured that delay as a stall.
+- Fix: the self-test holds a `.userInitiated, .latencyCritical` activity (`ProcessInfo.beginActivity`) for its whole run; the load check's worst stall dropped from 300-800 ms to 86-101 ms.
+- Rule: a run that measures timing turns App Nap off; a heartbeat gap with an idle main thread in `sample` is the scheduler, not the app.
+
+## Hiding the focused table looped forever (S-030)
+
+- Symptom: with both lists kept in the window, switching to Logs pinned the main thread at 100% for minutes.
+- Cause: `scrollView.isHidden = true` on the table that was first responder made AppKit ask for the next valid key view, and SwiftUI's focus bridge kept answering with views it could not focus.
+- Fix: the column out of sight is only transparent, not hit-testable, disabled and hidden from VoiceOver (`shownWhen`); its AppKit views are never `isHidden`.
+- Rule: never hide an AppKit view inside SwiftUI while it may hold the focus; move the focus first, or keep it shown.
+
+## reloadData(forRowIndexes:) took seconds after scrolling through thousands of rows (S-030)
+
+- Symptom: under load, after the list had been scrolled to its end, each refresh stalled the main thread for up to seconds.
+- Cause: `reloadData(forRowIndexes:columnIndexes:)` walks every row view the table keeps and rebuilds the key view loop for each (`_updateKeyViewLoopForRowView`), and adding row views with Auto Layout constraints went through the window's layout engine.
+- Fix: rows on screen are filled in place (`view(atColumn:row:makeIfNecessary: false)` then `fill`), and cells lay out with frames, not constraints.
+- Rule: refresh a visible cell by refilling it; keep table cells off Auto Layout when rows come and go many times a second.
+
+## The main window did not open at launch (S-030)
+
+- Symptom: launches of the signed build, test runs included, showed no main window (only the status item); the same build re-signed ad hoc opened it. Snapshots and self-tests waited forever.
+- Cause: not found: SwiftUI decided not to open the WindowGroup's window (no saved state; `~/Library/Saved Application State` itself had gone missing at the time).
+- Fix: `MainWindow.openAtLaunch()` opens the window when none showed up within a second of launch (S-029: a launch always shows the window).
+- Rule: a launch that must show a window checks that it did.

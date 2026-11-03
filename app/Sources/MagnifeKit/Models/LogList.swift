@@ -116,6 +116,24 @@ public struct LogListItem: Sendable, Hashable, Identifiable {
 
 /// The first page of the Logs list with the count in scope, read in one
 /// transaction: the newest log id and the last seq it reflects.
+/// The Logs list's counts as last read: the next read with the same filter
+/// counts only the logs above `throughID` and adds them (S-030), instead of
+/// counting every log on each refresh. Pruning deletes logs, so the model
+/// drops the mark on each `pruned` line.
+public struct LogCountMark: Sendable, Equatable {
+    public var filter: LogFilter
+    public var throughID: Int64
+    public var count: Int
+    public var scopeCount: Int
+
+    public init(filter: LogFilter, throughID: Int64, count: Int, scopeCount: Int) {
+        self.filter = filter
+        self.throughID = throughID
+        self.count = count
+        self.scopeCount = scopeCount
+    }
+}
+
 public struct LogPage: Sendable, Equatable {
     public var items: [LogListItem]
     /// The newest log id in the store when the page was read; while the list
@@ -130,6 +148,8 @@ public struct LogPage: Sendable, Equatable {
     /// Read while paused (S-010): only logs up to this id, and `newCount` above it.
     public var upTo: Int64?
     public var newCount: Int
+    /// The counts to start from next time (not while paused).
+    public var countMark: LogCountMark?
 
     public init(items: [LogListItem], lastID: Int64, lastSeq: Int64, logCount: Int? = nil, scopeCount: Int? = nil,
                 upTo: Int64? = nil, newCount: Int = 0) {

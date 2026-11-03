@@ -39,8 +39,34 @@ this app starts the helper and reads its database. No server, no accounts.
   shown is dropped; scrolled away from the top it holds still (rows update in
   place, new traces are counted for the "N new traces" button) through
   `TraceListScroller`, which watches the table's NSScrollView. A sidebar scope change empties the list before the
-  new read: diffing one scope's rows into another's trips AppKit's
-  "reentrant operation in its NSTableView delegate" warning.
+  new read.
+- Live lists (S-030): the trace list and the Logs list are NSTableViews,
+  never SwiftUI `Table`s (FIXLOG: "reentrant operation in its NSTableView
+  delegate"). `LiveTable.swift` (`LiveTableCoordinator`) takes each new
+  row array as one `RowUpdate` (MagnifeKit `LiveRows.swift`, unit-tested),
+  never inside a table callback, inserting at most every 250 ms
+  (`UpdatePacer`, no animation under load or with Reduce Motion), refills
+  visible cells in place (never `reloadData(forRowIndexes:)`), and gives
+  the flexible column (Route, Body) the width left. `TraceTable.swift` /
+  `TraceTableKeys.swift` / `TraceTableCells.swift` and `LogTable.swift`
+  hold the columns, cells (AppKit, frames not constraints; `HostingCell`
+  for RouteCell, LogLevelLabel, LogBodyCell, given values), keys and
+  context menus. `TraceRows` / `LogRows` are the only views that read the
+  rows, so a batch updates the table alone. Both lists and both detail
+  columns stay in the window (`shownWhen`; never `isHidden`, FIXLOG).
+  Batch refreshes (`reload(fromBatches:)`, `isBatchRefresh`) show the
+  subtitle and the sidebar's services at most once a second
+  (`AppModel+Counts.swift`, `shownSubtitle`, `shownServices`), the menu bar
+  extra's copy at most once a second, and rebuild a growing open waterfall
+  at most every 500 ms; a change people make shows at once. `MenuState`
+  publishes `hasNewRows`, not the count. Trace Logs reads only logs above
+  the shown ones (`TelemetryReader.traceLogs(after:)`) and the Logs counts
+  only logs above the last count (`LogCountMark`, dropped on `pruned`).
+  `APP_SELFTEST_ONLY=load` floods the window at 5,000 spans/s for 60 s
+  (`APP_LOAD_SECONDS`, `APP_LOAD_STEPS`); `APP_DEBUG_STALLS=1` prints each
+  main run loop turn over 100 ms with the app's work in it (`StallLog`).
+  The self-test turns App Nap off (FIXLOG); `selftest.sh` fails on the
+  reentrant warning.
 - The sidebar (S-009): services come with every list read
   (`servicesWithErrors`, counts derived from spans); a service scope is
   `TelemetrySQL.serviceScope`, an IN subquery on the covering index
@@ -94,8 +120,8 @@ this app starts the helper and reads its database. No server, no accounts.
   counting logs whose id is above the shown rows' newest id. Open Trace
   (`openTrace(ofLog:)`) switches to Traces and selects the log's span
   through `pendingSpan` once the waterfall is built. Views in
-  `LogListView.swift` and `LogDetailView.swift`. A Table cell's root view
-  never reads `@Environment` (FIXLOG): pass it values and actions.
+  `LogListView.swift`, `LogTable.swift` and `LogDetailView.swift`. A table
+  cell's view never reads `@Environment` (FIXLOG): pass it values and actions.
 - The Logs filter bar (S-014, `LogFilterBar.swift`): `LogFilter` (MagnifeKit)
   holds the service (the sidebar's), the level chips (merged OTel ranges,
   `severityRanges`) and "Body contains"; `TelemetrySQL.logFilterConditions`

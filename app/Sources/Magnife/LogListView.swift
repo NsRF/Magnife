@@ -8,74 +8,27 @@ struct LogListView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        table
+        // The rows are an NSTableView (LogTable.swift, S-030), with its keys.
+        LogRows()
             .overlay(alignment: .top) { NewLogsButton() }
-            // Esc in the list hides the filter bar too; the filters stay on.
-            // onExitCommand does not reach a focused Table (FIXLOG).
-            .onKeyPress(.escape) {
-                guard model.showsLogFilterBar else { return .ignored }
-                model.hideLogFilterBar()
-                return .handled
-            }
-            .listKeys(page: { model.pageRows(model.logScroller) }, move: { model.moveLogSelection($0) },
-                      tab: { model.focusNextColumn(from: .list, backward: $0) })
+            .overlay { LogListEmpty() }
     }
+}
 
-    // Fixed Time and Level; Service's minimum fits "checkout-api" (at the
-    // 520 pt column the Table gave it its minimum plus padding, not its
-    // ideal); Body takes the rest (PROGRESS decision 63).
-    private var table: some View {
-        @Bindable var model = model
-        return Table(model.logs, selection: $model.selectedLogID) {
-            TableColumn("Time") { item in
-                Text(item.line.time)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    // The row's sentence lives here; the other cells are hidden, so VoiceOver reads it once.
-                    .accessibilityLabel(item.accessibilityLabel)
-                    // The one view inside the NSTableView: it reports scrolling.
-                    .background(TraceListAnchor(scroller: model.logScroller))
-                    .onAppear { if item.id == model.logs.last?.id { model.loadMoreLogs() } }
-            }
-            .width(96)
-            TableColumn("Level") { item in
-                LogLevelLabel(level: item.line.level)
-                    .accessibilityHidden(true)
-            }
-            .width(LogLevelLabel.width)
-            TableColumn("Service") { item in
-                ServiceName(name: item.record.serviceName)
-                    .accessibilityHidden(true)
-            }
-            .width(min: 124, ideal: 128, max: 200)
-            TableColumn("Body") { item in
-                LogBodyCell(item: item) { model.openTrace(ofLog: item.id) }
-            }
-            .width(min: 80, ideal: 108, max: .infinity)
-        }
-        .alternatingRowBackgrounds(model.logs.isEmpty ? .disabled : .enabled)
-        .contextMenu(forSelectionType: LogListItem.ID.self) { ids in
-            if let item = ids.first.flatMap({ id in model.logs.first { $0.id == id } }) {
-                if item.hasTrace {
-                    Button("Open Trace") { model.openTrace(ofLog: item.id) }
-                        .disabled(!item.canOpenTrace)
-                }
-                Button("Copy Body") { model.copyBody(item.record.body) }
-                if let traceID = item.record.traceID, item.hasTrace {
-                    Button("Copy Trace ID") { model.copyTraceID(traceID) }
-                }
-            }
-        } primaryAction: { ids in
-            // Return and double-click: Open Trace (docs/ux.md, Keyboard map).
-            model.openTrace(ofLog: ids.first)
-        }
-        .onCopyCommand {
-            guard let log = model.selectedLog else { return [] }
-            return [NSItemProvider(object: log.record.body as NSString)]
-        }
-        .accessibilityLabel("Logs")
-        .overlay { emptyState }
+/// The table, fed with the model's rows; on its own so new rows update it alone (S-030).
+struct LogRows: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        LogTable(model: model, rows: model.logs, colors: model.serviceColors, selected: model.selectedLogID)
     }
+}
+
+/// The Logs list's empty states.
+struct LogListEmpty: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View { emptyState }
 
     @ViewBuilder
     private var emptyState: some View {

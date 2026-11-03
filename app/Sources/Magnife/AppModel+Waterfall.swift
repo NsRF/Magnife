@@ -66,12 +66,29 @@ extension AppModel {
             if openTrace != trace { openTrace = trace }
             return
         }
+        // Still receiving spans under load: redraw at most every 500 ms (docs/ux.md, S-030 States).
+        if isBatchRefresh, let last = lastWaterfallRebuild, last.duration(to: .now) < Self.waterfallRedrawInterval {
+            return scheduleWaterfallRefresh(after: Self.waterfallRedrawInterval - last.duration(to: .now))
+        }
         let previous = waterfall
         let result = try await Self.readWaterfall(reader, traceID: id, after: previous)
         // Two refreshes can overlap: the older read never replaces a newer tree.
         guard selectedTraceID == id, (result.trace?.updatedSeq ?? .max) >= (openTrace?.updatedSeq ?? 0) else { return }
         show(result.tree, of: result.trace ?? trace, findings: result.findings, collapsing: result.collapsed,
              opening: false)
+    }
+
+    static let waterfallRedrawInterval: Duration = .milliseconds(500)
+
+    /// One deferred rebuild at a time; it reads the trace as it is then.
+    private func scheduleWaterfallRefresh(after delay: Duration) {
+        guard waterfallRefreshTask == nil else { return }
+        waterfallRefreshTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self else { return }
+            self.waterfallRefreshTask = nil
+            if let reader = self.reader, !self.isPaused { try? await self.refreshOpenTrace(reader) }
+        }
     }
 
     /// `collapsing`: the spans `Waterfall.autoCollapsed` closes, worked out off the main actor.
@@ -88,6 +105,7 @@ extension AppModel {
             loadSpanDetail()
         }
         waterfall = tree
+        lastWaterfallRebuild = .now
         // With the tree, so the outline draws the rows' icons in the same reload.
         if openTraceFindings != findings { openTraceFindings = findings }
         waterfallGeneration += 1

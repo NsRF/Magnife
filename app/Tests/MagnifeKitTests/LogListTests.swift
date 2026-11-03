@@ -31,6 +31,26 @@ struct LogListTests {
 
     private func bodies(_ items: [LogListItem]) -> [String] { items.map(\.record.body) }
 
+    @Test("a refresh counts only the logs above the last count, with the same filter (S-030)")
+    func incrementalCounts() async throws {
+        let (dir, writer, reader) = try await makeStore()
+        defer { dir.remove() }
+        let errors = LogFilter(levels: [.error])
+        let first = try await reader.logPage(filter: errors)
+        #expect(first.logCount == 6 && first.scopeCount == 12)
+        try await writer.write { db in for n in 13...16 { try Self.insert(db, n) } }
+        let second = try await reader.logPage(filter: errors, counted: first.countMark)
+        let full = try await reader.logPage(filter: errors)
+        #expect(second.logCount == full.logCount && second.scopeCount == full.scopeCount)
+        #expect(second.logCount == 8 && second.scopeCount == 16)
+        #expect(second.countMark == LogCountMark(filter: errors, throughID: second.lastID, count: 8, scopeCount: 16))
+        // Another filter's mark is not used.
+        let web = LogFilter(service: "web")
+        #expect(try await reader.logPage(filter: web, counted: second.countMark).logCount == 8)
+        // Paused pages keep no mark.
+        #expect(try await reader.logPage(filter: errors, upTo: 10).countMark == nil)
+    }
+
     @Test("a page is newest first by time, with the count, the newest id and the last seq")
     func page() async throws {
         let (dir, writer, reader) = try await makeStore()

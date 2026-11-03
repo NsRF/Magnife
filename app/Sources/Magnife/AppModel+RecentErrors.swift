@@ -15,9 +15,25 @@ extension AppModel {
 
     /// Copies what the menu and the icon show, only when it changed: each
     /// change rebuilds the scene's menus.
+    /// Under a flood, at most once a second: each change also redraws the
+    /// status item (S-030, PROGRESS S-026 note).
     func publishRecentErrors() {
+        let now = ProcessInfo.processInfo.systemUptime
+        let delay = isBatchRefresh ? recentErrorsThrottle.delay(at: now) : 0
+        guard delay == 0 else {
+            guard recentErrorsTask == nil else { return }
+            recentErrorsTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self else { return }
+                self.recentErrorsTask = nil
+                self.publishRecentErrors()
+            }
+            return
+        }
+        let changed = !RecentErrors.showSame(recentErrors.traces, recentErrorTraces) || newErrorCount != recentErrors.newCount
         if !RecentErrors.showSame(recentErrors.traces, recentErrorTraces) { recentErrorTraces = recentErrors.traces }
         if newErrorCount != recentErrors.newCount { newErrorCount = recentErrors.newCount }
+        if changed { recentErrorsThrottle.fired(at: now) }
     }
 
     /// The menu opened: the count and the red icon reset, and the items'

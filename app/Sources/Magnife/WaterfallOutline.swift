@@ -67,8 +67,10 @@ struct WaterfallOutline: NSViewRepresentable {
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        context.coordinator.update(generation: generation, waterfall: waterfall, findings: findings,
-                                   collapsed: collapsed, selected: selected, colors: colors)
+        StallLog.measure("waterfall") {
+            context.coordinator.update(generation: generation, waterfall: waterfall, findings: findings,
+                                       collapsed: collapsed, selected: selected, colors: colors)
+        }
     }
 }
 
@@ -147,7 +149,13 @@ final class WaterfallCoordinator: NSObject, NSOutlineViewDataSource, NSOutlineVi
     }
 
     /// Expands every span that is not collapsed, parents first, without recursion.
+    /// With none collapsed (Expand All Spans), one call opens them all, the
+    /// fastest way for a fully expanded trace that keeps growing (S-030).
     private func expandOpenSpans(_ outline: NSOutlineView) {
+        if collapsed.isEmpty {
+            outline.expandItem(nil, expandChildren: true)
+            return
+        }
         var stack = waterfall.roots
         while let index = stack.popLast() {
             let node = waterfall.nodes[index]

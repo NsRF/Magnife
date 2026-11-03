@@ -23,6 +23,55 @@ struct TraceLogsTests {
         #expect(TraceLogs().isEmpty && TraceLogs().stamp == LogStamp(count: 0, lastID: 0))
     }
 
+    @Test("new logs merge in time order: late ones in their place, others' and shown ones left out (S-030)")
+    func adding() throws {
+        let shown = TraceLogs(traceID: Self.trace, records: try [
+            logRecord(id: 1, timeNs: 1_000, body: "a"),
+            logRecord(id: 2, timeNs: 3_000, body: "c"),
+        ])
+        let more = shown.adding(try [
+            logRecord(id: 5, timeNs: 4_000, body: "d"),
+            logRecord(id: 4, timeNs: 2_000, body: "b, sent late"),
+            logRecord(id: 2, timeNs: 3_000, body: "c again"),
+            logRecord(id: 6, timeNs: 0, body: "other trace", trace: "4bf92f3577b34da6a3ce929d0e0e0000"),
+        ])
+        #expect(more.lines.map(\.record.body) == ["a", "b, sent late", "c", "d"])
+        #expect(more.stamp == LogStamp(count: 4, lastID: 5))
+        #expect(more == TraceLogs(traceID: Self.trace, records: try [
+            logRecord(id: 1, timeNs: 1_000, body: "a"), logRecord(id: 2, timeNs: 3_000, body: "c"),
+            logRecord(id: 5, timeNs: 4_000, body: "d"), logRecord(id: 4, timeNs: 2_000, body: "b, sent late"),
+        ]))
+        #expect(shown.adding([]) == shown)
+    }
+
+    @Test("the reader reads only logs after the shown ones, and everything again after a prune")
+    func readerAfter() async throws {
+        let dir = try TempDir("trace-logs-after")
+        defer { dir.remove() }
+        let url = dir.file("magnife.sqlite")
+        let writer = try makeWriter(at: url)
+        try await writer.write { db in
+            for n in 0..<3 { try insertLog(db, timeNs: Int64(1_000 + n), severity: 9, service: "web", body: "log \(n)", trace: Self.trace) }
+        }
+        let reader = try await TelemetryReader.open(at: url)
+        let first = try await reader.traceLogs(traceID: Self.trace)
+        #expect(first.lines.count == 3)
+        try await writer.write { db in
+            try insertLog(db, timeNs: 500, severity: 9, service: "web", body: "late", trace: Self.trace)
+            try insertLog(db, timeNs: 2_000, severity: 9, service: "web", body: "new", trace: Self.trace)
+        }
+        let second = try await reader.traceLogs(after: first)
+        #expect(second.lines.map(\.record.body) == ["late", "log 0", "log 1", "log 2", "new"])
+        #expect(second == (try await reader.traceLogs(traceID: Self.trace)))
+        // Retention deleted one shown log: the counts do not add up, so all are read again.
+        try await writer.write { db in
+            try db.execute(sql: "DELETE FROM logs WHERE body = 'log 0'")
+            try insertLog(db, timeNs: 3_000, severity: 9, service: "web", body: "newer", trace: Self.trace)
+        }
+        let third = try await reader.traceLogs(after: second)
+        #expect(third.lines.map(\.record.body) == ["late", "log 1", "log 2", "new", "newer"])
+    }
+
     @Test("the Span column: the span's name, — without a span id, Span not received")
     func spanColumn() {
         let waterfall = Waterfall(spans: WaterfallTests.orders)

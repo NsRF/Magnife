@@ -213,6 +213,17 @@ extension SelfTest {
                 let elapsed = Date().timeIntervalSince(started) * 1_000
                 print("INFO waterfall \(count) spans: Expand All Spans \(String(format: "%.0f", elapsed)) ms, stall \(String(format: "%.0f", expand.stop())) ms")
                 check("Expand All Spans shows all 30,000 rows", opened)
+                // A trace that keeps growing while fully expanded: each rebuild reloads the outline (S-030).
+                let rebuild = Heartbeat()
+                rebuild.start()
+                let before = model.shownWaterfallGeneration
+                model.waterfallGeneration += 1
+                _ = await waitUntil(5) { model.shownWaterfallGeneration > before }
+                try? await Task.sleep(for: .milliseconds(50))
+                let rebuildStall = rebuild.stop()
+                print("INFO waterfall \(count) spans, all expanded: a rebuild stalls the main thread \(String(format: "%.0f", rebuildStall)) ms")
+                checkTiming("a fully expanded 30,000-span trace rebuilds without a hang", ms: rebuildStall, budget: 100,
+                            ok: model.waterfallOutline?.numberOfRows == count)
             }
         }
     }

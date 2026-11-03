@@ -8,93 +8,38 @@ struct TraceListView: View {
 
     var body: some View {
         // Banners, the pause bar, the title and the toolbar are ContentColumn's.
-        table
+        // The rows are an NSTableView (TraceTable.swift, S-030); its keys are
+        // TraceTableKeys.swift's.
+        // Each part reads only what it shows, so a batch's new rows update the
+        // table alone, not this view and its overlays (S-030).
+        TraceRows()
             .overlay(alignment: .top) { NewTracesButton() }
-            // Esc in the list hides the filter bar; the filters stay on (docs/ux.md,
-            // Keyboard map). onExitCommand does not reach a focused Table.
-            .onKeyPress(.escape) {
-                guard model.showsTraceFilterBar else { return .ignored }
-                model.hideTraceFilterBar()
-                return .handled
-            }
-            // → (or Return, the primary action) moves into the waterfall on the
-            // root span; Space shows or hides the span detail (S-022).
-            .onKeyPress(keys: [.rightArrow, .space]) { press in
-                guard press.modifiers.held.isEmpty, model.selectedTraceID != nil else { return .ignored }
-                if press.key == .space { model.toggleSpanDetail() } else { model.enterWaterfall() }
-                return .handled
-            }
-            .listKeys(page: { model.pageRows(model.listScroller) }, move: { model.moveTraceSelection($0) },
-                      tab: { model.focusNextColumn(from: .list, backward: $0) })
+            .overlay { TraceListEmpty() }
     }
+}
 
-    private var table: some View {
-        @Bindable var model = model
-        return Table(model.traces, selection: $model.selectedTraceID) {
-            TableColumn("Service") { trace in
-                ServiceName(name: trace.rootService)
-                    // VoiceOver reads the row as one sentence here; the other cells are
-                    // hidden from it, so it is read once (S-004 Access).
-                    .accessibilityLabel(model.rowAccessibilityLabel(trace))
-                    // The one view inside the NSTableView: it reports scrolling (S-004).
-                    .background(TraceListAnchor(scroller: model.listScroller))
-                    .onAppear { if trace.id == model.traces.last?.id { model.loadMoreTraces() } }
-            }
-            .width(min: 64, ideal: 72, max: 200)
-            TableColumn("Route") { trace in
-                // The route and its finding badges (S-023+).
-                RouteCell(route: trace.route, findings: model.findingSummary(for: trace))
-                    .accessibilityHidden(true)
-            }
-            .width(min: 80, ideal: 98, max: .infinity)
-            TableColumn("Duration") { trace in
-                Text(DurationFormat.string(nanoseconds: trace.durationNs))
-                    .monospacedDigit()
-                    .accessibilityHidden(true)
-            }
-            .width(min: 56, ideal: 56, max: 96)
-            .alignment(.trailing)
-            TableColumn("Spans") { trace in
-                Text(trace.spanCount, format: .number)
-                    .monospacedDigit()
-                    .accessibilityHidden(true)
-            }
-            .width(min: 52, ideal: 52, max: 80)
-            .alignment(.trailing)
-            TableColumn("Status") { trace in
-                StatusLabel(status: trace.status)
-                    .accessibilityHidden(true)
-            }
-            .width(min: 64, ideal: 64, max: 96)
-            TableColumn("Time") { trace in
-                Text(RelativeTime.string(for: trace.start, now: model.now))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .accessibilityHidden(true)
-            }
-            .width(min: 88, ideal: 88, max: 140)
-        }
-        .alternatingRowBackgrounds(model.traces.isEmpty ? .disabled : .enabled)
-        .contextMenu(forSelectionType: TraceSummary.ID.self) { ids in
-            if let id = ids.first { Button("Copy Trace ID") { model.copyTraceID(id) } }
-        } primaryAction: { _ in
-            // Return and double-click: into the waterfall (docs/ux.md, Keyboard map).
-            model.enterWaterfall()
-        }
-        .onCopyCommand {
-            guard let id = model.selectedTraceID else { return [] }
-            return [NSItemProvider(object: id as NSString)]
-        }
-        .accessibilityLabel("Traces")
+/// The table, fed with the model's rows.
+struct TraceRows: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        TraceTable(model: model, rows: model.traces, findings: model.findingCache, now: model.now,
+                   colors: model.serviceColors, selected: model.selectedTraceID)
+    }
+}
+
+/// The list's empty states, over an empty list only.
+struct TraceListEmpty: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
         // Read on every layout: a width kept in @State could miss the
         // column's last resize and leave the variables cut (FIXLOG).
         // Only over an empty list, so it never stands between the pointer and the rows.
-        .overlay {
-            if model.traces.isEmpty {
-                GeometryReader { proxy in
-                    emptyState(width: proxy.size.width)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                }
+        if model.traces.isEmpty {
+            GeometryReader { proxy in
+                emptyState(width: proxy.size.width)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
             }
         }
     }

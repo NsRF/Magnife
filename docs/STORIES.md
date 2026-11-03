@@ -357,7 +357,7 @@ Depends: S-004
 Acceptance:
 - [self] At 5,000 spans per second for 60 seconds, no main-thread hang exceeds 100 ms.
 - [self] The list pages from the database instead of loading every trace.
-Status: todo
+Status: done
 
 ### S-031 Use Magnife in dark mode
 As the user, Magnife follows my Mac's appearance.

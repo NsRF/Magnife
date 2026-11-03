@@ -48,11 +48,12 @@ struct ContentColumn: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Group {
-            switch model.contentMode {
-            case .traces: TraceListView()
-            case .logs: LogListView()
-            }
+        // Both lists stay in the window; switching only shows the other one.
+        // Taking a list out and putting it back cost 100 ms at rest and
+        // several hundred under load (AppKit recomputes the key view loop, S-030).
+        ZStack {
+            TraceListView().shownWhen(model.contentMode == .traces)
+            LogListView().shownWhen(model.contentMode == .logs)
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             VStack(spacing: 0) {
@@ -69,7 +70,8 @@ struct ContentColumn: View {
             }
         }
         .navigationTitle(model.title)
-        .navigationSubtitle(model.subtitle)
+        // At most once a second under load (AppModel+Counts.swift).
+        .navigationSubtitle(model.shownSubtitle)
         // Over the list they act on (docs/ux.md, Toolbar items 3 and 4).
         .toolbar {
             ToolbarItem { ContentModePicker() }
@@ -102,10 +104,24 @@ struct DetailColumn: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        switch model.contentMode {
-        case .traces: TraceDetail()
-        case .logs: LogDetailView()
+        // Both stay in the window, as the lists do (ContentColumn).
+        ZStack {
+            TraceDetail().shownWhen(model.contentMode == .traces)
+            LogDetailView().shownWhen(model.contentMode == .logs)
         }
+    }
+}
+
+extension View {
+    /// Kept in the window but out of sight, out of reach of the pointer and
+    /// VoiceOver while `shown` is false. Never `isHidden` on its AppKit
+    /// views: hiding the focused table looped forever in SwiftUI's search
+    /// for the next key view (FIXLOG).
+    func shownWhen(_ shown: Bool) -> some View {
+        opacity(shown ? 1 : 0)
+            .allowsHitTesting(shown)
+            .disabled(!shown)
+            .accessibilityHidden(!shown)
     }
 }
 
@@ -121,7 +137,7 @@ struct Sidebar: View {
             Label("All Services", systemImage: "square.stack.3d.up")
                 .tag(SidebarSelection.allTraces)
             Section("Services") {
-                ForEach(model.services) { service in
+                ForEach(model.shownServices) { service in
                     ServiceRow(service: service)
                         .tag(SidebarSelection.service(service.name))
                 }

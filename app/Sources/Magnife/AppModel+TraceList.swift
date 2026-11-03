@@ -30,8 +30,10 @@ extension AppModel {
         }
         // The state may have moved on while reading (a scope change, scrolling, another read).
         guard reader === self.reader, let next = listState.applying(read) else { return }
-        services = read.services
-        show(next)
+        StallLog.measure("list apply") {
+            if services != read.services { services = read.services }
+            show(next)
+        }
         if case .page = read { isLoadingScope = false }
     }
 

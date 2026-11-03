@@ -14,12 +14,18 @@ enum SelfTest {
     private static var failures = 0
     private static var count = 0
     private static var started = false
+    private static var activity: NSObjectProtocol?
 
     static func runIfRequested(model: AppModel) {
         guard requested, !started else { return }
         started = true
         // Print each line at once, so a crash keeps the lines before it.
         setvbuf(stdout, nil, _IOLBF, 0)
+        // No App Nap: behind other windows macOS defers a napping app's
+        // timers by hundreds of milliseconds, which the heartbeats measured
+        // as main-thread stalls while the main thread sat idle (S-030).
+        activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical],
+                                                         reason: "Magnife self-test timings")
         guard StoreLocation.isOverridden(), StoreLocation.isTestLocation(model.storeURL) else {
             print("SELFTEST refused: set APP_STORE to a file in /tmp")
             finish(code: 1)
@@ -57,6 +63,8 @@ enum SelfTest {
                 await checkMenuBar(model)
             } else if only == "notifications" {
                 await checkNotifications(model)
+            } else if only == "load" {
+                await checkLoad(model)
             } else if only == "launch" {
                 await checkLaunch(model)
             } else if only == "retention" {
@@ -85,6 +93,7 @@ enum SelfTest {
                 await checkLogs(model)
                 await checkLogFilters(model)
                 await checkRetention(model)
+                await checkLoad(model)
                 await checkSupervisor()
                 await checkReceiver()
                 checkApp()

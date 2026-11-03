@@ -113,8 +113,10 @@ extension SelfTest {
         check("the waterfall catches up after Resume", await waitUntil(3) { model.waterfall.count == spanCount + 1 },
               "\(model.waterfall.count) spans")
 
+        // Resume's task ends after its reveal, which waits for the table's rows (paced, S-030).
+        let settled = await waitUntil(2) { model.resumeRows == nil }
         check("a refresh during Resume kept the selected trace in the list",
-              model.traces.contains { $0.id == selected } && model.resumeRows == nil)
+              model.traces.contains { $0.id == selected } && settled)
 
         // Nothing selected: Resume reads one page, however many arrived.
         model.selectedTraceID = nil

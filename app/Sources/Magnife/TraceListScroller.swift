@@ -151,8 +151,11 @@ struct TraceListAnchor: NSViewRepresentable {
 /// (swift-swiftui, "Menu commands").
 final class MenuState: ObservableObject {
     static let shared = MenuState()
-    /// Trace > Show Newest Traces is enabled while this is above zero.
-    @Published private(set) var newTraceCount = 0
+    /// Trace > Show Newest Traces is enabled while there are new rows. The
+    /// count itself is not published: under a flood it changes with every
+    /// batch, and each publish updates the whole scene (S-030).
+    @Published private(set) var hasNewRows = false
+    private(set) var newTraceCount = 0
 
     /// Trace > Pause reads "Resume" while paused (S-010).
     @Published private(set) var isPaused = false
@@ -165,7 +168,8 @@ final class MenuState: ObservableObject {
     @Published private(set) var hasWaterfall = false
 
     func update(newTraceCount: Int) {
-        if self.newTraceCount != newTraceCount { self.newTraceCount = newTraceCount }
+        self.newTraceCount = newTraceCount
+        if hasNewRows != (newTraceCount > 0) { hasNewRows = newTraceCount > 0 }
     }
 
     func update(hasWaterfall: Bool) {

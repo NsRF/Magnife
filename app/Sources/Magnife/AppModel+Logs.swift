@@ -76,10 +76,12 @@ extension AppModel {
                                                    shown: state.isPaused ? [] : state.items.map(\.id)),
                          filter: state.filter, base: state.baseID)
         } else {
-            read = .page(try await reader.logPage(limit: limit, filter: state.filter, upTo: state.pausedID),
+            read = .page(try await reader.logPage(limit: limit, filter: state.filter, upTo: state.pausedID,
+                                                  counted: logCountMark),
                          filter: state.filter)
         }
         guard reader === self.reader, let next = logListState.applying(read) else { return }
+        if case .page(let page, _) = read, page.countMark?.filter == logFilter { logCountMark = page.countMark }
         show(next)
         // A trace's spans can arrive after its log: Open Trace turns on then.
         if case .page = read, let detail = logDetail, detail.item.hasTrace, !detail.item.hasStoredTrace {
@@ -100,6 +102,7 @@ extension AppModel {
 
     /// A new scope or store: the list starts empty and is read again.
     func resetLogList() {
+        logCountMark = nil
         logs = []
         logBaseID = 0
         logAppliedSeq = 0

@@ -78,6 +78,7 @@ enum LaunchProbe {
         line["filter"] = TraceQuery.format(model.traceFilter)
         line["shows_filter_bar"] = model.showsTraceFilterBar
         line["receiver"] = model.receiverStatusText ?? NSNull()
+        line["windows"] = NSApp.windows.map { "\($0.className) visible \($0.isVisible)" }
         guard let data = try? JSONSerialization.data(withJSONObject: line, options: [.sortedKeys]) else { return }
         FileManager.default.createFile(atPath: path, contents: data + Data("\n".utf8))
     }

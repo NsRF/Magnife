@@ -142,6 +142,17 @@ enum MainWindow {
     /// no SwiftUI context (a notification click, S-028).
     static var openAction: OpenWindowAction?
 
+    /// A launch always shows the window (S-029 Flow: click the Dock icon, the
+    /// window appears). SwiftUI restores none when the last session ended
+    /// with it closed, and some launches of the signed build got none at all
+    /// (PROGRESS, Problems): open it when none showed up.
+    static func openAtLaunch() {
+        Task {
+            for _ in 0..<20 where window == nil { try? await Task.sleep(for: .milliseconds(50)) }
+            if window == nil { openAction?(id: "main") }
+        }
+    }
+
     static func bringForward(_ openWindow: OpenWindowAction? = openAction) {
         NSApp.activate()
         if let window {

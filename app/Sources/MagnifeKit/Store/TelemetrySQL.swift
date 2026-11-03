@@ -166,6 +166,9 @@ enum TelemetrySQL {
 
     static let logsOfTrace = "SELECT \(logColumns) FROM logs WHERE trace_id = ? ORDER BY time_ns, id"
 
+    /// The trace's logs that arrived after the shown ones (ids only grow).
+    static let logsOfTraceAfter = "SELECT \(logColumns) FROM logs WHERE trace_id = ? AND id > ? ORDER BY time_ns, id"
+
     /// logs_by_trace covers it: no log row is read.
     static let logStampOfTrace = "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM logs WHERE trace_id = ?"
 

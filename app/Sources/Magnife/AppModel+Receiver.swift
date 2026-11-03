@@ -86,6 +86,8 @@ extension AppModel {
         case .helper(.pruned):
             // Pruned rows leave the lists and the sidebar counts drop (S-015);
             // a selected trace that was deleted shows "Trace No Longer Stored".
+            // The Logs counts are counted again in full: logs were deleted.
+            logCountMark = nil
             requestRefresh()
             refreshDatabaseSize()
         case .helper(.error(let message)):

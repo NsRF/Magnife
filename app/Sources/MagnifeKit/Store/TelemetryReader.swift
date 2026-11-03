@@ -365,6 +365,22 @@ public final class TelemetryReader: Sendable {
         return TraceLogs(traceID: traceID, records: records)
     }
 
+    /// Trace Logs after `shown`: only the logs that arrived since are read
+    /// and merged in (S-030); when some of the shown ones are gone
+    /// (retention) the counts do not add up, and every log is read again.
+    @concurrent
+    public func traceLogs(after shown: TraceLogs) async throws -> TraceLogs {
+        let traceID = shown.traceID
+        let (stamp, added) = try await pool.read { db in
+            let row = try Row.fetchOne(db, sql: TelemetrySQL.logStampOfTrace, arguments: [traceID])
+            let added = try LogRecord.fetchAll(db, sql: TelemetrySQL.logsOfTraceAfter,
+                                               arguments: [traceID, shown.stamp.lastID])
+            return (LogStamp(count: row?[0] ?? 0, lastID: row?[1] ?? 0), added)
+        }
+        guard stamp.count == shown.stamp.count + added.count else { return try await traceLogs(traceID: traceID) }
+        return shown.adding(added)
+    }
+
     /// Logs written during one span, in time order.
     @concurrent
     public func logs(traceID: String, spanID: String) async throws -> [LogRecord] {
@@ -394,7 +410,7 @@ public final class TelemetryReader: Sendable {
     /// logs in scope came after it.
     @concurrent
     public func logPage(limit: Int = LogList.pageSize, filter: LogFilter = LogFilter(),
-                        upTo: Int64? = nil) async throws -> LogPage {
+                        upTo: Int64? = nil, counted: LogCountMark? = nil) async throws -> LogPage {
         let scope = Self.arguments(for: filter)
         let pageSQL = TelemetrySQL.logList(cursor: false, upTo: upTo != nil, filter: filter)
         let pageArguments = (upTo.map { [$0] as StatementArguments } ?? []) + scope + [limit]
@@ -403,19 +419,38 @@ public final class TelemetryReader: Sendable {
         let narrows = filter.narrowsScope
         let scopeCountSQL = TelemetrySQL.logScopeCount(upTo: upTo != nil, filter: filter)
         let scopeCountArguments = (upTo.map { [$0] as StatementArguments } ?? []) + Self.scopeArguments(for: filter)
+        let scopeOnly = LogFilter(service: filter.service)
         let rows = try await pool.read { db in
-            (rows: try Self.logRows(db, sql: pageSQL, arguments: pageArguments),
-             lastID: try Int64.fetchOne(db, sql: TelemetrySQL.lastLogID) ?? 0,
-             lastSeq: try Self.lastSeq(db),
-             count: try Int.fetchOne(db, sql: countSQL, arguments: countArguments) ?? 0,
-             scopeCount: narrows ? try Int.fetchOne(db, sql: scopeCountSQL, arguments: scopeCountArguments) ?? 0 : nil,
-             newCount: try upTo.map { try Int.fetchOne(db, sql: TelemetrySQL.logsAfter(filter: filter),
-                                                       arguments: [$0] + scope) ?? 0 } ?? 0)
+            let lastID = try Int64.fetchOne(db, sql: TelemetrySQL.lastLogID) ?? 0
+            // With the same filter, only the logs above the last count are counted (S-030).
+            let counts: (Int, Int?)
+            if upTo == nil, let counted, counted.filter == filter, counted.throughID <= lastID {
+                let added = try Int.fetchOne(db, sql: TelemetrySQL.logsAfter(filter: filter),
+                                             arguments: [counted.throughID] + scope) ?? 0
+                let scopeAdded = narrows ? try Int.fetchOne(db, sql: TelemetrySQL.logsAfter(filter: scopeOnly),
+                                                            arguments: [counted.throughID] + Self.scopeArguments(for: filter)) ?? 0 : 0
+                counts = (counted.count + added, narrows ? counted.scopeCount + scopeAdded : nil)
+            } else {
+                counts = (try Int.fetchOne(db, sql: countSQL, arguments: countArguments) ?? 0,
+                          narrows ? try Int.fetchOne(db, sql: scopeCountSQL, arguments: scopeCountArguments) ?? 0 : nil)
+            }
+            return (rows: try Self.logRows(db, sql: pageSQL, arguments: pageArguments),
+                    lastID: lastID,
+                    lastSeq: try Self.lastSeq(db),
+                    count: counts.0,
+                    scopeCount: counts.1,
+                    newCount: try upTo.map { try Int.fetchOne(db, sql: TelemetrySQL.logsAfter(filter: filter),
+                                                              arguments: [$0] + scope) ?? 0 } ?? 0)
         }
         // The lines are built here, off the main actor.
-        return LogPage(items: rows.rows.map(Self.logItem), lastID: rows.lastID, lastSeq: rows.lastSeq,
-                       logCount: rows.count, scopeCount: rows.scopeCount ?? rows.count, upTo: upTo,
-                       newCount: rows.newCount)
+        var page = LogPage(items: rows.rows.map(Self.logItem), lastID: rows.lastID, lastSeq: rows.lastSeq,
+                           logCount: rows.count, scopeCount: rows.scopeCount ?? rows.count, upTo: upTo,
+                           newCount: rows.newCount)
+        if upTo == nil {
+            page.countMark = LogCountMark(filter: filter, throughID: rows.lastID, count: rows.count,
+                                          scopeCount: rows.scopeCount ?? rows.count)
+        }
+        return page
     }
 
     /// The next page of the Logs list below `cursor` (the last row shown).

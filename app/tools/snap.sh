@@ -15,9 +15,13 @@ root=${here:h:h}
 source $here/seed.zsh
 app=~/Applications/Magnife.app/Contents/MacOS/Magnife
 run=$(mktemp -d /tmp/Magnife-snap.XXXXXX) || exit 1
-cleanup() { seed_stop; rm -f $run/*.sqlite(N) $run/*.sqlite-wal(N) $run/*.sqlite-shm(N) }
+# The stores live in a .noindex folder: Spotlight indexing databases that
+# grow at 5,000 spans/s took two cores from the timed checks (S-030).
+data=$run/data.noindex
+mkdir -p $data
+cleanup() { seed_stop; rm -rf $data }
 trap cleanup EXIT INT TERM
-store=$run/test.sqlite
+store=$data/test.sqlite
 shots=$run/shots
 # Earlier runs' directories older than a day.
 find /tmp -maxdepth 1 -name 'Magnife-snap.*' -type d -mtime +1 -exec rm -rf {} + 2>/dev/null
