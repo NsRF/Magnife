@@ -37,7 +37,10 @@ queues); tree building (`Waterfall.build`) and span ordering (`SpanDetail.init`)
 there too. `AppModel` awaits them and assigns results on the main actor. Results
 carry the seq they read; the rules that drop an older result live in value types
 (`TraceListState.applying` for the list) or next to the read (`updated_seq` for the
-open trace).
+open trace). Values shown together come from one `pool.read` (one WAL snapshot):
+the open trace's row, waterfall spans and findings are `TelemetryReader.openTrace`.
+Whether a refresh came from the helper's batches (and so is paced) is the
+task-local `RefreshPacing.isBatch`, never a stored flag, since refreshes overlap.
 
 ## Seams
 
@@ -51,4 +54,4 @@ Both live lists (traces, logs) report and set their scroll position through
 its `reveal(row:once:)`, which waits for the table to show the model's rows.
 
 Reviews: `docs/architecture-review-2026-11-02.md` (M1),
-`docs/architecture-review-2026-11-02-m2.md` (M2).
+`docs/architecture-review-2026-11-02-m2.md` (M2), `docs/architecture-review-2026-11-02-m3.md` (M3).
