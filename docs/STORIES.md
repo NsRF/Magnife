@@ -81,7 +81,8 @@ UX:
 - States: empty is S-003; too much: Route truncates in the middle with the full route in a tooltip, 100,000 rows scroll smoothly (S-030); a trace still receiving spans updates its row in place without moving it
 - Words: column headers "Service", "Route", "Duration", "Spans", "Status", "Time"; statuses "Error" with an octagon icon, "OK" with no icon, "Unset" shown blank; durations "12 ms", "1.24 s"; time relative under an hour ("2 min ago"), then clock time
 - Access: VoiceOver reads a row as "checkout-api, POST /orders, 240 milliseconds, 18 spans, Error"; the Error status pairs icon and word, not red alone
-Status: done
+Status: partial
+Blocked: the self-test's VoiceOver row check through the Accessibility API failed in every run with the screen unlocked until 2026-11-03 (the row read as its cells, "web", "182 ms", "12", "3 min ago"): AppKit's accessibility row (NSTableRow) lists one AXCell per column and never asks the row view for its label. Fixed on 2026-11-03: the first column's cell carries the sentence and every cell hides its text; an in-process check of what AppKit serves now passes for the trace list and the Logs list, but the Accessibility API check has not run since (the screen was locked all night). Done when `APP_SELFTEST_ONLY=trace-list app/tools/selftest.sh` and `=logs` print PASS for "VoiceOver reads … once" with the screen unlocked.
 
 ### S-005 Open a trace's waterfall
 As the user, I select a trace and see its spans as a waterfall in the detail column.
@@ -342,7 +343,7 @@ Acceptance:
 - [unit] A burst of failures within 10 seconds produces one notification naming the count (decided by the agent).
 - [manual] Clicking the notification opens the trace like S-027, including when the click launched the app.
 - [self] Notifications show even while Magnife is frontmost, and group by service (platform decision 9).
-Status: done
+Status: done (manual lines pending owner: the permission prompt and a click that launches Magnife were never tried by hand; docs/RELEASE.md B9)
 
 ## M6 Polish
 
@@ -360,7 +361,7 @@ Acceptance:
 - [self] At 5,000 spans per second for 60 seconds, no main-thread hang exceeds 100 ms.
 - [self] The list pages from the database instead of loading every trace.
 Status: todo
-Blocked: switching Traces | Logs under the flood hangs the main thread 95-137 ms (37-47 ms at rest), over the 100 ms limit; scrolling, keys, selecting and opening traces stay under it (77-96 ms), and the list pages (M3 review 1, 2026-11-02). The switch's cost is SwiftUI re-rendering the content and detail columns and the toolbar in one turn; deferring the menus' update saved about 10 ms, removing `.disabled` or covering the hidden column instead of zero opacity saved nothing. Next: take the switch out of the window's SwiftUI graph (an AppKit container that swaps two hosting views) or make the hidden column's views not depend on `contentMode`. The self-test prints the value as a BLOCKED line.
+Blocked: switching Traces | Logs under the flood hangs the main thread 95-137 ms (37-47 ms at rest), over the 100 ms limit, and with the screen unlocked scrolling and selecting are over it too: 107-113 ms (once 178 ms) in every unlocked run of 2026-11-02. The earlier "77-96 ms" for scrolling, keys, selecting and opening came from runs with the screen locked, when the OS draws no frames for the window, so it was most likely measured without drawing rather than lost to a later change (security and scope review, 2026-11-03). The list pages (M3 review 1, 2026-11-02). Still to do: measure again on a quiet, unlocked machine with the window fixed at 1280 × 760 (the test scripts now pass an empty window frame), 6a5ce29 against HEAD. The switch's cost is SwiftUI re-rendering the content and detail columns and the toolbar in one turn; deferring the menus' update saved about 10 ms, removing `.disabled` or covering the hidden column instead of zero opacity saved nothing. Next: take the switch out of the window's SwiftUI graph (an AppKit container that swaps two hosting views) or make the hidden column's views not depend on `contentMode`. The self-test prints the value as a BLOCKED line.
 
 ### S-031 Use Magnife in dark mode
 As the user, Magnife follows my Mac's appearance.
@@ -373,7 +374,7 @@ Status: done
 As the user, I find Magnife in the Dock and Launchpad by its icon.
 Acceptance:
 - [manual] The app icon follows the macOS icon grid and reads at 16 pt in Finder and the Dock.
-Status: done
+Status: done (manual line pending owner: checked in Finder's icon at 16 to 128 pt, never seen in the Dock or Launchpad; docs/RELEASE.md B9)
 
 ## Seed data
 Snapshots use a fixture of OTLP payloads replayed into the helper, so every value comes from telemetry the app receives:

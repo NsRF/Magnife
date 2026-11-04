@@ -119,7 +119,7 @@ func events(evs ptrace.SpanEventSlice) string {
 		b = append(b, `,"name":`...)
 		b = appendString(b, ev.Name())
 		b = append(b, `,"attributes":`...)
-		b = appendMap(b, ev.Attributes())
+		b = appendMap(b, ev.Attributes(), 0)
 		b = append(b, '}')
 	}
 	return string(append(b, ']'))
@@ -141,7 +141,7 @@ func links(ls ptrace.SpanLinkSlice) string {
 		b = append(b, `,"span_id":`...)
 		b = appendID(b, spanID(l.SpanID()))
 		b = append(b, `,"attributes":`...)
-		b = appendMap(b, l.Attributes())
+		b = appendMap(b, l.Attributes(), 0)
 		b = append(b, '}')
 	}
 	return string(append(b, ']'))

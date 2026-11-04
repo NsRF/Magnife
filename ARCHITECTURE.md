@@ -23,9 +23,10 @@ apps ──OTLP──> ingest/ (Go helper, magnife-ingest) ──writes──> m
   `TelemetryReader` with all SQL in `TelemetrySQL`, the helper protocol and
   `HelperSupervisor`, formatting. Unit-tested in `app/Tests/MagnifeKitTests`.
 - `app/Sources/Magnife` (the app, main actor by default): `AppModel` (observable
-  state, split by story into extensions), SwiftUI views, two AppKit outlines (the
-  waterfall's NSOutlineView, the span detail's NSSplitView), the self-test and
-  snapshot modes.
+  state, split by story into extensions), SwiftUI views, the AppKit views where
+  SwiftUI was too slow or reentrant (the waterfall's NSOutlineView, the span
+  detail's NSSplitView, and the trace list's and Logs list's NSTableViews,
+  `LiveTable.swift`, decision 159), the self-test and snapshot modes.
 
 Dependencies point one way: `Magnife` -> `MagnifeKit` -> GRDB. MagnifeKit never
 imports the app.

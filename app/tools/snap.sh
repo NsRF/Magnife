@@ -30,9 +30,10 @@ rm -rf ~/Library/Saved\ Application\ State/com.nasserfarhat.magnife.savedState
 seed_store $store || exit 1
 # 01-empty-state reads the schema-only file next to the store (SnapshotPage.emptyStore).
 seed_store ${store:r}.empty.sqlite --empty || exit 1
-# The empty split-frames default makes the window's columns start at their
-# ideal widths (docs/ux.md), not where the last run left them.
-APP_STORE=$store APP_HELPER=none APP_TEST_ROOT=$run APP_SNAPSHOT=$shots $app -"NSSplitView Subview Frames main-AppWindow-1, SidebarNavigationSplitView" "()"
+# The empty window-frame and split-frames defaults make the window open at
+# its default 1280 x 760 with the columns at their ideal widths (docs/ux.md),
+# not at the size the owner or the last run left.
+APP_STORE=$store APP_HELPER=none APP_TEST_ROOT=$run APP_SNAPSHOT=$shots $app -"NSWindow Frame main-AppWindow-1" "" -"NSSplitView Subview Frames main-AppWindow-1, SidebarNavigationSplitView" "()"
 code=$?
 # /tmp/Magnife-shots: the newest finished run's shots (a real directory from older runs is replaced).
 [[ -L /tmp/Magnife-shots || ! -e /tmp/Magnife-shots ]] || rm -rf /tmp/Magnife-shots

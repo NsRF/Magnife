@@ -175,12 +175,14 @@ class LiveTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         applying {
             for row in rows {
                 // Rows from `visibleRows` are real rows: never -1 here (FIXLOG).
+                let words = sentence(row: row)
                 for column in columnIndexes {
                     if let cell = table.view(atColumn: column.index, row: row, makeIfNecessary: false) {
                         fill(cell, column: column.id, row: row)
+                        if column.index == 0 { (cell as? TraceTextCell)?.sentence = words }
                     }
                 }
-                (table.rowView(atRow: row, makeIfNecessary: false) as? LiveRowView)?.sentence = sentence(row: row)
+                (table.rowView(atRow: row, makeIfNecessary: false) as? LiveRowView)?.sentence = words
             }
         }
     }
@@ -225,6 +227,8 @@ class LiveTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         }
         guard let cell = makeCell(column.identifier, in: tableView) else { return nil }
         fill(cell, column: column.identifier, row: row)
+        // The first column's cell is what VoiceOver reads for the row (TraceTextCell.sentence).
+        if column === tableView.tableColumns.first { (cell as? TraceTextCell)?.sentence = sentence(row: row) }
         return cell
     }
 
@@ -266,7 +270,9 @@ final class LiveTableView: NSTableView {
     }
 }
 
-/// A row VoiceOver reads as one sentence (S-004, S-013 Access).
+/// A row VoiceOver reads as one sentence (S-004, S-013 Access). The
+/// sentence also goes on the first column's cell (TraceTextCell.sentence),
+/// which is what AppKit's accessibility row lists.
 final class LiveRowView: NSTableRowView {
     var sentence = "" {
         didSet { if sentence != oldValue { setAccessibilityLabel(sentence) } }

@@ -41,6 +41,8 @@ type Config struct {
 // batches are committed until exitBudget has passed since EOF (at least
 // drainFloor), and dropped after that.
 const (
+	readTimeout = 60 * time.Second  // a whole HTTP request, body included
+	idleTimeout = 120 * time.Second // a keep-alive connection between requests
 	stopTimeout = 300 * time.Millisecond
 	exitBudget  = 700 * time.Millisecond
 	drainFloor  = 100 * time.Millisecond
@@ -114,6 +116,8 @@ func Run(cfg Config, stdin io.Reader, stdout io.Writer) int {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigs)
 
+	// Files the helper creates (the database, -wal, -shm) are the owner's only.
+	syscall.Umask(0o077)
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {
 		msg := fmt.Sprintf("Cannot open the database at %s: %v", cfg.DBPath, err)
@@ -130,7 +134,7 @@ func Run(cfg Config, stdin io.Reader, stdout io.Writer) int {
 	recv := &receiver.Receiver{Sink: w}
 	grpcSrv := recv.NewGRPCServer()
 	fresh := &freshConns{conns: map[net.Conn]bool{}}
-	httpSrv := &http.Server{Handler: recv.HTTPHandler(), ReadHeaderTimeout: 10 * time.Second, ConnState: fresh.track}
+	httpSrv := newHTTPServer(recv.HTTPHandler(), fresh)
 	grpcEP := &endpoint{addr: cfg.GRPCAddr, serve: grpcSrv.Serve}
 	httpEP := &endpoint{addr: cfg.HTTPAddr, serve: httpSrv.Serve}
 	bindAll := func() {
@@ -236,6 +240,19 @@ func handleCommand(line string, w *store.Writer, retry func()) {
 		retry()
 	default:
 		slog.Warn("ignoring unknown command", "line", line)
+	}
+}
+
+// newHTTPServer bounds every phase of a connection: a client that sends its
+// body slowly, or keeps idle connections open, cannot hold a connection (and
+// an in-flight slot) for ever.
+func newHTTPServer(h http.Handler, fresh *freshConns) *http.Server {
+	return &http.Server{
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       readTimeout,
+		IdleTimeout:       idleTimeout,
+		ConnState:         fresh.track,
 	}
 }
 

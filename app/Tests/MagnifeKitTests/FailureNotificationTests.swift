@@ -179,4 +179,12 @@ struct FailureNotificationTests {
         #expect(try await reader.failedTraces(ids: []).isEmpty)
         _ = writer
     }
+
+    @Test("only a real run on the real store uses the notification center")
+    func notificationAccess() {
+        #expect(NotificationAccess.usesSystemCenter(environment: [:], arguments: ["Magnife"]))
+        #expect(!NotificationAccess.usesSystemCenter(environment: ["APP_STORE": "/tmp/t/store.sqlite"], arguments: ["Magnife"]))
+        #expect(!NotificationAccess.usesSystemCenter(environment: ["APP_SNAPSHOT": "/tmp/shots"], arguments: ["Magnife"]))
+        #expect(!NotificationAccess.usesSystemCenter(environment: [:], arguments: ["Magnife", "--selftest"]))
+    }
 }

@@ -33,6 +33,17 @@ public enum Retention {
         return seconds
     }
 
+    /// The retention a launch sends the helper: `stored`, except that a run on
+    /// another store (APP_STORE: snapshots, self-tests, the release checklist's
+    /// end-to-end run) never reads the owner's choice; it gets the test hook's
+    /// seconds or 24 hours.
+    public static func atLaunch(in defaults: UserDefaults,
+                                environment: [String: String] = ProcessInfo.processInfo.environment) -> Int {
+        guard StoreLocation.isOverridden(environment: environment) else { return stored(in: defaults, environment: environment) }
+        if let seconds = environment[environmentKey].flatMap({ Int($0) }), seconds > 0 { return seconds }
+        return defaultSeconds
+    }
+
     /// The pop-up's items: the choices, plus a test hook's value so the pop-up never shows blank.
     public static func menuChoices(including current: Int) -> [Int] {
         choices.contains(current) ? choices : (choices + [current]).sorted()

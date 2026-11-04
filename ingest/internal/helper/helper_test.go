@@ -1,6 +1,8 @@
 package helper
 
 import (
+	"net"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -41,5 +43,12 @@ func TestCheckLoopback(t *testing.T) {
 		if err := checkLoopback("grpc", addr); (err == nil) != ok {
 			t.Errorf("checkLoopback(%q) = %v, want ok=%v", addr, err, ok)
 		}
+	}
+}
+
+func TestHTTPServerHasTimeouts(t *testing.T) {
+	s := newHTTPServer(http.NotFoundHandler(), &freshConns{conns: map[net.Conn]bool{}})
+	if s.ReadHeaderTimeout <= 0 || s.ReadTimeout < 30*time.Second || s.IdleTimeout < s.ReadTimeout {
+		t.Fatalf("ReadHeaderTimeout %v, ReadTimeout %v, IdleTimeout %v", s.ReadHeaderTimeout, s.ReadTimeout, s.IdleTimeout)
 	}
 }

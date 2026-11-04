@@ -41,13 +41,14 @@ seed_stop_last
 seed_store $store || exit 1
 print "selftest: run directory $run"
 # APP_SEED_GRPC / APP_SEED_HTTP: the seed helper, still writing $store, for the live list checks.
-# The empty split-frames default makes the window's columns start at their
-# ideal widths (docs/ux.md), not where the last run left them; it goes
+# The empty window-frame and split-frames defaults make the window open at
+# its default 1280 x 760 with the columns at their ideal widths (docs/ux.md),
+# not at the size the owner or the last run left; it goes
 # before --selftest, which the argument domain would otherwise read as a key.
 APP_STORE=$store APP_HELPER=none APP_TEST_ROOT=$run APP_SEARCH_STORE=$search_store APP_EDGE_STORE=$edge_store \
   APP_SAMPLE_SENDER=$seed_sender \
   APP_LAUNCH_STORES=${(j:,:)launch_stores} APP_SEED_GRPC=$seed_grpc APP_SEED_HTTP=$seed_http \
-  ~/Applications/Magnife.app/Contents/MacOS/Magnife -"NSSplitView Subview Frames main-AppWindow-1, SidebarNavigationSplitView" "()" --selftest \
+  ~/Applications/Magnife.app/Contents/MacOS/Magnife -"NSWindow Frame main-AppWindow-1" "" -"NSSplitView Subview Frames main-AppWindow-1, SidebarNavigationSplitView" "()" --selftest \
   2>&1 | tee $run/selftest.log
 code=${pipestatus[1]}
 # AppKit's "reentrant operation in its NSTableView delegate" warning fails the run (S-030, FIXLOG).

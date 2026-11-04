@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"math"
+	"strconv"
+	"strings"
 	"testing"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -226,5 +228,63 @@ func TestLogs(t *testing.T) {
 	}
 	if r := rows[1]; r.Body != `{"msg":"server started"}` || r.TraceID != "" || r.SpanID != "" || r.TimeNs != 0 || r.ObservedNs != 20 {
 		t.Fatalf("%+v", r)
+	}
+}
+
+// nest makes v `levels` arrays and maps, alternating, around "x".
+func nest(v pcommon.Value, levels int) {
+	for i := range levels {
+		if i%2 == 0 {
+			v = v.SetEmptySlice().AppendEmpty()
+		} else {
+			v = v.SetEmptyMap().PutEmpty("k")
+		}
+	}
+	v.SetStr("x")
+}
+
+// jsonDepth is the deepest bracket level of a JSON document.
+func jsonDepth(s string) int {
+	depth, deepest := 0, 0
+	for _, c := range s {
+		switch c {
+		case '[', '{':
+			depth++
+			deepest = max(deepest, depth)
+		case ']', '}':
+			depth--
+		}
+	}
+	return deepest
+}
+
+func TestDeepValuesStopAtMaxValueDepth(t *testing.T) {
+	if !strings.Contains(TooDeep, strconv.Itoa(MaxValueDepth)) {
+		t.Fatalf("TooDeep %q does not name %d", TooDeep, MaxValueDepth)
+	}
+	for _, levels := range []int{MaxValueDepth, MaxValueDepth + 1, 1500} {
+		m := pcommon.NewMap()
+		nest(m.PutEmpty("deep"), levels)
+		m.PutStr("http.route", "/ok")
+		got, _ := Attributes(m)
+		if !json.Valid([]byte(got)) {
+			t.Fatalf("%d levels: invalid JSON", levels)
+		}
+		// The attribute object, then at most MaxValueDepth arrays and maps.
+		if d := jsonDepth(got); d > MaxValueDepth+1 {
+			t.Fatalf("%d levels: stored %d levels deep", levels, d)
+		}
+		if placeholder := strings.Contains(got, TooDeep); placeholder != (levels > MaxValueDepth) {
+			t.Fatalf("%d levels: placeholder %v in %s", levels, placeholder, got)
+		}
+		if !strings.Contains(got, `"http.route":"/ok"`) {
+			t.Fatalf("%d levels: other attributes lost: %s", levels, got)
+		}
+	}
+	// A log body is a value too.
+	v := pcommon.NewValueEmpty()
+	nest(v, 1500)
+	if b := body(v); jsonDepth(b) > MaxValueDepth || !strings.Contains(b, TooDeep) {
+		t.Fatalf("log body stored %d levels deep", jsonDepth(b))
 	}
 }

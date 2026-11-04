@@ -189,3 +189,15 @@ public enum NotificationPermission: Sendable, Equatable {
 public enum FailureAction: Sendable, Equatable {
     case post, ask, drop
 }
+
+/// Whether a run may use macOS's notification center (S-028). Snapshot and
+/// self-test runs, and any run on another store (APP_STORE: the release
+/// checklist's end-to-end run, scripted checks), post to a fake instead,
+/// so a test never asks for, or posts with, the owner's permission.
+public enum NotificationAccess {
+    public static func usesSystemCenter(environment: [String: String] = ProcessInfo.processInfo.environment,
+                                        arguments: [String] = CommandLine.arguments) -> Bool {
+        let snapshot = !(environment["APP_SNAPSHOT"] ?? "").isEmpty
+        return !snapshot && !arguments.contains("--selftest") && !StoreLocation.isOverridden(environment: environment)
+    }
+}

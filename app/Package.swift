@@ -5,8 +5,9 @@ let package = Package(
     name: "Magnife",
     platforms: [.macOS(.v26)],
     // Software updates (Sparkle 2) are opt-in: `swift build --traits Sparkle`,
-    // which build.sh passes when MAGNIFE_SPARKLE=1. Without the trait SwiftPM
-    // neither fetches nor links Sparkle, and the app has no updater.
+    // which build.sh passes when MAGNIFE_SPARKLE=1. Without the trait Sparkle
+    // is not fetched as a binary, not compiled and not linked (a resolve may
+    // still check out its source, docs/RELEASE.md A2), and the app has no updater.
     traits: [
         .trait(name: "Sparkle", description: "Link Sparkle 2 and show Check for Updates…"),
     ],

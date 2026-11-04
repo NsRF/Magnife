@@ -66,8 +66,16 @@ type Store struct {
 	stmts       statements
 }
 
+// JournalSizeLimit is the size the -wal file is cut back to after a
+// checkpoint (PRAGMA journal_size_limit). Without it the file kept the size
+// of the largest burst for good, and Settings > Database size counts it. On
+// a clean close the persistent -wal is truncated to zero bytes.
+const JournalSizeLimit = 16 << 20
+
 // Open creates the directory and the database if needed, applies the schema
-// and sets meta schema_version.
+// and sets meta schema_version. The database files are the owner's only
+// (0600; the helper also runs with umask 077): telemetry can hold queries,
+// URLs and tokens.
 func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("create database directory: %w", err)
@@ -75,7 +83,8 @@ func Open(path string) (*Store, error) {
 	q := url.Values{}
 	// A 16 MiB page cache commits as fast as 64 MiB (BenchmarkCommit) and keeps
 	// the helper near 55 MB at 5,000 spans/s instead of 160 MB.
-	for _, p := range []string{"journal_mode(WAL)", "synchronous(NORMAL)", "foreign_keys(OFF)", "busy_timeout(5000)", "cache_size(-16384)", "temp_store(MEMORY)"} {
+	for _, p := range []string{"journal_mode(WAL)", "synchronous(NORMAL)", "foreign_keys(OFF)", "busy_timeout(5000)",
+		"cache_size(-16384)", "temp_store(MEMORY)", "journal_size_limit(" + strconv.Itoa(JournalSizeLimit) + ")"} {
 		q.Add("_pragma", p)
 	}
 	q.Set("_txlock", "immediate")
@@ -94,6 +103,13 @@ func Open(path string) (*Store, error) {
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
+	}
+	// Files made by an older helper, or before the umask, were 0644.
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if err := os.Chmod(path+suffix, 0o600); err != nil && !errors.Is(err, os.ErrNotExist) {
+			db.Close()
+			return nil, fmt.Errorf("database permissions: %w", err)
+		}
 	}
 	if err := s.stmts.prepare(db); err != nil {
 		db.Close()

@@ -101,9 +101,9 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
         self.model = model
     }
 
-    /// Real runs only: test runs never touch the notification center.
+    /// Real runs only: test runs and APP_STORE runs never touch the notification center.
     static func install(model: AppModel) {
-        guard shared == nil, !AppDefaults.isTestRun else { return }
+        guard shared == nil, !AppDefaults.usesFakeNotifications else { return }
         let router = NotificationRouter(model: model)
         shared = router
         UNUserNotificationCenter.current().delegate = router

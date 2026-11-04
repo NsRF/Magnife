@@ -74,7 +74,7 @@ Apple Development identity when the keychain has one, ad hoc otherwise.
 | Build | Sparkle | Info.plist | Menu |
 | --- | --- | --- | --- |
 | `./build.sh`, `scripts/install-local.sh` (default) | not fetched as a binary, not compiled, not linked | no `SU*` keys | no Check for Updates… |
-| `MAGNIFE_SPARKLE=1 ./build.sh` / `MAGNIFE_SPARKLE=1 scripts/install-local.sh` | `Contents/Frameworks/Sparkle.framework` (2.9 MB) | `SUFeedURL`, `SUPublicEDKey` (placeholders), `SUEnableAutomaticChecks` false | Magnife > Check for Updates…, disabled |
+| `MAGNIFE_SPARKLE=1 ./build.sh` / `MAGNIFE_SPARKLE=1 scripts/install-local.sh` | `Contents/Frameworks/Sparkle.framework` (2.9 MB) | `SUFeedURL`, `SUPublicEDKey` (placeholders), `SUEnableAutomaticChecks` false (`SPARKLE_AUTOMATIC_CHECKS=1`: true; `=ask`: no key) | Magnife > Check for Updates…, disabled |
 | the same with `SPARKLE_FEED_URL=https://… SPARKLE_PUBLIC_ED_KEY=<base64>` | as above | the real values | enabled; checks only when chosen |
 
 - Default builds: SwiftPM prunes the trait-only dependency. With the Sparkle
@@ -87,8 +87,11 @@ Apple Development identity when the keychain has one, ad hoc otherwise.
   an HTTPS feed with a host and a base64 key of 32 bytes), so the app makes no
   request and shows no "can't check for updates" alert.
 - With a real feed and key Sparkle starts, but `SUEnableAutomaticChecks` is
-  false: no check at launch, no "check automatically?" question on the second
-  launch. The only request is the one Check for Updates… makes.
+  false by default: no check at launch, no "check automatically?" question on
+  the second launch. The only request is the one Check for Updates… makes.
+  `SPARKLE_AUTOMATIC_CHECKS=1` writes true (Sparkle checks once a day) and
+  `SPARKLE_AUTOMATIC_CHECKS=ask` leaves the key out (Sparkle asks people on the
+  second launch); the release build's choice is B2's decision.
 - Sparkle never starts in snapshot or self-test runs (it keeps its state in
   the app's own defaults domain).
 - Ad hoc only: the app is signed **without** the hardened runtime when
@@ -108,8 +111,17 @@ Never against the real database in `~/Library/Application Support/Magnife/`
 
 - [ ] Helper: `cd ingest && go test -race ./...`
 - [ ] App unit tests: `cd app && swift test --scratch-path ~/Library/Developer/Magnife/test-build`
-- [ ] `app/build.sh`, then `app/tools/selftest.sh` exits 0 (receiver checks with
-      the bundled helper; S-008 lifecycle: quit, crash restart, `kill -9`).
+- [ ] `app/build.sh`, then `app/tools/selftest.sh` (receiver checks with the
+      bundled helper; S-008 lifecycle: quit, crash restart, `kill -9`). It does
+      not exit 0 while S-030 is blocked: expect exactly these lines and no other
+      FAIL (docs/STORIES.md, S-030 and S-004 Blocked):
+      - `BLOCKED … switching Traces | Logs …` (S-030, about 95-137 ms);
+      - `FAIL … while scrolling and selecting, no main-thread hang over 100 ms`
+        with the screen unlocked (S-030, 107-178 ms); it passes with the screen
+        locked, when the window draws nothing;
+      - with the screen unlocked and the Accessibility permission, the two
+        "VoiceOver reads … once" checks (S-004, S-013) must PASS; with the
+        screen locked they print `INFO … skipped`.
       `APP_SELFTEST_ONLY=updates app/tools/selftest.sh` checks the update menu.
 - [ ] `MAGNIFE_SPARKLE=1 app/build.sh`, then `APP_SELFTEST_ONLY=updates app/tools/selftest.sh`
       (Check for Updates… after About Magnife, disabled, no shortcut;
@@ -118,7 +130,10 @@ Never against the real database in `~/Library/Application Support/Magnife/`
       `swift app/tools/check-layout.swift /tmp/Magnife-shots/*-layout.json`;
       look at the light and dark PNGs.
 - [ ] SDK interop: `scripts/interop/run-all.sh` (gRPC 34317, HTTP 34318).
-- [ ] An installed copy end to end (`scripts/install-local.sh --dest "$(mktemp -d)"`):
+- [ ] An installed copy end to end (`scripts/install-local.sh --dest "$(mktemp -d)"`).
+      A run on another store (`APP_STORE`) posts notifications to a fake and
+      never asks for or uses the notification permission, and it reads the
+      default 24-hour retention, never the owner's choice:
 
 ```sh
 T=$(mktemp -d /tmp/magnife-e2e.XXXXXX); APP=<dest>/Magnife.app
@@ -174,6 +189,15 @@ export DEV_ID="Developer ID Application: <DEV_ID_NAME> (<TEAM_ID>)"
       clock. Record each release's value:
       `plutil -extract CFBundleVersion raw Magnife.app/Contents/Info.plist`.
 - [ ] Release notes for the version (`Magnife-<VERSION>.html`, used by B6).
+- [ ] **Decide automatic update checks [owner]**. docs/MVP.md promises
+      "atualizações automáticas pelo Sparkle"; local builds turn them off.
+      Pick one for the release build (B3) and pass it as
+      `SPARKLE_AUTOMATIC_CHECKS`: `1` (Sparkle checks once a day, the
+      privacy statement must say Magnife contacts `<HOST>`), `ask` (Sparkle asks
+      people on the second launch), or `0` (only Check for Updates…). Then run
+      `SPARKLE_AUTOMATIC_CHECKS=<choice> APP_SELFTEST_ONLY=updates app/tools/selftest.sh`
+      on the release build. A Settings toggle for it would be a new design in
+      docs/ux.md first; Sparkle's own question (`ask`) needs none.
 - [ ] Tag the release commit: `git tag -s v<VERSION>` (signed through 1Password).
 
 ## B3. Release build and signing **[owner: certificate]**
@@ -202,9 +226,20 @@ Requirements notarization checks:
 
 ```sh
 export SPARKLE_FEED_URL=https://<HOST>/appcast.xml SPARKLE_PUBLIC_ED_KEY=<base64 from B5>
-MAGNIFE_SPARKLE=1 SIGN_IDENTITY=- app/build.sh   # assemble; signatures are replaced below
-APP=~/Library/Developer/Magnife/release/Magnife.app
-rm -rf "$APP" && mkdir -p "${APP:h}" && ditto ~/Applications/Magnife.app "$APP"
+export SPARKLE_AUTOMATIC_CHECKS=<0, 1 or ask, from B2>
+REL=~/Library/Developer/Magnife/release
+# Assemble in the release folder (ad hoc; signatures are replaced below). It
+# never touches ~/Applications/Magnife.app, the everyday copy, and quits only
+# a Magnife running from $REL.
+MAGNIFE_SPARKLE=1 scripts/install-local.sh --dest "$REL"
+APP=$REL/Magnife.app
+# install-local.sh builds the app for this Mac's architecture only: put the
+# universal binary in its place.
+SPARKLE_FLAGS=(--traits Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks)
+swift build -c release --package-path app --arch arm64 --arch x86_64 "${SPARKLE_FLAGS[@]}"
+BIN=$(swift build -c release --package-path app --arch arm64 --arch x86_64 "${SPARKLE_FLAGS[@]}" --show-bin-path)
+cp "$BIN/Magnife" "$APP/Contents/MacOS/Magnife"
+lipo -info "$APP/Contents/MacOS/Magnife"                       # x86_64 arm64
 plutil -extract SUPublicEDKey raw "$APP/Contents/Info.plist"   # must not be __SPARKLE_PUBLIC_ED_KEY__
 
 # Inside out, never --deep.
@@ -356,6 +391,10 @@ brew uninstall --cask --zap magnife
       leaves no `magnife-ingest`; a busy port shows the busy-port banner.
 - [ ] Notifications (S-028, still untested by hand): the permission prompt on
       the first error trace, and a banner click that opens the trace.
+- [ ] The icon (S-032, never seen in the Dock): open the installed app and look
+      at it in the Dock and in Launchpad at their default sizes and at 16 pt in a
+      Finder list, light and dark. If the old or a generic icon shows,
+      `touch Magnife.app` and relaunch (last resort `killall Dock`).
 - [ ] **Local appcast test** (docs/research/platform.md open question: does the
       helper exit before Sparkle swaps the bundle?). Build version A with a
       test feed; publish version B (higher CFBundleVersion); in A, Magnife >

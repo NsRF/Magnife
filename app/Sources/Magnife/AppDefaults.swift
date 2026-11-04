@@ -16,6 +16,11 @@ enum AppDefaults {
         !(ProcessInfo.processInfo.environment["APP_SNAPSHOT"] ?? "").isEmpty || CommandLine.arguments.contains("--selftest")
     }
 
+    /// Runs on another store (APP_STORE) or snapshot and self-test runs post
+    /// to `FakeNotificationPoster` and never touch the notification center,
+    /// so a test run never asks for, or uses, the owner's permission (S-028).
+    static var usesFakeNotifications: Bool { !NotificationAccess.usesSystemCenter() }
+
     /// The suite `shared` reads, nil for the user's own defaults.
     static let sharedSuiteName: String? = {
         if isTestRun || ProcessInfo.processInfo.environment["APP_DEFAULTS_SUITE"] != nil { return TestRun.suiteName }

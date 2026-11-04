@@ -177,10 +177,11 @@ The default "Magnife Help" item is removed; there is no help book in v0.1.
 
 ### Settings
 
-A `Settings` scene, 480 pt wide, two tabs:
+A `Settings` scene, 480 pt wide, three tabs:
 
 - **General** (`gearshape`): "Keep traces and logs for" pop-up (1 hour, 6 hours, 24 hours, 3 days, 7 days; default 24 hours) with "Older traces and logs are deleted automatically." under it; "Database size" with the size ("182 MB") and a "Show in Finder" button; "Show Magnife in the menu bar" toggle.
 - **Notifications** (`bell`): "Notify me when a trace has an error" toggle (on), plus a status line (S-028).
+- **Appearance** (`paintpalette`): "Accent color" swatches (System first, the default) with the chosen color's name under them and a small preview window drawn in it (decision 18). Light and dark mode always follow the Mac.
 
 ### Notifications
 
@@ -193,14 +194,14 @@ Native `UNUserNotificationCenter` banners (platform decision 9). Permission is a
 | Launch | Last view, scope, filters and selected trace restored; rows from the database at once, no spinner; Pause is always off at launch |
 | Receiver starting over 0.5 s | Toolbar status "Starting receiver…" |
 | Helper `error` line | Banner above the list: "The receiver reported a problem: <message>" with "Try Again" |
-| Database schema unknown | Banner: "This database was written by a different version of Magnife. Update Magnife to read it." No rows shown |
+| Database schema unknown | Banner: "This database has schema version <found>, and this version of Magnife reads version <expected>. Update Magnife." (`StoreError.unsupportedVersion`) No rows shown |
 | Busy port, helper restart | S-001, S-002, S-008 banners, unchanged |
 
 ### Colors
 
-- Follows the system appearance; there is no in-app appearance setting. System accent color for selection and controls.
+- Follows the system appearance for light and dark; the only in-app appearance setting is the accent color (Settings > Appearance), which follows the system accent by default and colors selection and controls.
 - Error is system red with the octagon icon and the word. Findings are system orange with their icon and kind name. Neither color is a service color.
-- Services take colors from a fixed 10-color palette (system blue, green, purple, teal, pink, indigo, brown, mint, cyan, yellow), assigned in order of `services.first_seen_ns`, so a service keeps its color across launches (design decision 4).
+- Services take colors from a fixed 10-color palette (system blue, green, purple, teal, pink, indigo, brown, mint, cyan, yellow), assigned in order of `services.first_seen_ns`, so a service keeps its color across launches (design decision 4). The 11th service takes the 1st color again (the palette repeats in the same order), so two services can share a color; the name always shows beside the dot, which is never the only way to tell services apart (research/design.md, 10+ services).
 
 ## 2. Keyboard map
 
@@ -441,7 +442,7 @@ UX:
 ### S-031 Use Magnife in dark mode
 UX:
 - Flow: change the Mac's appearance -> Magnife follows at once, no relaunch
-- Surface: every view; no in-app appearance setting (the system setting is the one place)
+- Surface: every view; light and dark follow the system setting (the one place); Settings > Appearance only picks the accent color
 - States: light, dark, and each with Increase Contrast (waterfall bars get a 1 pt border, service dots a ring); status red, finding orange and all 10 service colors keep at least 4.5:1 for text and 3:1 for bars against the background in both modes; every snapshot page has a dark version
 - Words: no new words
 - Access: color never carries meaning alone (octagon for Error, icons and words for findings, level words); Reduce Transparency gives the Search panel and banners a solid background

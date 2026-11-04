@@ -7,10 +7,11 @@ import Sparkle
 /// Software updates through Sparkle 2, compiled in only with the Sparkle
 /// trait (`MAGNIFE_SPARKLE=1 ./build.sh`, docs/RELEASE.md). Without it this
 /// type is an empty shell: Sparkle is not linked and Magnife makes no
-/// network requests. With it, nothing is checked automatically
-/// (SUEnableAutomaticChecks is false); the only request is the one
-/// Magnife > Check for Updates… makes, and only once Info.plist has a real
-/// feed and key (`UpdateConfiguration`).
+/// network requests. With it, nothing is checked automatically unless the
+/// build turned it on (SUEnableAutomaticChecks, false unless
+/// SPARKLE_AUTOMATIC_CHECKS says otherwise, tools/sparkle-bundle.sh); the
+/// only request is then the one Magnife > Check for Updates… makes, and only
+/// once Info.plist has a real feed and key (`UpdateConfiguration`).
 final class UpdaterController: ObservableObject {
     static let shared = UpdaterController()
 

@@ -57,10 +57,23 @@ func appendString(b []byte, s string) []byte {
 	return append(b, '"')
 }
 
+// MaxValueDepth is how deeply arrays and maps may nest in a stored value
+// (an attribute value, a log body). A deeper array or map is stored as the
+// string TooDeep: SQLite's JSON functions fail on a document nested more
+// than 1,000 levels, and one such row broke every attribute filter.
+const MaxValueDepth = 32
+
+// TooDeep stands in for an array or map nested deeper than MaxValueDepth.
+const TooDeep = "(nested more than 32 levels deep; not stored)"
+
 // appendValue appends an AnyValue: string, number, bool, array, object,
 // base64 bytes or null. Non-finite doubles, which JSON cannot hold, become
-// the strings "NaN", "+Inf" and "-Inf".
-func appendValue(b []byte, v pcommon.Value) []byte {
+// the strings "NaN", "+Inf" and "-Inf". depth is the value's own level: 1
+// for an attribute's value or a log body.
+func appendValue(b []byte, v pcommon.Value, depth int) []byte {
+	if t := v.Type(); depth > MaxValueDepth && (t == pcommon.ValueTypeMap || t == pcommon.ValueTypeSlice) {
+		return appendString(b, TooDeep)
+	}
 	switch v.Type() {
 	case pcommon.ValueTypeStr:
 		return appendString(b, v.Str())
@@ -80,7 +93,7 @@ func appendValue(b []byte, v pcommon.Value) []byte {
 	case pcommon.ValueTypeBool:
 		return strconv.AppendBool(b, v.Bool())
 	case pcommon.ValueTypeMap:
-		return appendMap(b, v.Map())
+		return appendMap(b, v.Map(), depth)
 	case pcommon.ValueTypeSlice:
 		s := v.Slice()
 		b = append(b, '[')
@@ -88,7 +101,7 @@ func appendValue(b []byte, v pcommon.Value) []byte {
 			if i > 0 {
 				b = append(b, ',')
 			}
-			b = appendValue(b, s.At(i))
+			b = appendValue(b, s.At(i), depth+1)
 		}
 		return append(b, ']')
 	case pcommon.ValueTypeBytes:
@@ -126,7 +139,8 @@ func sortedEntries(m pcommon.Map) []entry {
 
 // appendMap appends an object with sorted, unique keys, so equal attribute
 // sets always encode to the same bytes (the resource hash relies on it).
-func appendMap(b []byte, m pcommon.Map) []byte {
+// depth is the map's own level (0 for an attribute set); its values are one deeper.
+func appendMap(b []byte, m pcommon.Map, depth int) []byte {
 	b = append(b, '{')
 	for i, e := range sortedEntries(m) {
 		if i > 0 {
@@ -134,7 +148,7 @@ func appendMap(b []byte, m pcommon.Map) []byte {
 		}
 		b = appendString(b, e.key)
 		b = append(b, ':')
-		b = appendValue(b, e.val)
+		b = appendValue(b, e.val, depth+1)
 	}
 	return append(b, '}')
 }
@@ -155,11 +169,11 @@ func Attributes(m pcommon.Map) (string, []string) {
 		keys[i] = e.key
 		b = appendString(b, e.key)
 		b = append(b, ':')
-		b = appendValue(b, e.val)
+		b = appendValue(b, e.val, 1)
 	}
 	b = append(b, '}')
 	return string(b), keys
 }
 
 // ValueJSON encodes one AnyValue.
-func ValueJSON(v pcommon.Value) string { return string(appendValue(nil, v)) }
+func ValueJSON(v pcommon.Value) string { return string(appendValue(nil, v, 1)) }

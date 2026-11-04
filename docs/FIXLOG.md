@@ -325,3 +325,80 @@ One entry per bug a story fixed: symptom, cause, fix, and the rule that keeps it
 - Cause: three loosenings stacked: stalls after a view switch were moved to a separate 250 ms budget, the heartbeat's longest stall was passed as `stall > 50 ? 0 : stall` (dropped exactly when it was large), and `checkTiming` passes up to twice the budget.
 - Fix: every stall counts against 100 ms with `regression: 100` (no WARN band); the switching part prints a BLOCKED line while S-030 is blocked on it; launch and search checks fail over their acceptance numbers too.
 - Rule: a check that encodes an acceptance number fails over that number; never carve a case out of a check to make it pass, mark the story blocked instead.
+
+## One deeply nested attribute value crashed the helper (security review, S-001, S-002)
+
+- Symptom: one span over HTTP protobuf with an attribute nested 2,000,000 levels deep (ArrayValue inside AnyValue, 19.5 MB) killed the helper with "goroutine stack exceeds 1000000000-byte limit"; any local process (or a web page through DNS rebinding) could do it.
+- Cause: pdata's generated decoders recurse once per nesting level with no limit, and the gRPC path decoded before any of our code ran.
+- Fix: `receiver/depth.go` walks every request before decoding without recursion (protobuf: a table of the OTLP fields that lead to an AnyValue; JSON: a bracket count outside strings) and refuses values nested more than 64 levels with 400 or InvalidArgument. The gRPC services are registered by hand with a pass-through codec, so they get the same check. `TestNestingWithinTheLimitIsStoredAndBeyondIsRefused` and `TestGRPCRefusesDeepNestingWithInvalidArgument` send two million levels.
+- Rule: anything that decodes untrusted input recursively gets a depth bound checked before it, without recursion.
+
+## One span nested over 1,000 levels broke every attribute filter (security review, S-020)
+
+- Symptom: after one span with a 1,500-level attribute was stored, `attributes ->> '$."http.route"'` failed with "malformed JSON" on the whole table, and the app's filters (`try?`) silently showed nothing.
+- Cause: SQLite's JSON functions refuse documents nested more than 1,000 levels, and the attribute filters run them on every row.
+- Fix: the converter stores arrays and maps nested more than 32 levels as the string "(nested more than 32 levels deep; not stored)" (`convert.MaxValueDepth`, attributes, event and link attributes, log bodies); the receiver refuses anything over 64 anyway. `TestDeepValuesStopAtMaxValueDepth`.
+- Rule: the helper never writes a value that the app's SQL cannot read back; limits of the reader are limits of the writer.
+
+## A few concurrent requests could take gigabytes (security review, S-001, S-002)
+
+- Symptom: eight concurrent POSTs of a 139 KB gzip body (140 MiB of zeros) each got 413, but the helper's RSS peaked at 3,083 MB.
+- Cause: a 128 MiB cap read through a growing `bytes.Buffer` (up to twice the body in garbage per request), gRPC at 64 MiB, and no bound on requests at once.
+- Fix: 32 MiB for bodies and gRPC messages, a declared `Content-Length` over it refused before reading, bodies read into pooled 1 MiB chunks and copied once (`readLimited`), and one gate of 4 in-flight requests shared by HTTP and gRPC (`MaxInFlight`), plus 8 gRPC streams per connection. The same eight requests now peak at 155 MB. `TestInFlightRequestsAreBoundedAcrossHTTPAndGRPC`, `TestHTTPRefusesLargeBodiesEarly`.
+- Rule: every per-request allocation has a cap, and the number of requests holding one at once has a cap too.
+
+## The HTTP receiver answered requests for any host (security review, S-001)
+
+- Symptom: `Host: attacker.example:<port>` with `Origin: http://attacker.example` got 200 and the span was stored, so a web page that rebinds its domain to 127.0.0.1 could post telemetry (or the nesting crash above).
+- Cause: binding to 127.0.0.1 limits who can connect, not which names a browser uses to get there.
+- Fix: `localOnly` returns 403 unless the Host is localhost, a loopback address or host.docker.internal, and when an Origin is sent, unless it is too. The HTTP server also times out a request after 60 s and an idle connection after 120 s. `TestHTTPAcceptsOnlyRequestsAddressedToThisMac`, `TestHTTPServerHasTimeouts`.
+- Rule: a loopback HTTP server checks Host; loopback is not an access check against browsers.
+
+## The -wal file kept the size of the largest burst (correctness review, S-016)
+
+- Symptom: after a 30 MB burst the `-wal` stayed 30 MB through pruning, 50 small commits and Close, and Settings > Database size counts it.
+- Cause: SQLite never shrinks a WAL file unless `journal_size_limit` is set; persistent WAL (S-008) keeps it after Close too.
+- Fix: `journal_size_limit(16777216)` in `store.Open`'s pragmas (not a schema change). The file goes back to 16 MiB when the log restarts and to zero bytes, still present, on a Close with no other connection open (while the app's reader is open the helper's close does not checkpoint, and the next start trims it), which the read-only reader opens (`TestCloseKeepsWALForReadOnlyReaders`). `TestWALShrinksAfterABurst`.
+- Rule: every file the helper grows has a way back down.
+
+## One huge request was one long transaction (security review, S-008)
+
+- Symptom: a request with far more than 2,000 records became one transaction, so a helper told to stop could miss its one-second exit.
+- Cause: the writer appended a whole batch before checking `MaxRecords`, and `late()` was checked only between queue reads.
+- Fix: `Writer.Submit` queues a batch in chunks of at most `MaxRecords` (`Batch.Split`), so each transaction is at most about 2 x 2,000 records and chunks still queued at the deadline are dropped. `TestWriterSplitsALargeSubmit`, `TestBatchSplit`.
+- Rule: work the exit budget must cover is cut into pieces at the point it enters the queue.
+
+## The database files were readable by other users (security review, S-008)
+
+- Symptom: the Magnife folder was drwxr-xr-x and the .sqlite, -wal and -shm files -rw-r--r--, although the helper asks for 0700.
+- Cause: the app created the folder first with the default mode, and `MkdirAll` leaves an existing folder alone; SQLite creates files with the process umask.
+- Fix: the helper runs with umask 077 and `store.Open` sets the three files to 0600; the app creates (and corrects) its own Magnife folder at 0700. `TestOpenMakesTheFilesPrivate`.
+- Rule: files holding telemetry are the owner's only, set where they are created and corrected where they are opened.
+
+## VoiceOver read a list row as its cells (S-004, S-013, scope review 1)
+
+- Symptom: with the screen unlocked, the self-test's VoiceOver row check read the HTTP 500 row as `["web","182 ms","12","3 min ago"]`, never its sentence, in every run; locked runs skipped the check, so S-004 said done.
+- Cause: a view-based NSTableView serves `NSTableRow` elements whose children are one `NSTableViewCellMockElement` (AXCell) per column, each described by its cell view's label and listing the cell's subviews. `LiveRowView`'s label and its empty `accessibilityChildren` were never asked, and the cells' `NSTextField`s stayed readable although the views were set to non-elements.
+- Fix: `TraceTextCell.sentence` puts the row's sentence on the first column's cell (kept a non-element), and every `TraceTextCell` returns no accessibility children. A new self-test check reads what AppKit serves in process (`tableAccessibilityRows`, by selector) for the trace list and the Logs list, so it also runs with the screen locked; the Accessibility API check stays for unlocked runs.
+- Rule: check accessibility at the element AppKit actually serves (dump it once), not at the view you expect; a check that can only skip unattended needs an in-process twin.
+
+## Test runs on another store used the owner's notification permission and retention (scope review 3, e2e P3-2)
+
+- Symptom: the release checklist's end-to-end run (`APP_STORE=… Magnife` plus the seed set's error traces) asked macOS for notification permission for `com.nasserfarhat.magnife` and could post real banners; it also sent the owner's retention to its helper.
+- Cause: the fake poster and the router guard keyed on `AppDefaults.isTestRun` (snapshot, self-test) only, and `retentionSeconds` read `Retention.stored(in: .standard)` with no test-run branch.
+- Fix: `NotificationAccess.usesSystemCenter` (MagnifeKit) is false for snapshot, self-test and any APP_STORE run, used by `FailureNotifier` and `NotificationRouter.install`; `Retention.atLaunch` gives APP_STORE runs 24 hours or `APP_RETENTION_SECONDS`. Unit tests `notificationAccess`, `overriddenStoreIgnoresOwnersChoice`.
+- Rule: every owner-scoped resource (defaults, permissions, folders) has one "is this a test run" predicate, and APP_STORE counts as one.
+
+## Snapshot and self-test windows took the owner's window size (e2e P2-1)
+
+- Symptom: snapshots came out 2560 x 1520 one run and 3996 x 1740 another.
+- Cause: the scripts emptied the split-view frames in the argument domain but not "NSWindow Frame main-AppWindow-1", which `protectLayout` backs up but leaves in effect.
+- Fix: `snap.sh` and `selftest.sh` also pass `-"NSWindow Frame main-AppWindow-1" ""`, so every run opens at the scene's default 1280 x 760 (all window snapshots 2560 x 1520 after the fix).
+- Rule: a test run's window starts from the scene's defaults, never from a saved frame.
+
+## install-local.sh missed a copy started with a relative path, and two runs shared one stage (correctness review 2 and 3)
+
+- Symptom: a Magnife started as `./Magnife.app/Contents/MacOS/Magnife` from the destination folder was not seen as running, so the script replaced the bundle under it; two runs at once shared `$build_dir/stage` and `swiftpm`, and each `rm -rf`'d the stage.
+- Cause: `ps -o comm=` gives the path as typed, which `${exe:A}` resolved against the script's folder; the stage was a fixed path.
+- Fix: `running_pids` takes the executable from `lsof -a -p <pid> -d txt -Fn`; the whole run holds `lockf` on `$BUILD_DIR/.lock`, and each run stages in its own `mktemp -d` folder removed on exit. Checked: a copy started by relative path stops `--no-quit` with "Magnife is running from …"; two runs at once both install and verify.
+- Rule: identify a process by what it mapped, not by what it was called.

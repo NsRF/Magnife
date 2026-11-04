@@ -66,7 +66,10 @@ func (w *Writer) Start() {
 	go w.run()
 }
 
-// Submit queues a batch, blocking while the queue is full.
+// Submit queues a batch, blocking while the queue is full. A batch larger
+// than MaxRecords is queued in chunks of at most MaxRecords, so one huge
+// request never becomes one long transaction, and a helper told to stop
+// drops the chunks still queued at its deadline instead of committing them all.
 func (w *Writer) Submit(ctx context.Context, b *Batch) error {
 	if b == nil || b.Len() == 0 {
 		return nil
@@ -76,12 +79,14 @@ func (w *Writer) Submit(ctx context.Context, b *Batch) error {
 	if w.closed {
 		return ErrClosed
 	}
-	select {
-	case w.in <- b:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+	for _, chunk := range b.Split(w.MaxRecords) {
+		select {
+		case w.in <- chunk:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
+	return nil
 }
 
 // Prune starts a pruning pass now.

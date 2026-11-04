@@ -55,6 +55,21 @@ final class TraceTextCell: NSTableCellView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// The row's sentence, on the first column's cell only. AppKit's
+    /// accessibility row for a view-based table (NSTableRow) lists one AXCell
+    /// per column, each describing itself with its cell view's label, and
+    /// never asks the row view (LiveRowView) for its label or children: so
+    /// the first cell says the sentence and every cell hides its text and
+    /// icon (`accessibilityChildren`), and VoiceOver reads the row once
+    /// (S-004, S-013). The cell itself stays a non-element: as an element
+    /// its subviews' text came back as children.
+    var sentence: String? {
+        didSet { if sentence != oldValue { setAccessibilityLabel(sentence) } }
+    }
+
+    /// The label and icon never reach VoiceOver: the sentence says it all.
+    override func accessibilityChildren() -> [Any]? { [] }
+
     /// A service dot draws itself in the current appearance (S-031).
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()

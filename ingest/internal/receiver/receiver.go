@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -23,6 +24,9 @@ type Sink interface {
 // Receiver converts OTLP data on the request goroutine and submits it.
 type Receiver struct {
 	Sink Sink
+
+	gateOnce sync.Once
+	inflight chan struct{} // MaxInFlight slots shared by HTTP and gRPC
 }
 
 // Traces stores the spans and returns how many were rejected and why.

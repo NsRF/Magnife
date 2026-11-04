@@ -25,8 +25,11 @@ extension SelfTest {
         }
         check("Check for Updates… has no keyboard shortcut (Apple's apps give it none)", item?.keyEquivalent == "")
         check("with no updater running Check for Updates… is disabled", item?.isEnabled == false)
-        check("Info.plist turns automatic checks off",
-              Bundle.main.object(forInfoDictionaryKey: UpdateConfiguration.automaticChecksKey) as? Bool == false)
+        // SPARKLE_AUTOMATIC_CHECKS as the build had it (tools/sparkle-bundle.sh): off unless asked.
+        let asked = ProcessInfo.processInfo.environment["SPARKLE_AUTOMATIC_CHECKS"] ?? "0"
+        let automatic = Bundle.main.object(forInfoDictionaryKey: UpdateConfiguration.automaticChecksKey)
+        check("Info.plist's automatic checks are what SPARKLE_AUTOMATIC_CHECKS=\(asked) asks (off by default)",
+              asked == "ask" ? automatic == nil : automatic as? Bool == (asked == "1"), "\(automatic ?? "no key")")
         check("Info.plist has a feed URL and a public key (placeholders until there are real ones)",
               Bundle.main.object(forInfoDictionaryKey: UpdateConfiguration.feedURLKey) is String
                 && Bundle.main.object(forInfoDictionaryKey: UpdateConfiguration.publicKeyKey) is String)

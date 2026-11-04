@@ -41,6 +41,7 @@ extension SelfTest {
               row?.line.time.wholeMatch(of: /\d\d:\d\d:\d\d\.\d\d\d/) != nil && row?.line.levelWord.isEmpty == false
                 && row?.record.serviceName.isEmpty == false && row?.record.body.isEmpty == false,
               row?.accessibilityLabel ?? "nil")
+        await checkLogRowAccessibility(model)
         model.sidebar = .service("orders")
         await model.reload()
         let orders = try? await reader.logPage(filter: LogFilter(service: "orders"))
@@ -49,6 +50,31 @@ extension SelfTest {
                 && model.logCount == orders?.logCount && model.title == "orders", "\(model.logs.count) rows")
         model.sidebar = .allTraces
         await model.reload()
+    }
+
+    /// What VoiceOver hears for a log row (S-013 Access): its sentence once,
+    /// through the Accessibility API, as the trace list's check reads it.
+    private static func checkLogRowAccessibility(_ model: AppModel) async {
+        _ = await waitUntil(2) { model.logScroller.rowCount == model.logs.count }
+        guard let first = model.logs.first, let table = model.logScroller.tableView else {
+            return check("the Logs view has a row to read", false)
+        }
+        // In process too, so it runs with the screen locked (the trace list's check).
+        let served = tableAccessibilityRows(table)
+        check("the Logs list's accessibility row says the log's sentence, once",
+              served.first == [first.accessibilityLabel], "\(served.first ?? [])")
+        guard AXIsProcessTrusted() else {
+            print("INFO VoiceOver log row check skipped: Magnife has no Accessibility permission")
+            return
+        }
+        guard accessibilityShowsWindows() else {
+            print("INFO VoiceOver log row check skipped: the Accessibility API shows no window (screen locked?)")
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(100))
+        let rows = accessibilityRows()
+        check("VoiceOver reads a log row once, as its sentence",
+              rows.contains([first.accessibilityLabel]), "\(rows.prefix(3))")
     }
 
     /// Opening a log with a trace id opens that trace with the log's span

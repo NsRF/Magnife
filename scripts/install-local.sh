@@ -62,15 +62,24 @@
 # Environment:
 #   MAGNIFE_REPO   repo root (default: the folder above this script)
 #   INSTALL_DIR    destination folder (default ~/Applications)
-#   BUILD_DIR      SwiftPM scratch + staging (default ~/Library/Developer/Magnife/install-local)
+#   BUILD_DIR      SwiftPM scratch + staging (default ~/Library/Developer/Magnife/install-local);
+#                  one run at a time per BUILD_DIR (a lock on BUILD_DIR/.lock)
 #   HELPER_BIN     use this prebuilt magnife-ingest instead of running ingest/build.sh
 #   MAGNIFE_SPARKLE=1   with Sparkle 2 and Magnife > Check for Updates… (off by default;
-#                  SPARKLE_FEED_URL, SPARKLE_PUBLIC_ED_KEY as in app/build.sh). Ad hoc,
+#                  SPARKLE_FEED_URL, SPARKLE_PUBLIC_ED_KEY, SPARKLE_AUTOMATIC_CHECKS as in app/build.sh). Ad hoc,
 #                  the app is then signed without the hardened runtime: library
 #                  validation refuses an ad hoc framework in an ad hoc app.
 set -euo pipefail
 
 name="Magnife"
+# One install at a time per build folder: two runs at once shared the SwiftPM
+# scratch and the staging folder. The whole run, build through install,
+# holds a lock on <BUILD_DIR>/.lock; a second run waits for it.
+build_dir="${BUILD_DIR:-$HOME/Library/Developer/$name/install-local}"
+if [[ -z "${MAGNIFE_INSTALL_LOCKED:-}" ]]; then
+  mkdir -p "$build_dir"
+  MAGNIFE_INSTALL_LOCKED=1 exec lockf -k "$build_dir/.lock" "$0" "$@"
+fi
 config=release
 dest="${INSTALL_DIR:-$HOME/Applications}"
 open_after=0
@@ -94,9 +103,7 @@ appsrc="$repo/app"
 ingest="$repo/ingest"
 [[ -f "$appsrc/Package.swift" && -f "$appsrc/Info.plist.in" ]] || { echo "error: no Magnife app package in $appsrc (set MAGNIFE_REPO)" >&2; exit 1; }
 
-build_dir="${BUILD_DIR:-$HOME/Library/Developer/$name/install-local}"
 scratch="$build_dir/swiftpm"
-stage="$build_dir/stage"
 bundle_id=$(plutil -extract CFBundleIdentifier raw -o - "$appsrc/Info.plist.in")
 [[ -n "$bundle_id" ]] || { echo "error: no CFBundleIdentifier in $appsrc/Info.plist.in" >&2; exit 1; }
 mkdir -p "$build_dir" "$dest"
@@ -104,7 +111,8 @@ dest="${dest:A}"
 app="$dest/$name.app"
 
 step() { print -P "%B==>%b $*"; }
-# Sparkle is a package trait: off, SwiftPM neither fetches nor links it.
+# Sparkle is a package trait: off, it is not fetched as a binary, not compiled,
+# not linked (a resolve may still check out its source; docs/RELEASE.md A2).
 sparkle=${MAGNIFE_SPARKLE:-0}
 swift_flags=()
 if [[ $sparkle == 1 ]]; then
@@ -141,8 +149,10 @@ fi
 
 # 3. Assemble in staging ---------------------------------------------------
 step "Assembling $name.app"
+# A staging folder of this run's own, removed however the run ends.
+stage=$(mktemp -d "$build_dir/stage.XXXXXX")
+trap 'rm -rf "$stage"' EXIT
 staged="$stage/$name.app"
-rm -rf "$stage"
 mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Helpers" "$staged/Contents/Resources"
 cp "$bin" "$staged/Contents/MacOS/$name"
 cp "$helper_src" "$staged/Contents/Helpers/magnife-ingest"
@@ -184,10 +194,14 @@ codesign -dv "$staged" 2>&1 | grep -E "^Identifier=|flags=" | sed 's/^/    app: 
 # Only processes whose executable is this destination's copy: a Magnife
 # running from another folder is someone else's and keeps running.
 # Executables are compared with symlinks resolved (/tmp is /private/tmp).
+# The path comes from the process's mapped executable (lsof's txt entry),
+# not `ps -o comm=`: a copy started with a relative path reports that path,
+# which resolved against this shell's folder names the wrong file, and the
+# swap below then replaced the bundle under the live process.
 running_pids() {
   local pid exe
   for pid in $(pgrep -x "$1" 2>/dev/null); do
-    exe=$(ps -o comm= -p $pid 2>/dev/null) || continue
+    exe=$(lsof -a -p $pid -d txt -Fn 2>/dev/null | awk '/^n/{print substr($0,2); exit}') || continue
     [[ -n "$exe" && "${exe:A}" == "${2:A}" ]] && print $pid
   done
   return 0
@@ -221,7 +235,6 @@ fi
 step "Installing to $app"
 rm -rf "$app"
 ditto "$staged" "$app"
-rm -rf "$stage"
 codesign --verify --strict --deep "$app" || { echo "error: installed copy fails its signature check" >&2; exit 1; }
 # Only an Applications folder: a scratch copy registered with Launch Services
 # could answer `open -b` or a notification click instead of the real one.

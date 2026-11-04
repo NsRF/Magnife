@@ -62,6 +62,22 @@ type Batch struct {
 // Len counts records toward the batch size limit.
 func (b *Batch) Len() int { return len(b.Spans) + len(b.Logs) }
 
+// Split cuts the batch into batches of at most n records, spans and logs
+// apart, sharing its arrays. A batch within n, or n <= 0, comes back whole.
+func (b *Batch) Split(n int) []*Batch {
+	if n <= 0 || b.Len() <= n {
+		return []*Batch{b}
+	}
+	out := make([]*Batch, 0, (len(b.Spans)+n-1)/n+(len(b.Logs)+n-1)/n)
+	for s := b.Spans; len(s) > 0; s = s[min(n, len(s)):] {
+		out = append(out, &Batch{Spans: s[:min(n, len(s)):min(n, len(s))]})
+	}
+	for l := b.Logs; len(l) > 0; l = l[min(n, len(l)):] {
+		out = append(out, &Batch{Logs: l[:min(n, len(l)):min(n, len(l))]})
+	}
+	return out
+}
+
 // BatchResult describes one committed batch (the "batch" stdout line).
 type BatchResult struct {
 	Seq         int64

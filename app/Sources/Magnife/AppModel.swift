@@ -400,10 +400,11 @@ final class AppModel {
     var showsEnvironmentPopover = false
     @ObservationIgnored var copiedResetTask: Task<Void, Never>?
     /// How long the helper keeps data, in seconds (S-015, S-016): 24 hours
-    /// on first launch, APP_RETENTION_SECONDS in test runs. Sent to the
+    /// on first launch, APP_RETENTION_SECONDS in test runs (which never read
+    /// the owner's choice: `Retention.atLaunch`). Sent to the
     /// helper with --retention at every launch (restarts too) and
     /// `retention <s>` on change (`HelperSupervisor.setRetention`).
-    var retentionSeconds: Int = Retention.stored(in: .standard) {
+    var retentionSeconds: Int = Retention.atLaunch(in: .standard) {
         didSet {
             guard retentionSeconds != oldValue else { return }
             if !StoreLocation.isOverridden() { UserDefaults.standard.set(retentionSeconds, forKey: Retention.defaultsKey) }

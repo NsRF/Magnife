@@ -10,8 +10,13 @@ extension AppModel {
         guard let executable, supervisor == nil else { return }
         if !StoreLocation.isOverridden() {
             // The helper creates the file; the folder may not exist on first launch.
-            try? FileManager.default.createDirectory(at: storeURL.deletingLastPathComponent(),
-                                                     withIntermediateDirectories: true)
+            // Telemetry can hold queries, URLs and tokens: the folder is the owner's
+            // only, also when an older build made it with the default mode.
+            let folder = storeURL.deletingLastPathComponent()
+            let privateFolder: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true,
+                                                     attributes: privateFolder)
+            try? FileManager.default.setAttributes(privateFolder, ofItemAtPath: folder.path)
         }
         let configuration = HelperConfiguration(executableURL: executable, databaseURL: storeURL,
                                                 grpcPort: ports.grpc, httpPort: ports.http,

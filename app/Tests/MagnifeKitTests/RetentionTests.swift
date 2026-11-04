@@ -29,6 +29,15 @@ struct RetentionTests {
         #expect(configuration.arguments[flag + 1] == "86400")
     }
 
+    @Test("a run on another store (APP_STORE) never reads the owner's choice")
+    func overriddenStoreIgnoresOwnersChoice() {
+        let owners = defaults()
+        owners.set(604_800, forKey: Retention.defaultsKey)
+        #expect(Retention.atLaunch(in: owners, environment: [:]) == 604_800)
+        #expect(Retention.atLaunch(in: owners, environment: ["APP_STORE": "/tmp/x.sqlite"]) == 86_400)
+        #expect(Retention.atLaunch(in: owners, environment: ["APP_STORE": "/tmp/x.sqlite", Retention.environmentKey: "3"]) == 3)
+    }
+
     @Test("a stored choice is kept; anything else reads as 24 hours")
     func storedChoice() {
         let stored = defaults()

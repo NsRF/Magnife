@@ -55,7 +55,7 @@ public enum EnvironmentLanguage: String, CaseIterable, Identifiable, Sendable {
     public var note: String {
         switch self {
         case .dotnet: "Call AddOtlpExporter() with no options; it reads these variables."
-        case .go: "Use the otlptracehttp and otlploghttp exporters; they read the endpoint from these variables."
+        case .go: "Use the otlptracehttp and otlploghttp exporters; they read these variables."
         case .node: "Start NodeSDK from @opentelemetry/sdk-node; it reads these variables."
         case .python: "Run your app with opentelemetry-instrument."
         case .java: "Start the JVM with -javaagent:opentelemetry-javaagent.jar."

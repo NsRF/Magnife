@@ -37,7 +37,7 @@ final class FailureNotifier {
     @ObservationIgnored var pendingIDs: [String] = []
     @ObservationIgnored var drainTask: Task<Void, Never>?
 
-    init(poster: any NotificationPosting = AppDefaults.isTestRun ? FakeNotificationPoster() : SystemNotificationPoster(),
+    init(poster: any NotificationPosting = AppDefaults.usesFakeNotifications ? FakeNotificationPoster() : SystemNotificationPoster(),
          defaults: UserDefaults = AppDefaults.shared, window: TimeInterval = FailureCoalescer.defaultWindow) {
         self.poster = poster
         self.defaults = defaults

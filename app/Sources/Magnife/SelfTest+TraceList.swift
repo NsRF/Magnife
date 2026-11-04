@@ -28,6 +28,17 @@ extension SelfTest {
         // permission. (Walking SwiftUI's accessibility elements in process
         // crashed the app later, in its next render.)
         guard let failed else { return }
+        // What AppKit serves as the table's accessibility rows, read in
+        // process (AppKit's own elements, never SwiftUI's), so the check
+        // also runs while the screen is locked and the API below shows nothing.
+        _ = await waitUntil(2) { model.listScroller.rowCount == model.traces.count }
+        await model.waitForTraceFindings()
+        if let table = model.listScroller.tableView, let row = model.traces.firstIndex(where: { $0.id == failed.id }) {
+            let served = tableAccessibilityRows(table)
+            check("the trace list's accessibility row for the HTTP 500 trace says its sentence, once",
+                  row < served.count && served[row] == [model.rowAccessibilityLabel(failed)],
+                  "\(row < served.count ? served[row] : [])")
+        }
         guard AXIsProcessTrusted() else {
             print("INFO VoiceOver row check skipped: Magnife has no Accessibility permission")
             return
@@ -58,6 +69,32 @@ extension SelfTest {
             return AXUIElementCopyAttributeValue(window, kAXRoleAttribute as CFString, &role) == .success
                 && role as? String == kAXWindowRole
         }
+    }
+
+    /// The texts of each accessibility row a table serves (descriptions,
+    /// titles and values, children included), in process. AppKit's row and
+    /// cell elements (NSTableRow, NSTableViewCellMockElement) answer only the
+    /// attribute API that AXUIElement reaches, so that is what this asks.
+    static func tableAccessibilityRows(_ table: NSTableView) -> [[String]] {
+        // The attribute API by selector: it is deprecated for implementing
+        // accessibility, not for reading what AppKit serves.
+        let getter = NSSelectorFromString("accessibilityAttributeValue:")
+        func attribute(_ element: NSObject, _ name: NSAccessibility.Attribute) -> Any? {
+            guard element.responds(to: getter) else { return nil }
+            return element.perform(getter, with: name.rawValue)?.takeUnretainedValue()
+        }
+        func texts(_ element: Any, depth: Int) -> [String] {
+            guard depth < 6, let element = element as? NSObject else { return [] }
+            var result: [String] = []
+            for name in [NSAccessibility.Attribute.description, .title, .value] {
+                if let text = attribute(element, name) as? String, !text.isEmpty { result.append(text) }
+            }
+            for child in attribute(element, .children) as? [Any] ?? [] {
+                result += texts(child, depth: depth + 1)
+            }
+            return result
+        }
+        return (table.accessibilityRows() ?? []).map { texts($0, depth: 0) }
     }
 
     /// The texts of each row of this app's tables, through AXUIElement.

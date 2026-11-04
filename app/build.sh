@@ -9,14 +9,16 @@
 #        ./build.sh --open     install, then quit the running copy and open the new one
 #        MAGNIFE_SPARKLE=1 ./build.sh   with Sparkle 2 and Magnife > Check for Updates… (off by
 #                              default; SPARKLE_FEED_URL and SPARKLE_PUBLIC_ED_KEY fill
-#                              Info.plist, placeholders otherwise: docs/RELEASE.md)
+#                              Info.plist, placeholders otherwise; SPARKLE_AUTOMATIC_CHECKS=0|1|ask,
+#                              0 by default: tools/sparkle-bundle.sh, docs/RELEASE.md)
 set -euo pipefail
 here=${0:A:h}
 name="Magnife"
 scratch="$HOME/Library/Developer/$name/build"
 config=release
 [[ " $* " == *" --debug "* ]] && config=debug
-# Sparkle is a package trait: off, SwiftPM neither fetches nor links it.
+# Sparkle is a package trait: off, it is not fetched as a binary, not compiled,
+# not linked (a resolve may still check out its source; docs/RELEASE.md A2).
 sparkle=${MAGNIFE_SPARKLE:-0}
 swift_flags=()
 if [[ $sparkle == 1 ]]; then

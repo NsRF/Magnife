@@ -583,3 +583,121 @@ func TestCloseKeepsWALForReadOnlyReaders(t *testing.T) {
 		t.Fatalf("read-only count = %d, %v", traces, err)
 	}
 }
+
+// The database holds queries, URLs and tokens: its files are the owner's only.
+func TestOpenMakesTheFilesPrivate(t *testing.T) {
+	dir := tmpDir(t)
+	path := filepath.Join(dir, "new", "m.sqlite")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	// As an older helper (or the default umask) left them.
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if err := os.Chmod(path+suffix, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if fi, _ := os.Stat(filepath.Dir(path)); fi.Mode().Perm() != 0o700 {
+		t.Errorf("folder mode %v, want 0700", fi.Mode().Perm())
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if fi, err := os.Stat(path + suffix); err != nil || fi.Mode().Perm() != 0o600 {
+			t.Errorf("%s: %v %v, want 0600", path+suffix, fi.Mode().Perm(), err)
+		}
+	}
+}
+
+// After a burst the -wal file goes back to JournalSizeLimit once the log
+// restarts, and to zero bytes on Close (it stays, for the app's read-only
+// connection: TestCloseKeepsWALForReadOnlyReaders).
+func TestWALShrinksAfterABurst(t *testing.T) {
+	path := filepath.Join(tmpDir(t), "m.sqlite")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	walSize := func() int64 {
+		fi, err := os.Stat(path + "-wal")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fi.Size()
+	}
+	big := `{"blob":"` + strings.Repeat("x", 2000) + `"}`
+	var burst Batch
+	for i := range 15_000 {
+		sp := span("burst"+strconv.Itoa(i/100), strconv.Itoa(i), "", "x", 0, 1, 0)
+		sp.Attributes = big
+		burst.Spans = append(burst.Spans, sp)
+	}
+	commit(t, s, &burst)
+	if n := walSize(); n <= JournalSizeLimit {
+		t.Fatalf("burst left a %d byte -wal; the test needs one over %d", n, JournalSizeLimit)
+	}
+	for i := range 5 {
+		commit(t, s, &Batch{Spans: []Span{span("small", strconv.Itoa(i), "", "x", 0, 1, 0)}})
+	}
+	if n := walSize(); n > JournalSizeLimit {
+		t.Fatalf("-wal is %d bytes after small commits, want at most %d", n, JournalSizeLimit)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if n := walSize(); n != 0 {
+		t.Fatalf("-wal is %d bytes after Close, want 0", n)
+	}
+}
+
+func TestBatchSplit(t *testing.T) {
+	var b Batch
+	for i := range 25 {
+		b.Spans = append(b.Spans, span("t", strconv.Itoa(i), "", "x", 0, 1, 0))
+	}
+	b.Logs = make([]Log, 7)
+	var sizes []int
+	for _, c := range b.Split(10) {
+		if len(c.Spans) > 0 && len(c.Logs) > 0 {
+			t.Fatal("a chunk mixes spans and logs")
+		}
+		sizes = append(sizes, c.Len())
+	}
+	if !reflect.DeepEqual(sizes, []int{10, 10, 5, 7}) {
+		t.Fatalf("chunk sizes %v", sizes)
+	}
+	if got := b.Split(0); len(got) != 1 || got[0] != &b {
+		t.Fatal("Split(0) should return the batch itself")
+	}
+}
+
+// One request larger than MaxRecords commits in several transactions of at
+// most MaxRecords, not one long one.
+func TestWriterSplitsALargeSubmit(t *testing.T) {
+	s := openTest(t)
+	ev := newEvents()
+	w := NewWriter(s, 86400, ev)
+	w.MaxRecords = 10
+	w.MaxDelay = time.Hour
+	w.Start()
+	var b Batch
+	for i := range 35 {
+		b.Spans = append(b.Spans, span("big", strconv.Itoa(i), "", "x", 0, 1, 0))
+	}
+	if err := w.Submit(t.Context(), &b); err != nil {
+		t.Fatal(err)
+	}
+	w.Close()
+	var sizes []int
+	for _, r := range ev.batches {
+		sizes = append(sizes, r.Spans)
+	}
+	if !reflect.DeepEqual(sizes, []int{10, 10, 10, 5}) {
+		t.Fatalf("commits %v, want 10, 10, 10, 5", sizes)
+	}
+}

@@ -7,7 +7,12 @@
 #       copies the framework into Contents/Frameworks and adds the SU keys to
 #       Contents/Info.plist: SUFeedURL and SUPublicEDKey from SPARKLE_FEED_URL
 #       and SPARKLE_PUBLIC_ED_KEY (placeholders when unset, so the updater does
-#       not start; UpdaterController), and SUEnableAutomaticChecks false.
+#       not start; UpdaterController), and SUEnableAutomaticChecks from
+#       SPARKLE_AUTOMATIC_CHECKS: unset or 0, false (no background checks:
+#       local builds); 1, true (a daily check, as docs/MVP.md's "atualizações
+#       automáticas" asks of a release); ask, no key, so Sparkle asks people on
+#       the second launch. The release build's value is the owner's decision
+#       (docs/RELEASE.md, B2).
 #   sparkle-bundle.sh --sign <identity> <Magnife.app>
 #       signs Sparkle's code inside out (Sparkle's docs for builds outside
 #       Xcode), before the caller signs the app around it.
@@ -38,8 +43,13 @@ plist="$app/Contents/Info.plist"
 # Placeholders until the owner has a feed and keys (docs/RELEASE.md, Sparkle).
 plutil -insert SUFeedURL -string "${SPARKLE_FEED_URL:-__SPARKLE_FEED_URL__}" "$plist"
 plutil -insert SUPublicEDKey -string "${SPARKLE_PUBLIC_ED_KEY:-__SPARKLE_PUBLIC_ED_KEY__}" "$plist"
-# No background checks, and no "check automatically?" question on the second launch.
-plutil -insert SUEnableAutomaticChecks -bool NO "$plist"
+case "${SPARKLE_AUTOMATIC_CHECKS:-0}" in
+  0) # No background checks, and no "check automatically?" question on the second launch.
+     plutil -insert SUEnableAutomaticChecks -bool NO "$plist" ;;
+  1) plutil -insert SUEnableAutomaticChecks -bool YES "$plist" ;;
+  ask) ;;
+  *) echo "error: SPARKLE_AUTOMATIC_CHECKS is 0, 1 or ask, not '$SPARKLE_AUTOMATIC_CHECKS'" >&2; exit 1 ;;
+esac
 if [[ -z "${SPARKLE_FEED_URL:-}" || -z "${SPARKLE_PUBLIC_ED_KEY:-}" ]]; then
   echo "note: no SPARKLE_FEED_URL / SPARKLE_PUBLIC_ED_KEY; Check for Updates… stays disabled in this build"
 fi
