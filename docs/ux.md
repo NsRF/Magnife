@@ -79,7 +79,7 @@ Shown with ⌘F or the Filter button, above the list of the current view; Esc or
 Every action has a menu item. Items that do not apply are disabled, not hidden, except where noted.
 
 **Magnife**
-- About Magnife
+- About Magnife (the standard About panel; its credits read "Made by Nasser Farhat" and "GitHub · LinkedIn", links to github.com/NsRF and linkedin.com/in/nasserfarhat that open in the browser)
 - Check for Updates… (only in builds with the Sparkle trait, `MAGNIFE_SPARKLE=1`; absent in the default build; disabled until Info.plist has a real feed and key; no keyboard shortcut, like Apple's apps)
 - —
 - Settings… ⌘,

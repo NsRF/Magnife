@@ -5,6 +5,7 @@ import MagnifeKit
 /// builds with the Sparkle trait, and no build starts the updater in a test run.
 extension SelfTest {
     static func checkUpdates() {
+        checkAbout()
         let item = menuItem(UpdaterController.checkTitle)
         let sparkleKeys = [UpdateConfiguration.feedURLKey, UpdateConfiguration.publicKeyKey,
                            UpdateConfiguration.automaticChecksKey].filter { Bundle.main.object(forInfoDictionaryKey: $0) != nil }
@@ -33,5 +34,21 @@ extension SelfTest {
         check("Info.plist has a feed URL and a public key (placeholders until there are real ones)",
               Bundle.main.object(forInfoDictionaryKey: UpdateConfiguration.feedURLKey) is String
                 && Bundle.main.object(forInfoDictionaryKey: UpdateConfiguration.publicKeyKey) is String)
+    }
+
+    /// About Magnife: first in the Magnife menu, with the author's links in its credits.
+    static func checkAbout() {
+        let about = menuItem("About Magnife")
+        check("About Magnife is the first item of the Magnife menu",
+              about != nil && about === NSApp.mainMenu?.items.first?.submenu?.items.first)
+        let credits = AboutPanel.credits()
+        var links: [URL] = []
+        credits.enumerateAttribute(.link, in: NSRange(location: 0, length: credits.length)) { value, _, _ in
+            if let url = value as? URL { links.append(url) }
+        }
+        check("the About panel's credits link GitHub and LinkedIn",
+              links.map(\.absoluteString) == ["https://github.com/NsRF", "https://www.linkedin.com/in/nasserfarhat/"],
+              "\(links)")
+        check("the About panel's credits name the author", credits.string.hasPrefix("Made by Nasser Farhat"))
     }
 }

@@ -42,6 +42,10 @@ struct MagnifeApp: App {
         .commands {
             SidebarCommands()
             ToolbarCommands()
+            // The standard About panel with the author's links (AboutPanel.swift).
+            CommandGroup(replacing: .appInfo) {
+                Button("About Magnife") { AboutPanel.show() }
+            }
             #if MAGNIFE_SPARKLE
             // After About Magnife (docs/ux.md, Menu bar). Builds without the
             // Sparkle trait have no such item.
