@@ -70,6 +70,11 @@
 #                  the app is then signed without the hardened runtime: library
 #                  validation refuses an ad hoc framework in an ad hoc app.
 set -euo pipefail
+# SwiftUI's macros ship with Xcode, not the Command Line Tools: when
+# xcode-select points at the latter and Xcode is installed, build with Xcode.
+if [[ -z "${DEVELOPER_DIR:-}" && "$(xcode-select -p 2>/dev/null)" == *CommandLineTools* && -d /Applications/Xcode.app ]]; then
+  export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+fi
 
 name="Magnife"
 # One install at a time per build folder: two runs at once shared the SwiftPM

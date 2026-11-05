@@ -12,6 +12,11 @@
 #                              Info.plist, placeholders otherwise; SPARKLE_AUTOMATIC_CHECKS=0|1|ask,
 #                              0 by default: tools/sparkle-bundle.sh, docs/RELEASE.md)
 set -euo pipefail
+# SwiftUI's macros ship with Xcode, not the Command Line Tools: when
+# xcode-select points at the latter and Xcode is installed, build with Xcode.
+if [[ -z "${DEVELOPER_DIR:-}" && "$(xcode-select -p 2>/dev/null)" == *CommandLineTools* && -d /Applications/Xcode.app ]]; then
+  export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+fi
 here=${0:A:h}
 name="Magnife"
 scratch="$HOME/Library/Developer/$name/build"
