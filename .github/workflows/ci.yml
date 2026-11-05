@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ingest:
+    name: Go helper
+    # The busy-port checks read macOS's lsof and ps output.
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ingest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ingest/go.mod
+          cache-dependency-path: ingest/go.sum
+      - name: The helper's schema is a byte-identical copy of the contract
+        run: cmp ../docs/schema.sql internal/store/schema.sql
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+
+  app:
+    name: MagnifeKit
+    # The app targets macOS 26 and Swift 6.4 (Xcode 27).
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: swift --version
+      - run: swift test

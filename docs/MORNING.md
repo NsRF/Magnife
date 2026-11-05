@@ -229,7 +229,7 @@ All of these are in the [PROGRESS.md](PROGRESS.md) "Verified [U] items" table.
 - **134:** list badges show the icon alone at the default width; the word appears when the column is wide enough. With decision 171, the word is orange.
 - **194, 196:** Sparkle is behind the `MAGNIFE_SPARKLE` package trait and is off by default. The updater starts only with a real HTTPS feed and key, never in test runs, and automatic checks are off.
 - **195 and RELEASE.md A1:** ad hoc signing for everything built tonight. Ad hoc Sparkle builds drop the hardened runtime. Developer ID, notarization and Sparkle EdDSA keys are your steps (RELEASE.md B1-B5). No keys or certificates were created.
-- **Your keychain** also holds a Developer ID certificate for another team (ALLFARM). It was never used. Do not sign Magnife with it (RELEASE.md B1).
+- **Your keychain** also holds a Developer ID certificate for another team. It was never used. Do not sign Magnife with it (RELEASE.md B1).
 - **200:** the receiver also accepts Host `host.docker.internal`, for Docker Desktop.
 
 ## 6. Commits
