@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"magnife/ingest/internal/receiver"
 	"magnife/ingest/internal/store"
 )
 
@@ -39,6 +40,20 @@ type prunedLine struct {
 	Traces int64  `json:"traces"`
 	Spans  int64  `json:"spans"`
 	Logs   int64  `json:"logs"`
+}
+
+type importedLine struct {
+	Type   string   `json:"type"`
+	Path   string   `json:"path"`
+	Spans  int      `json:"spans"`
+	Logs   int      `json:"logs"`
+	Traces []string `json:"traces"`
+}
+
+type importFailedLine struct {
+	Type    string `json:"type"`
+	Path    string `json:"path"`
+	Message string `json:"message"`
 }
 
 type errorLine struct {
@@ -76,6 +91,18 @@ func (e *emitter) ports(grpc, http portState) {
 }
 
 func (e *emitter) errorf(msg string) { e.emit(errorLine{Type: "error", Message: msg}) }
+
+func (e *emitter) imported(path string, r receiver.ImportResult) {
+	traces := r.Traces
+	if traces == nil {
+		traces = []string{}
+	}
+	e.emit(importedLine{Type: "imported", Path: path, Spans: r.Spans, Logs: r.Logs, Traces: traces})
+}
+
+func (e *emitter) importFailed(path, msg string) {
+	e.emit(importFailedLine{Type: "import_failed", Path: path, Message: msg})
+}
 
 // Batch, Pruned and Error implement store.Events.
 

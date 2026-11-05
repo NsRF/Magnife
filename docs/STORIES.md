@@ -376,6 +376,19 @@ Acceptance:
 - [manual] The app icon follows the macOS icon grid and reads at 16 pt in Finder and the Dock.
 Status: done (manual line pending owner: checked in Finder's icon at 16 to 128 pt, never seen in the Dock or Launchpad; docs/RELEASE.md B9)
 
+## v0.2 Share
+
+### S-033 Share a trace as a file
+As the user, I save a trace to a file and send it to a teammate, who opens it in their Magnife and sees what I saw.
+Depends: S-005, S-011
+Acceptance:
+- [unit] File > Export Trace… (⇧⌘E, and Export Trace… on a trace's context menu) writes every span and log of the trace, with their resources, as OTLP JSON Lines: one ExportTraceServiceRequest line, then one ExportLogsServiceRequest line when the trace has logs. The file name comes from the root service and route.
+- [unit] The helper imports the export with the same rows the original export request stored: ids, times, kinds, statuses, attributes of every type, events, links and logs (one golden file, written by the Swift test and read by the Go test).
+- [unit] File > Import Traces… (⇧⌘I, or a file dropped on the window) also reads one OTLP JSON request per file and the Collector file exporter's JSON Lines; metrics lines are skipped.
+- [self] The imported trace opens with its spans, findings and logs once the helper says it is committed; the helper stays the only writer.
+- [unit] A file that is missing, empty, not JSON, not OTLP, nested too deeply or larger than 64 MB stores nothing, and the alert says why in one sentence.
+Status: done
+
 ## Seed data
 Snapshots use a fixture of OTLP payloads replayed into the helper, so every value comes from telemetry the app receives:
 - Services: `checkout-api` (.NET), `orders` (Go), `web` (Node).
@@ -393,7 +406,7 @@ Snapshots use a fixture of OTLP payloads replayed into the helper, so every valu
 
 ## Later
 - v0.2: metrics with charts; side-by-side comparison of two traces.
-- v0.2: export and import traces as files.
+- ~~v0.2: export and import traces as files.~~ Done as S-033.
 - v0.3: AI agent view (calls, tools, tokens, cost).
 - v0.3: MCP server for agents to query local traces.
 - v0.4: forwarding to a remote backend (OTLP proxy).

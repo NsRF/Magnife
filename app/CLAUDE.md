@@ -273,6 +273,14 @@ this app starts the helper and reads its database. No server, no accounts.
   (`restoreLayout`). Never write the real domain from a test run.
 - App-owned settings (retention, Settings tab, accent) live in UserDefaults,
   never in the database.
+- Sharing (S-033, `AppModel+Sharing.swift`): Export Trace… reads the trace
+  with `TelemetryReader.exportTrace` (spans, logs, resources in one read) and
+  `TraceExport` (MagnifeKit) writes OTLP JSON Lines; its output is the golden
+  file `../ingest/internal/receiver/testdata/magnife-export.jsonl`, which the
+  Go import test reads (`MAGNIFE_UPDATE_GOLDEN=1 swift test` rewrites it).
+  Import Traces… (and files dropped on the window) never write: they send
+  `HelperCommand.importFile` and act on `imported` / `import_failed` only for
+  paths in `pendingImports`. `APP_SELFTEST_ONLY=sharing` runs it end to end.
 
 ## Layout
 

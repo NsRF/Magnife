@@ -26,6 +26,11 @@ struct ContentView: View {
         }
         // Search (S-017) floats over every column.
         .overlay { SearchOverlay() }
+        // OTLP JSON files dropped anywhere on the window are imported (v0.2).
+        .dropDestination(for: URL.self) { urls, _ in
+            model.importTraces(from: urls)
+            return !urls.isEmpty
+        }
         // Closed, the list takes the focus back, so the arrow keys work at once (S-022).
         .sheet(isPresented: Binding(get: { model.showsSaveFilterSheet }, set: { if !$0 { model.cancelSaveFilter() } }),
                onDismiss: { model.focusListAfterSheet() }) {

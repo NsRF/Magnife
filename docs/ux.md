@@ -95,6 +95,7 @@ Every action has a menu item. Items that do not apply are disabled, not hidden, 
 - Save Filter As… ⇧⌘S (only while a saved filter is selected)
 - Rename Filter… (selected saved filter)
 - Delete Filter ⌘⌫ (selected saved filter; enabled only while the sidebar has focus, so ⌘⌫ still edits text fields)
+- Import Traces… ⇧⌘I (OTLP JSON files; also by dropping files on the window) · Export Trace… ⇧⌘E (the selected trace, S-033)
 - —
 - Close Window ⌘W
 
@@ -155,7 +156,7 @@ The default "Magnife Help" item is removed; there is no help book in v0.1.
 
 | Where | Items |
 | --- | --- |
-| Trace row | Copy Trace ID |
+| Trace row | Copy Trace ID, —, Export Trace… |
 | Waterfall row | Copy Span ID, —, Expand All Spans, Collapse All Spans |
 | Log row (Logs view, Trace Logs) | Open Trace, Copy Body, Copy Trace ID |
 | Saved filter row | Rename Filter…, Delete Filter |
@@ -221,6 +222,7 @@ Menu shortcuts work anywhere in the main window unless focus is in a text field 
 | ⌘O | Open Trace | Log selected |
 | ⌘C | Copy the focused item (text, trace ID, span ID, log body) | Everywhere |
 | ⌘⌫ | Delete Filter | Sidebar, saved filter selected |
+| ⇧⌘I / ⇧⌘E | Import Traces… / Export Trace… | Anywhere / a trace selected |
 | ⌘0 | Show the main window | App |
 | ⌘, | Settings | App |
 | ⌘W, ⌘M, ⌘H, ⌥⌘H, ⌘Q, ⌘Z, ⇧⌘Z, ⌃⌘S, ⌃⌘F | System meanings | App |
@@ -459,7 +461,7 @@ UX:
 
 Things: Finding, Slow SQL, N+1, HTTP Error, Filters, Filter Bar, Condition, Any Field, Saved Filter, Search, Span Detail, Trace Logs, Log Detail, Level (TRACE, DEBUG, INFO, WARN, ERROR, FATAL), Body, All Services, Traces with errors, Recent Errors, Database size, Edited.
 
-Actions: Pause, Resume, Search…, Show Filter Bar / Hide Filter Bar, Clear Filters, Apply as Filter, Save Filter… / Save Filter As…, Rename Filter…, Delete Filter, Open Trace, Show Newest Traces, Expand All Spans / Collapse All Spans, Show Span Detail / Hide Span Detail, Copy Trace ID, Copy Span ID, Copy Body, Show Environment Variables, Open Magnife, Show in Finder, Open Settings, Open System Settings, Delete (retention dialog).
+Actions: Pause, Resume, Search…, Show Filter Bar / Hide Filter Bar, Clear Filters, Apply as Filter, Save Filter… / Save Filter As…, Rename Filter…, Delete Filter, Open Trace, Show Newest Traces, Expand All Spans / Collapse All Spans, Show Span Detail / Hide Span Detail, Copy Trace ID, Copy Span ID, Copy Body, Import Traces…, Export Trace…, Show Environment Variables, Open Magnife, Show in Finder, Open Settings, Open System Settings, Delete (retention dialog).
 
 Settings: "Keep traces and logs for", "Database size", "Show Magnife in the menu bar", "Notify me when a trace has an error".
 

@@ -60,7 +60,7 @@ stdout carries only protocol lines, one JSON object per line, each written in on
 - `{"type":"pruned","traces":..,"spans":..,"logs":..}` after a pruning pass that deleted something.
 - `{"type":"error","message":"..."}` for a problem the app should show.
 
-stdin takes `retention <seconds>`, `prune` and `retry`; anything else (including lines over 4 KiB) is logged on stderr and ignored. EOF means exit: the helper stops the servers, commits the queued batches, closes the database and exits 0, normally in a few milliseconds. It always exits within a second: batches still queued 700 ms after EOF (only possible during a flood that filled the queue) are dropped, and the count is logged on stderr.
+stdin takes `retention <seconds>`, `prune`, `retry` and `import <absolute path>` (an OTLP JSON file, one request or one per line, answered by an `imported` or `import_failed` line once it is committed or refused); anything else (including lines over 4 KiB) is logged on stderr and ignored. EOF means exit: the helper stops the servers, commits the queued batches, closes the database and exits 0, normally in a few milliseconds. It always exits within a second: batches still queued 700 ms after EOF (only possible during a flood that filled the queue) are dropped, and the count is logged on stderr.
 
 ## How it works
 

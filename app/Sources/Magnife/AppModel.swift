@@ -419,6 +419,9 @@ final class AppModel {
     @ObservationIgnored var databaseSizeTask: Task<Void, Never>?
 
     var supervisor: HelperSupervisor?
+    /// Files this model asked the helper to import (AppModel+Sharing.swift):
+    /// only their answers open a trace or show an alert.
+    @ObservationIgnored var pendingImports: Set<String> = []
     /// Sees every helper event before the model handles it (self-test timing).
     @ObservationIgnored var onHelperEvent: ((SupervisorEvent) -> Void)?
     var quietStartTask: Task<Void, Never>?

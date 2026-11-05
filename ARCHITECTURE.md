@@ -7,7 +7,7 @@ apps ──OTLP──> ingest/ (Go helper, magnife-ingest) ──writes──> m
                     │ stdout JSON lines: ports, batch, pruned, error
                     v
                app/ (SwiftUI, Magnife.app) ──reads (GRDB, read-only)──> magnife.sqlite
-                    │ stdin: retention, prune, retry; EOF = exit
+                    │ stdin: retention, prune, retry, import <file>; EOF = exit
 ```
 
 ## Targets and layers
@@ -40,6 +40,10 @@ carry the seq they read; the rules that drop an older result live in value types
 (`TraceListState.applying` for the list) or next to the read (`updated_seq` for the
 open trace). Values shown together come from one `pool.read` (one WAL snapshot):
 the open trace's row, waterfall spans and findings are `TelemetryReader.openTrace`. Where each finding is (`FindingPlaces.build`, pure) is worked out from that tree after the read; the status messages it quotes under an HTTP Error come from one more read (`TelemetryReader.placedFindings`), which can only be newer.
+Sharing (v0.2) keeps the single writer: Export Trace… is a read
+(`TelemetryReader.exportTrace` -> `TraceExport`, OTLP JSON Lines), and Import
+Traces… asks the helper to store a file (`import <path>`), which it decodes
+with the receiver's own code and answers once committed.
 Whether a refresh came from the helper's batches (and so is paced) is the
 task-local `RefreshPacing.isBatch`, never a stored flag, since refreshes overlap.
 

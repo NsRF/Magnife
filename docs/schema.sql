@@ -208,8 +208,19 @@ CREATE TABLE IF NOT EXISTS attribute_keys (
 --       After a pruning pass that deleted anything.
 --   {"type":"error","message":"..."}
 --       A problem the app should show (for example the database cannot open).
+--   {"type":"imported","path":"/Users/me/checkout.otlp.jsonl","spans":12,"logs":3,
+--    "traces":["<trace id>", ...]}
+--       After an "import" command, once its records are committed (their batch
+--       lines come first). traces lists the file's distinct trace ids in file
+--       order.
+--   {"type":"import_failed","path":"/Users/me/notes.txt","message":"..."}
+--       An "import" that stored nothing; message is a sentence to show.
 --
 -- stdin: one command per line.
 --   retention <seconds>   set the retention and prune at once
 --   prune                 prune now
 --   retry                 try to bind any busy port again, then send "ports"
+--   import <path>         store the spans and logs of an OTLP JSON file (one
+--                         request, or one per line); <path> is absolute and is
+--                         the rest of the line. Answered by "imported" or
+--                         "import_failed".

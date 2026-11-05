@@ -66,6 +66,13 @@ struct MagnifeApp: App {
                     .keyboardShortcut(.delete, modifiers: .command)
                     .disabled(!menu.savedFilters.canDelete)
                 Divider()
+                // Sharing traces as files (v0.2, AppModel+Sharing.swift).
+                Button("Import Traces…") { delegate.model.importTraces() }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
+                Button("Export Trace…") { delegate.model.exportSelectedTrace() }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .disabled(!menu.hasTraceID)
+                Divider()
             }
             CommandGroup(after: .pasteboard) {
                 Divider()

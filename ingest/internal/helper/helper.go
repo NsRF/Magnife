@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,6 +47,8 @@ const (
 	stopTimeout = 300 * time.Millisecond
 	exitBudget  = 700 * time.Millisecond
 	drainFloor  = 100 * time.Millisecond
+
+	importTimeout = 2 * time.Minute
 )
 
 // endpoint is one port the helper listens on.
@@ -148,6 +151,23 @@ func Run(cfg Config, stdin io.Reader, stdout io.Writer) int {
 	bindAll()
 	w.Prune() // data may have expired while the helper was not running
 
+	// An import reads, decodes and commits a whole file: it runs beside the
+	// command loop, so retention changes and EOF are never kept waiting.
+	importFile := func(path string) {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), importTimeout)
+			defer cancel()
+			res, err := recv.ImportFile(ctx, path)
+			if err != nil {
+				slog.Warn("import failed", "path", path, "err", err)
+				out.importFailed(path, err.Error())
+				return
+			}
+			slog.Info("imported", "path", path, "spans", res.Spans, "logs", res.Logs, "traces", len(res.Traces))
+			out.imported(path, res)
+		}()
+	}
+
 	lines := make(chan string)
 	eof := make(chan struct{})
 	if cfg.NoStdin {
@@ -160,7 +180,7 @@ loop:
 	for {
 		select {
 		case line := <-lines:
-			handleCommand(line, w, bindAll)
+			handleCommand(line, w, bindAll, importFile)
 		case <-eof:
 			slog.Info("stdin closed; exiting")
 			break loop
@@ -221,12 +241,20 @@ func readCommands(stdin io.Reader, lines chan<- string, eof chan<- struct{}) {
 	}
 }
 
-func handleCommand(line string, w *store.Writer, retry func()) {
+func handleCommand(line string, w *store.Writer, retry func(), importFile func(path string)) {
 	fields := strings.Fields(line)
 	if len(fields) == 0 {
 		return
 	}
 	switch {
+	case fields[0] == "import":
+		// The path is the rest of the line, spaces and all.
+		path, _ := strings.CutPrefix(strings.TrimRight(line, "\r\n"), "import ")
+		if !filepath.IsAbs(path) {
+			slog.Warn("ignoring command: import needs an absolute path", "line", line)
+			return
+		}
+		importFile(path)
 	case fields[0] == "retention" && len(fields) == 2:
 		n, err := strconv.ParseInt(fields[1], 10, 64)
 		if err != nil || n <= 0 {

@@ -57,6 +57,8 @@ type Log struct {
 type Batch struct {
 	Spans []Span
 	Logs  []Log
+
+	synced chan struct{} // set on Sync's marker only: closed once all before it is committed
 }
 
 // Len counts records toward the batch size limit.

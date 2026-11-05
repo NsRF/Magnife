@@ -450,7 +450,7 @@ func TestHelperExitsWhenAppIsKilled(t *testing.T) {
 func TestBadCommandsAreIgnored(t *testing.T) {
 	p := start(t, testDB(t))
 	p.ports(t)
-	for _, cmd := range []string{"bogus", strings.Repeat("retention 1 ", 20_000), "retention abc", "retention -5", "retention 0", "prune now", ""} {
+	for _, cmd := range []string{"bogus", strings.Repeat("retention 1 ", 20_000), "retention abc", "retention -5", "retention 0", "prune now", "", "import", "import relative/path.jsonl"} {
 		fmt.Fprintln(p.stdin, cmd)
 	}
 	// Still reading commands, and nothing but protocol lines on stdout.
@@ -462,6 +462,56 @@ func TestBadCommandsAreIgnored(t *testing.T) {
 	case <-p.exited:
 		t.Fatal("helper exited")
 	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// TestImportCommand drives File > Import Traces… as the app does: the
+// helper stores the file, sends its batch lines, then one "imported" line
+// once the traces can be read; a file it cannot read is "import_failed".
+func TestImportCommand(t *testing.T) {
+	db := testDB(t)
+	p := start(t, db)
+	p.ports(t)
+
+	b := sample.NewBatch()
+	now := time.Now()
+	for i, sc := range sample.Scenarios {
+		sc.Add(sample.SeedGen(sc.Name), b, now.Add(-time.Duration(len(sample.Scenarios)-i)*time.Second), 1)
+	}
+	tr, _ := ptraceotlp.NewExportRequestFromTraces(b.Traces).MarshalJSON()
+	lg, _ := plogotlp.NewExportRequestFromLogs(b.Logs).MarshalJSON()
+	path := filepath.Join(t.TempDir(), "shared trace.otlp.jsonl")
+	if err := os.WriteFile(path, append(append(append(tr, '\n'), lg...), '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Fprintf(p.stdin, "import %s\n", path)
+	_, m := p.next(t, "imported", 10*time.Second)
+	if m["path"] != path || int(m["spans"].(float64)) != b.SpanCount() || int(m["logs"].(float64)) != b.LogCount() {
+		t.Fatalf("imported line %v, want %s with %d spans and %d logs", m, path, b.SpanCount(), b.LogCount())
+	}
+	traces := m["traces"].([]any)
+	if len(traces) != 5 { // as TestRetentionCommandPrunes: one scenario sends logs only
+		t.Fatalf("imported %d traces, want 5", len(traces))
+	}
+
+	// The traces are readable when the line arrives.
+	rdb, err := sql.Open("sqlite", "file:"+db+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rdb.Close()
+	var n int
+	if err := rdb.QueryRow(`SELECT count(*) FROM traces WHERE trace_id = ?`, traces[0]).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("first imported trace: %d rows, %v", n, err)
+	}
+
+	missing := filepath.Join(t.TempDir(), "gone.jsonl")
+	fmt.Fprintf(p.stdin, "import %s\n", missing)
+	line, _ := p.next(t, "import_failed", 5*time.Second)
+	want := fmt.Sprintf(`{"type":"import_failed","path":%q,"message":"The file does not exist."}`, missing)
+	if line != want {
+		t.Fatalf("got  %s\nwant %s", line, want)
 	}
 }
 

@@ -98,6 +98,10 @@ extension AppModel {
             refreshDatabaseSize()
         case .helper(.error(let message)):
             helperProblem = ReceiverStatus.problem(message)
+        case .helper(.imported(let imported)):
+            importFinished(imported)
+        case .helper(.importFailed(let path, let message)):
+            importFailed(path: path, message: message)
         case .helper(.unknown):
             break
         case .malformedLine(let line):

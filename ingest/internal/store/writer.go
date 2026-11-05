@@ -89,6 +89,33 @@ func (w *Writer) Submit(ctx context.Context, b *Batch) error {
 	return nil
 }
 
+// Sync waits until every batch submitted before it has been committed (or
+// dropped by a helper told to stop). An import uses it to report its traces
+// only once the app can read them.
+func (w *Writer) Sync(ctx context.Context) error {
+	marker := &Batch{synced: make(chan struct{})}
+	w.mu.RLock()
+	if w.closed {
+		w.mu.RUnlock()
+		return ErrClosed
+	}
+	select {
+	case w.in <- marker:
+	case <-ctx.Done():
+		w.mu.RUnlock()
+		return ctx.Err()
+	}
+	w.mu.RUnlock()
+	select {
+	case <-marker.synced:
+		return nil
+	case <-w.done:
+		return ErrClosed
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // Prune starts a pruning pass now.
 func (w *Writer) Prune() { w.do(func() {}) }
 
@@ -190,6 +217,10 @@ func (w *Writer) run() {
 	// receive handles one read from the queue and reports whether to go on.
 	receive := func(b *Batch, ok bool) bool {
 		switch {
+		case ok && b.synced != nil:
+			flush()
+			close(b.synced)
+			return true
 		case ok && !late():
 			add(b)
 			return true

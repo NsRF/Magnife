@@ -299,6 +299,25 @@ public final class TelemetryReader: Sendable {
         return read.map { SpanDetail(span: $0.0, resource: $0.1, logs: $0.2) }
     }
 
+    /// File > Export Trace… (v0.2): every span and log of the trace with
+    /// their resources, from one read, as OTLP JSON Lines. Nil when the
+    /// trace has no stored spans.
+    @concurrent
+    public func exportTrace(traceID: String) async throws -> TraceExport? {
+        let read = try await pool.read { db -> ([SpanRecord], [LogRecord], [Int64: ResourceRecord]) in
+            let spans = try SpanRecord.fetchAll(db, sql: TelemetrySQL.spansOfTrace, arguments: [traceID])
+            let logs = try LogRecord.fetchAll(db, sql: TelemetrySQL.logsOfTrace, arguments: [traceID])
+            var resources: [Int64: ResourceRecord] = [:]
+            for id in Set(spans.map(\.resourceID)).union(logs.map(\.resourceID)) {
+                resources[id] = try ResourceRecord.fetchOne(db, sql: TelemetrySQL.resourceByID, arguments: [id])
+            }
+            return (spans, logs, resources)
+        }
+        guard !read.0.isEmpty else { return nil }
+        // Encoding happens here, off the main actor.
+        return TraceExport(spans: read.0, logs: read.1, resources: read.2)
+    }
+
     // MARK: Findings (S-023+)
 
     /// The trace that opens or grows (S-005, S-023+): its row, its

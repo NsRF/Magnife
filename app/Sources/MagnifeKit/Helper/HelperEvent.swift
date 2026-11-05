@@ -10,6 +10,10 @@ public enum HelperEvent: Sendable, Equatable {
     case pruned(PrunedEvent)
     /// A problem the app should show.
     case error(message: String)
+    /// An "import" command's file, stored and committed.
+    case imported(ImportedEvent)
+    /// An "import" command that stored nothing, with a sentence to show.
+    case importFailed(path: String, message: String)
     /// A type this app does not know; ignored.
     case unknown(type: String)
 }
@@ -110,8 +114,31 @@ public struct PrunedEvent: Sendable, Equatable, Codable {
     }
 }
 
+public struct ImportedEvent: Sendable, Equatable, Codable {
+    public var path: String
+    public var spans: Int
+    public var logs: Int
+    /// The file's distinct trace ids, in file order.
+    public var traces: [String]
+
+    public init(path: String, spans: Int, logs: Int, traces: [String]) {
+        self.path = path
+        self.spans = spans
+        self.logs = logs
+        self.traces = traces
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        path = try container.decode(String.self, forKey: .path)
+        spans = try container.decodeIfPresent(Int.self, forKey: .spans) ?? 0
+        logs = try container.decodeIfPresent(Int.self, forKey: .logs) ?? 0
+        traces = try container.decodeIfPresent([String].self, forKey: .traces) ?? []
+    }
+}
+
 extension HelperEvent: Decodable {
-    private enum CodingKeys: String, CodingKey { case type, message }
+    private enum CodingKeys: String, CodingKey { case type, message, path }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -121,6 +148,10 @@ extension HelperEvent: Decodable {
         case "batch": self = .batch(try BatchEvent(from: decoder))
         case "pruned": self = .pruned(try PrunedEvent(from: decoder))
         case "error": self = .error(message: try container.decodeIfPresent(String.self, forKey: .message) ?? "")
+        case "imported": self = .imported(try ImportedEvent(from: decoder))
+        case "import_failed":
+            self = .importFailed(path: try container.decode(String.self, forKey: .path),
+                                 message: try container.decodeIfPresent(String.self, forKey: .message) ?? "")
         default: self = .unknown(type: type)
         }
     }
@@ -138,12 +169,22 @@ public enum HelperCommand: Sendable, Equatable {
     case prune
     /// Bind busy ports again, then send "ports".
     case retry
+    /// Store an OTLP JSON file; answered by "imported" or "import_failed".
+    /// The path is absolute and has no line break (`isValidImportPath`).
+    case importFile(path: String)
 
     public var line: String {
         switch self {
         case .retention(let seconds): "retention \(seconds)"
         case .prune: "prune"
         case .retry: "retry"
+        case .importFile(let path): "import \(path)"
         }
+    }
+
+    /// A path the "import" command can carry: absolute, on one line, and
+    /// within the helper's 4,096-byte command limit.
+    public static func isValidImportPath(_ path: String) -> Bool {
+        path.hasPrefix("/") && !path.contains(where: \.isNewline) && path.utf8.count < 4000
     }
 }

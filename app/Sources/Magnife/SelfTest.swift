@@ -69,6 +69,8 @@ enum SelfTest {
                 await checkLaunch(model)
             } else if only == "retention" {
                 await checkRetention(model)
+            } else if only == "sharing" {
+                await checkSharing(model)
             } else if only == "appearance" {
                 await checkAppearance(model)
             } else if only == "updates" {
@@ -98,6 +100,7 @@ enum SelfTest {
                 await checkLogs(model)
                 await checkLogFilters(model)
                 await checkRetention(model)
+                await checkSharing(model)
                 await checkLoad(model)
                 await checkSupervisor()
                 await checkReceiver()

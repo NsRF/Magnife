@@ -77,8 +77,17 @@ struct HelperProtocolTests {
         let error = fromDoc([#"  {"type":"error","message":"..."}"#])
         #expect(try HelperEvent.decode(line: error) == .error(message: "..."))
 
+        let imported = fromDoc([
+            #"  {"type":"imported","path":"/Users/me/checkout.otlp.jsonl","spans":12,"logs":3,"#,
+            #"   "traces":["<trace id>", ...]}"#,
+        ]).replacingOccurrences(of: #""<trace id>", ..."#, with: #""4bf92f3577b34da6a3ce929d0e0e4736""#)
+        #expect(try HelperEvent.decode(line: imported) == .imported(ImportedEvent(
+            path: "/Users/me/checkout.otlp.jsonl", spans: 12, logs: 3, traces: ["4bf92f3577b34da6a3ce929d0e0e4736"])))
+        let importFailed = fromDoc([#"  {"type":"import_failed","path":"/Users/me/notes.txt","message":"..."}"#])
+        #expect(try HelperEvent.decode(line: importFailed) == .importFailed(path: "/Users/me/notes.txt", message: "..."))
+
         // stdin commands and launch flags, as the contract spells them.
-        for command in ["retention <seconds>", "prune", "retry"] { #expect(Schema.sql.contains("--   " + command)) }
+        for command in ["retention <seconds>", "prune", "retry", "import <path>"] { #expect(Schema.sql.contains("--   " + command)) }
         #expect(HelperCommand.retention(seconds: 60).line == "retention 60")
         #expect(Schema.sql.contains("Contents/Helpers/magnife-ingest --db <path> --grpc 127.0.0.1:4317"))
         #expect(Schema.sql.contains("--http 127.0.0.1:4318 --retention <seconds>"))
@@ -104,10 +113,27 @@ struct HelperProtocolTests {
         #expect(busy.busyPorts.first?.owner == nil)
     }
 
+    @Test("import paths are absolute, on one line, and fit the helper's command limit")
+    func importPaths() {
+        #expect(HelperCommand.isValidImportPath("/Users/me/My Traces/checkout 4bf92f35.jsonl"))
+        #expect(!HelperCommand.isValidImportPath("relative/file.jsonl"))
+        #expect(!HelperCommand.isValidImportPath("/Users/me/two\nlines.jsonl"))
+        #expect(!HelperCommand.isValidImportPath("/" + String(repeating: "a", count: 4000)))
+    }
+
+    @Test("the Go helper's import lines, an empty trace list included")
+    func goImportEncodings() throws {
+        #expect(try HelperEvent.decode(line: #"{"type":"imported","path":"/tmp/logs.jsonl","spans":0,"logs":4,"traces":[]}"#)
+                == .imported(ImportedEvent(path: "/tmp/logs.jsonl", spans: 0, logs: 4, traces: [])))
+        #expect(try HelperEvent.decode(line: #"{"type":"import_failed","path":"/tmp/x","message":"The file is empty."}"#)
+                == .importFailed(path: "/tmp/x", message: "The file is empty."))
+    }
+
     @Test("commands are single lines")
     func commands() {
         #expect(HelperCommand.retention(seconds: 3600).line == "retention 3600")
         #expect(HelperCommand.prune.line == "prune")
+        #expect(HelperCommand.importFile(path: "/Users/me/My Traces/a b.jsonl").line == "import /Users/me/My Traces/a b.jsonl")
         #expect(HelperCommand.retry.line == "retry")
     }
 

@@ -121,6 +121,8 @@ final class TraceTableCoordinator: LiveTableCoordinator {
 
     override func menuItems(row: Int) -> [NSMenuItem] {
         let id = rows[row].traceID
-        return [ActionMenuItem.make("Copy Trace ID") { [model] in model.copyTraceID(id) }]
+        return [ActionMenuItem.make("Copy Trace ID") { [model] in model.copyTraceID(id) },
+                .separator(),
+                ActionMenuItem.make("Export Trace…") { [model] in model.exportTrace(id) }]
     }
 }
