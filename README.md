@@ -7,7 +7,7 @@
 A native macOS app that receives OTLP from what you run on your own Mac and shows traces and logs at once.
 No Docker, no Jaeger, no vendor account.
 
-[Why](#why) · [Features](#features) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Engineering](#engineering-notes) · [Roadmap](#roadmap)
+[Why](#why) · [Features](#features) · [Install](#install) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Engineering](#engineering-notes) · [Roadmap](#roadmap)
 
 <img src="docs/images/trace-detail-http-error.png" alt="Magnife showing a failed checkout trace: the trace list, the waterfall with three HTTP errors, and a finding that names the duplicate-key error in checkout-api" width="900">
 
@@ -50,9 +50,25 @@ It is for backend and full-stack developers on a Mac who instrument with OpenTel
   </tr>
 </table>
 
+## Install
+
+Requires macOS 26 or later, on Apple silicon or Intel.
+
+**One line** (downloads the latest release, checks its SHA-256, installs to `/Applications` and opens it):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/NsRF/Magnife/main/scripts/install.sh | bash
+```
+
+**Disk image**: download [**Magnife.dmg**](https://github.com/NsRF/Magnife/releases/latest/download/Magnife.dmg) from the [latest release](https://github.com/NsRF/Magnife/releases/latest), open it and drag Magnife to Applications.
+
+Releases are not notarized yet, so macOS stops a DMG copy the first time it opens. Open it once, then go to **System Settings > Privacy & Security** and click **Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/Magnife.app`). The install script needs neither step.
+
+To uninstall, quit Magnife and delete `/Applications/Magnife.app` and `~/Library/Application Support/Magnife`.
+
 ## Quick start
 
-Requirements: macOS 26 or later, Xcode 27 (Swift 6.4) and Go 1.27 (`brew install go`).
+Requirements to build from source: macOS 26 or later, Xcode 27 (Swift 6.4) and Go 1.27 (`brew install go`). With an [installed release](#install), skip the build and point your service at it as below.
 
 ```sh
 git clone https://github.com/NsRF/Magnife.git
@@ -128,7 +144,7 @@ It was built spec-first: [brief](docs/BRIEF.md) → [MVP spec](docs/MVP.md) → 
 ### Known issues
 
 - At a sustained 5,000 spans/s, switching between Traces and Logs takes 95–137 ms against a 100 ms budget (story S-030, tracked in [PROGRESS.md](docs/PROGRESS.md#blocked)).
-- There is no notarized download yet. Build from source. [docs/RELEASE.md](docs/RELEASE.md) lists the Developer ID, notarization and Sparkle steps.
+- Releases are signed ad hoc, not notarized: a DMG downloaded with a browser needs **Open Anyway** once (see [Install](#install)). [docs/RELEASE.md](docs/RELEASE.md) lists the Developer ID, notarization and Sparkle steps.
 
 ## Testing
 

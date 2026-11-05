@@ -154,6 +154,35 @@ lsof -nP -iTCP:47317 -iTCP:47318 -sTCP:LISTEN      # nothing
       `com.nasserfarhat.magnife`: Sparkle starts (`SUHasLaunchedBefore`) and the
       listener sees no connection.
 
+## A4. GitHub Releases, ad hoc
+
+`scripts/release.sh` builds a universal app (arm64 + x86_64, through
+`scripts/install-local.sh` with `ARCHS`), sets `CFBundleShortVersionString`
+to the version, signs it again and packs, in
+`~/Library/Developer/Magnife/release/<VERSION>/`: `Magnife.dmg`,
+`Magnife.zip`, `SHA256SUMS.txt` and `notes.md`. The asset names carry no
+version, so `https://github.com/NsRF/Magnife/releases/latest/download/Magnife.dmg`
+always names the newest one. It runs on a Mac with Xcode 27, not in CI:
+GitHub's runners have Xcode 26.6.
+
+```sh
+scripts/release.sh <VERSION>                     # package only; look at the DMG
+scripts/release.sh <VERSION> --publish --draft   # tag v<VERSION>, push the tag, draft release
+scripts/release.sh <VERSION> --publish           # the same, published at once
+```
+
+- [ ] A3 on the commit, a clean work tree (`--allow-dirty` packages a dirty one
+      for a local look, never with `--publish`), `gh auth login` done.
+- [ ] `scripts/install.sh` (the one-line install in the README) downloads
+      `Magnife.zip` and `SHA256SUMS.txt` with curl, checks both the checksum
+      and `codesign --verify`, and installs to `/Applications`
+      (`MAGNIFE_INSTALL_DIR`, `MAGNIFE_VERSION`, `MAGNIFE_NO_OPEN=1`). curl
+      sets no quarantine flag, so an ad hoc build opens without a prompt; a
+      browser download of the DMG needs Open Anyway once (the release notes say so).
+- [ ] With `DEV_ID` (B1) the script signs with the Developer ID instead, and
+      with `NOTARY_PROFILE` (B4) it also notarizes and staples the app and the
+      DMG. No Sparkle in these builds: B5 to B7 first.
+
 ---
 
 # Part B — needs the owner

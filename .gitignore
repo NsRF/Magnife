@@ -4,3 +4,9 @@
 *.sqlite-shm
 *.sqlite-wal
 /.night/
+# Local release settings and signing material: never in git (scripts/release.sh)
+/.release.env
+*.p12
+*.p8
+*.cer
+*.certSigningRequest

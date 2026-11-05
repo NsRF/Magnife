@@ -65,6 +65,8 @@
 #   BUILD_DIR      SwiftPM scratch + staging (default ~/Library/Developer/Magnife/install-local);
 #                  one run at a time per BUILD_DIR (a lock on BUILD_DIR/.lock)
 #   HELPER_BIN     use this prebuilt magnife-ingest instead of running ingest/build.sh
+#   ARCHS          build the app for these architectures, e.g. "arm64 x86_64" for a
+#                  universal binary (scripts/release.sh); default: this Mac's only
 #   MAGNIFE_SPARKLE=1   with Sparkle 2 and Magnife > Check for Updates… (off by default;
 #                  SPARKLE_FEED_URL, SPARKLE_PUBLIC_ED_KEY, SPARKLE_AUTOMATIC_CHECKS as in app/build.sh). Ad hoc,
 #                  the app is then signed without the hardened runtime: library
@@ -139,10 +141,15 @@ fi
 lipo -info "$helper_src"
 
 # 2. The app ---------------------------------------------------------------
-step "Building $name ($config)"
+arch_flags=()
+for a in ${=ARCHS:-}; do arch_flags+=(--arch "$a"); done
+swift_flags+=("${arch_flags[@]}")
+step "Building $name ($config${ARCHS:+, ${ARCHS}})"
 swift build -c $config --package-path "$appsrc" --scratch-path "$scratch" "${swift_flags[@]}" 2>&1 \
   | grep -E "error|warning:|Build complete" | grep -v "^\[" || true
-bin="$scratch/$config/$name"
+# A multi-architecture build puts its products elsewhere (apple/Products/Release).
+bin_dir=$(swift build -c $config --package-path "$appsrc" --scratch-path "$scratch" "${swift_flags[@]}" --show-bin-path)
+bin="$bin_dir/$name"
 [[ -x "$bin" ]] || { echo "error: build failed (no $bin)" >&2; exit 1; }
 # swift build can report success while an edited file failed to compile (app/build.sh).
 stale=$(find "$appsrc/Sources" -name '*.swift' -newer "$bin" | head -1)
@@ -163,7 +170,7 @@ cp "$bin" "$staged/Contents/MacOS/$name"
 cp "$helper_src" "$staged/Contents/Helpers/magnife-ingest"
 sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$appsrc/Info.plist.in" > "$staged/Contents/Info.plist"
 if [[ $sparkle == 1 ]]; then
-  "$appsrc/tools/sparkle-bundle.sh" "$scratch/$config/Sparkle.framework" "$staged"
+  "$appsrc/tools/sparkle-bundle.sh" "$bin_dir/Sparkle.framework" "$staged"
 fi
 plutil -lint -s "$staged/Contents/Info.plist"
 car="$appsrc/Resources/Assets.car"
