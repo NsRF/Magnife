@@ -308,7 +308,7 @@ this app starts the helper and reads its database. No server, no accounts.
   `#if MAGNIFE_SPARKLE` guards every Sparkle line. Ad hoc Sparkle builds drop
   the app's hardened runtime (library validation). `APP_SELFTEST_ONLY=updates`
   checks the menu both ways. Release steps: `../docs/RELEASE.md`.
-- `Icon/AppIcon.icon` the app icon (S-032), an Icon Composer file: `lens.svg` (the lens ring and handle) over `bars.svg` (three offset bars, a tiny waterfall) on a deep indigo automatic gradient; both layers turn light lavender in the dark look (`fill-specializations`), so the glyph reads on black. Filled shapes only, drawn by hand (no SF Symbol). `build.sh` compiles it with `tools/make_icon.sh`; `tools/icon_review.sh` renders every look into one PNG. The menu bar glyph (`MenuBarGlyph.drawGlyph`) is the same lens and bars as line art.
+- `Icon/AppIcon.icon` the app icon (S-032), an Icon Composer file: `lens.svg` (the lens ring and handle) over `bars.svg` (three offset bars, a tiny waterfall), both brand yellow #fcdb05, on solid brand purple #8d05fc; the dark look keeps both colors (`fill-specializations`) and translucency is off so the yellow stays true. `docs/brand/` has the 1024 and 512 px renders (ictool) and the social preview (`tools/social_preview.swift`). Filled shapes only, drawn by hand (no SF Symbol). `build.sh` compiles it with `tools/make_icon.sh`; `tools/icon_review.sh` renders every look into one PNG. The menu bar glyph (`MenuBarGlyph.drawGlyph`) is the same lens and bars as line art.
 - `tools/seed.zsh` seeds test databases through the real pipeline
   (docs/STORIES.md, "Seed data"): it starts the bundled helper standalone
   (`--no-stdin`, ports 0) on a fresh /tmp database, runs
@@ -434,4 +434,4 @@ The bama plugin has a skill for each step: `mac-design` (design rules),
 
 ## Git
 
-- Commit after each working change, with a message that says what the user can now do.
+- Commit only when asked

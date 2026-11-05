@@ -1,26 +1,71 @@
 {
-  "fill" : {
-    "automatic-gradient" : "srgb:0.22000,0.19000,0.66000,1.00000"
-  },
-  "groups" : [
+  "groups": [
     {
-      "layers" : [
+      "layers": [
         {
-          "fill-specializations" : [
-            { "appearance" : "dark", "value" : { "solid" : "srgb:0.66000,0.64000,1.00000,1.00000" } }
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.98824,0.85882,0.01961,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.98824,0.85882,0.01961,1.00000"
+              }
+            }
           ],
-          "glass" : true, "image-name" : "lens.svg", "name" : "lens"
+          "glass": true,
+          "image-name": "lens.svg",
+          "name": "lens"
         },
         {
-          "fill-specializations" : [
-            { "appearance" : "dark", "value" : { "solid" : "srgb:0.66000,0.64000,1.00000,1.00000" } }
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.98824,0.85882,0.01961,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.98824,0.85882,0.01961,1.00000"
+              }
+            }
           ],
-          "glass" : true, "image-name" : "bars.svg", "name" : "bars", "opacity" : 0.9
+          "glass": true,
+          "image-name": "bars.svg",
+          "name": "bars",
+          "opacity": 0.9
         }
       ],
-      "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
-      "translucency" : { "enabled" : true, "value" : 0.5 }
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
     }
   ],
-  "supported-platforms" : { "squares" : [ "macOS" ] }
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  },
+  "fill-specializations": [
+    {
+      "value": {
+        "solid": "srgb:0.55294,0.01961,0.98824,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "srgb:0.55294,0.01961,0.98824,1.00000"
+      }
+    }
+  ]
 }

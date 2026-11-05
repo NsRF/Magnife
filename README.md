@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/brand/magnife-icon-512.png" alt="Magnife icon: a yellow magnifying glass over three waterfall bars, on purple" width="128">
+
 # Magnife
 
 **See your OpenTelemetry traces the moment your app sends them.**
