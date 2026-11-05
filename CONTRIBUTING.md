@@ -2,6 +2,8 @@
 
 Thanks for taking a look. Magnife is small on purpose, and a few rules keep it fast and correct.
 
+By taking part you agree to the [code of conduct](CODE_OF_CONDUCT.md). Found a security problem? Please report it privately, as [SECURITY.md](SECURITY.md) explains, not in an issue. Questions are welcome in [Discussions](https://github.com/NsRF/Magnife/discussions).
+
 ## Set up
 
 - macOS 26 or later, Xcode 27 (Swift 6.4), Go 1.27 (`brew install go`).

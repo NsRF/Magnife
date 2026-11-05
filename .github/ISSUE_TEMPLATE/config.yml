@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea to talk through
+    url: https://github.com/NsRF/Magnife/discussions
+    about: Ask how to point an SDK at Magnife, or share an idea before it becomes an issue.
+  - name: Security vulnerability
+    url: https://github.com/NsRF/Magnife/security/advisories/new
+    about: Report it privately, please. See SECURITY.md.

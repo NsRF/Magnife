@@ -1,0 +1,65 @@
+name: Bug report
+description: Something in Magnife does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. A trace file makes most bugs easy to fix: select the trace and use
+        **File > Export Trace…**, then drag the `.jsonl` file into this issue (remove anything private first).
+        Security problems go through [Report a vulnerability](https://github.com/NsRF/Magnife/security/advisories/new), not an issue.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+      placeholder: |
+        1. Sent traces from a .NET app over gRPC
+        2. Opened the trace list
+        3. The waterfall showed …
+    validations:
+      required: true
+  - type: input
+    id: magnife-version
+    attributes:
+      label: Magnife version
+      description: Magnife > About Magnife, or the commit you built.
+      placeholder: "0.1.1"
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: "macOS 26.6"
+    validations:
+      required: true
+  - type: dropdown
+    id: sdk
+    attributes:
+      label: OpenTelemetry SDK
+      multiple: true
+      options:
+        - .NET
+        - Go
+        - Node.js
+        - Python
+        - Java
+        - OpenTelemetry Collector
+        - Other
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: OTLP protocol
+      multiple: true
+      options:
+        - grpc (4317)
+        - http/protobuf (4318)
+        - http/json (4318)
+        - Not sure
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Console.app messages from Magnife or magnife-ingest, a screenshot, or an exported trace.
+      render: text

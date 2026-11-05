@@ -1,0 +1,31 @@
+name: Feature request
+description: An idea that would make Magnife more useful.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+      placeholder: When a trace has hundreds of spans, I can't find …
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like
+      description: How you picture it working. Screens, shortcuts or examples from other tools help.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today
+      description: Workarounds or other tools you use for this.
+  - type: checkboxes
+    id: roadmap
+    attributes:
+      label: Roadmap
+      options:
+        - label: I checked the [roadmap](https://github.com/NsRF/Magnife#roadmap) and existing issues.
+          required: true
