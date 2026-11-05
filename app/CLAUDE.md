@@ -289,7 +289,7 @@ this app starts the helper and reads its database. No server, no accounts.
 - `Sources/MagnifeKit/` records, the reader, the helper protocol and
   supervisor, formatting (durations, relative time, service color slots). No
   SwiftUI. Tests in `Tests/MagnifeKitTests/` (Swift Testing).
-- `Package.swift` a Swift package (Swift 6.4 tools, macOS 26), GRDB 7.
+- `Package.swift` a Swift package (Swift tools 6.3, so CI's Xcode 26 can test MagnifeKit; the app builds with Xcode 27; macOS 26), GRDB 7.
   There is no Xcode project.
 - `build.sh` builds, runs `../ingest/build.sh` when it exists, copies the
   helper into `Contents/Helpers/`, signs inside out (helper, then app; never

@@ -34,7 +34,9 @@ jobs:
 
   app:
     name: MagnifeKit
-    # The app targets macOS 26 and Swift 6.4 (Xcode 27).
+    # The package needs Swift 6.3 (tools version 6.3) and the macOS 26 SDK,
+    # which the runner's newest stable Xcode has. Only the library and its
+    # tests are built: the app itself is built with Xcode 27 (app/build.sh).
     runs-on: macos-26
     defaults:
       run:
@@ -45,4 +47,5 @@ jobs:
         with:
           xcode-version: latest-stable
       - run: swift --version
-      - run: swift test
+      - run: swift build --product MagnifePackageTests
+      - run: swift test --skip-build
