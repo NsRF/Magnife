@@ -64,7 +64,9 @@ curl -fsSL https://raw.githubusercontent.com/NsRF/Magnife/main/scripts/install.s
 
 **Disk image**: download [**Magnife.dmg**](https://github.com/NsRF/Magnife/releases/latest/download/Magnife.dmg) from the [latest release](https://github.com/NsRF/Magnife/releases/latest), open it and drag Magnife to Applications.
 
-Releases are not notarized yet, so macOS stops a DMG copy the first time it opens. Open it once, then go to **System Settings > Privacy & Security** and click **Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/Magnife.app`). The install script needs neither step.
+Releases are signed with a Developer ID and notarized by Apple, so the app opens like any downloaded app.
+
+**Updates**: from 0.1.3, Magnife updates itself through [Sparkle](https://sparkle-project.org). Choose **Magnife > Check for Updates…**, or say yes when it asks on the second launch whether to check automatically. The only network request Magnife makes is that check, to this repository's GitHub Releases, and it makes none until you choose one of those. To move from 0.1.2 or earlier, run the one-line install again.
 
 To uninstall, quit Magnife and delete `/Applications/Magnife.app` and `~/Library/Application Support/Magnife`.
 
@@ -146,7 +148,7 @@ It was built spec-first: [brief](docs/BRIEF.md) → [MVP spec](docs/MVP.md) → 
 ### Known issues
 
 - At a sustained 5,000 spans/s, switching between Traces and Logs takes 95–137 ms against a 100 ms budget (story S-030, tracked in [PROGRESS.md](docs/PROGRESS.md#blocked)).
-- Releases are signed ad hoc, not notarized: a DMG downloaded with a browser needs **Open Anyway** once (see [Install](#install)). [docs/RELEASE.md](docs/RELEASE.md) lists the Developer ID, notarization and Sparkle steps.
+- No Homebrew cask yet: it comes once the project has enough users for the official cask list ([docs/RELEASE.md](docs/RELEASE.md) B8).
 
 ## Testing
 

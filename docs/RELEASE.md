@@ -160,7 +160,8 @@ lsof -nP -iTCP:47317 -iTCP:47318 -sTCP:LISTEN      # nothing
 `scripts/install-local.sh` with `ARCHS`), sets `CFBundleShortVersionString`
 to the version, signs it again and packs, in
 `~/Library/Developer/Magnife/release/<VERSION>/`: `Magnife.dmg`,
-`Magnife.zip`, `SHA256SUMS.txt` and `notes.md`. The asset names carry no
+`Magnife.zip`, `SHA256SUMS.txt`, `notes.md` and, with the update key (B5),
+`appcast.xml`. The app has Sparkle in it (B5 to B7). The asset names carry no
 version, so `https://github.com/NsRF/Magnife/releases/latest/download/Magnife.dmg`
 always names the newest one. It runs on a Mac with Xcode 27, not in CI:
 GitHub's runners have Xcode 26.6.
@@ -169,6 +170,8 @@ GitHub's runners have Xcode 26.6.
 scripts/release.sh <VERSION>                     # package only; look at the DMG
 scripts/release.sh <VERSION> --publish --draft   # tag v<VERSION>, push the tag, draft release
 scripts/release.sh <VERSION> --publish           # the same, published at once
+scripts/release.sh <VERSION> --notes whats-new.md --publish   # with "What's new" (Markdown)
+scripts/release.sh <VERSION> --ad-hoc --allow-dirty           # quick local look, no Developer ID
 ```
 
 - [ ] A3 on the commit, a clean work tree (`--allow-dirty` packages a dirty one
@@ -181,7 +184,13 @@ scripts/release.sh <VERSION> --publish           # the same, published at once
       browser download of the DMG needs Open Anyway once (the release notes say so).
 - [ ] With `DEV_ID` (B1) the script signs with the Developer ID instead, and
       with `NOTARY_PROFILE` (B4) it also notarizes and staples the app and the
-      DMG. No Sparkle in these builds: B5 to B7 first.
+      DMG. Sparkle's code is signed with the same identity and a secure
+      timestamp (`app/tools/sparkle-bundle.sh --sign`).
+- [ ] `--publish` needs the update key in the login keychain (B5): it signs
+      `Magnife.zip` with `sign_update` into `appcast.xml`, checks the
+      signature, uploads `appcast.xml` with the other files, and then reads the
+      live feed back. `SPARKLE_ED_KEY_FILE` + `SPARKLE_PUBLIC_ED_KEY` sign a
+      test package with a throwaway key; never with `--publish`.
 
 ---
 
@@ -218,7 +227,9 @@ export DEV_ID="Developer ID Application: <DEV_ID_NAME> (<TEAM_ID>)"
       clock. Record each release's value:
       `plutil -extract CFBundleVersion raw Magnife.app/Contents/Info.plist`.
 - [ ] Release notes for the version (`Magnife-<VERSION>.html`, used by B6).
-- [ ] **Decide automatic update checks [owner]**. docs/MVP.md promises
+- [x] **Decide automatic update checks [owner]**: `ask` (decided 2026-11-05;
+      `scripts/release.sh` builds with it and fails if `SUEnableAutomaticChecks`
+      is in the release's Info.plist). docs/MVP.md promises
       "atualizações automáticas pelo Sparkle"; local builds turn them off.
       Pick one for the release build (B3) and pass it as
       `SPARKLE_AUTOMATIC_CHECKS`: `1` (Sparkle checks once a day, the
@@ -318,51 +329,65 @@ rm Magnife-notarize.zip                            # has no ticket; never ship i
 
 ## B5. Sparkle EdDSA keys **[owner, once]**
 
+Sparkle's tools come with any Sparkle build; after a `scripts/release.sh` run
+they are in `~/Library/Developer/Magnife/release-build/swiftpm/artifacts/sparkle/Sparkle/bin`.
+
 ```sh
-SPARKLE_BIN=~/Library/Developer/Magnife/build/artifacts/sparkle/Sparkle/bin
-"$SPARKLE_BIN/generate_keys"        # key pair in the login keychain; prints the public key
-"$SPARKLE_BIN/generate_keys" -p     # prints the public key again
+SPARKLE_BIN=~/Library/Developer/Magnife/release-build/swiftpm/artifacts/sparkle/Sparkle/bin
+"$SPARKLE_BIN/generate_keys"        # key pair in the login keychain (account ed25519); prints the public key
+"$SPARKLE_BIN/generate_keys" -p     # prints the public key again (release.sh reads it this way)
 "$SPARKLE_BIN/generate_keys" -x ~/secure/magnife-sparkle-private.key   # backup export
 ```
 
-- [ ] Public key -> `SPARKLE_PUBLIC_ED_KEY` (Info.plist `SUPublicEDKey`). It is
-      public; it may go in a release script.
+- [ ] Public key: `scripts/release.sh` reads it from the keychain into
+      `SUPublicEDKey`. It is public; to pin it, put
+      `SPARKLE_PUBLIC_ED_KEY=<base64>` in `.release.env` (the script then
+      refuses a keychain key that differs).
 - [ ] Private key -> password manager, then delete the exported file. **Losing
       it means no signed update reaches existing installs.** Never commit it;
-      never print it in CI logs.
+      never print it in CI logs. On another Mac: `generate_keys -f <file>`.
 
-## B6. Packaging and appcast **[owner: certificate]**
+## B6. Packaging and appcast **[done by scripts/release.sh]**
 
-```sh
-V=<VERSION>
-rm -rf dmg && mkdir dmg && ditto Magnife.app dmg/Magnife.app && ln -s /Applications dmg/Applications
-hdiutil create -volname "Magnife" -srcfolder dmg -ov -format UDZO "Magnife-$V.dmg"
-codesign --force --timestamp --sign "$DEV_ID" "Magnife-$V.dmg"
-xcrun notarytool submit "Magnife-$V.dmg" --keychain-profile magnife-notary --wait
-xcrun stapler staple "Magnife-$V.dmg"
-spctl --assess --type open --context context:primary-signature -vv "Magnife-$V.dmg"
-ditto -c -k --sequesterRsrc --keepParent Magnife.app "Magnife-$V.zip"    # for Sparkle
-shasum -a 256 "Magnife-$V.dmg" "Magnife-$V.zip"
+`scripts/release.sh` packs, signs and notarizes `Magnife.dmg` and
+`Magnife.zip` (A4), then writes `appcast.xml` itself rather than with
+`generate_appcast` (every release's zip has the same name, and there are no
+deltas): one item with `sparkle:version` (`CFBundleVersion`, a
+`yyyymmddHHMM` stamp that only grows), `sparkle:shortVersionString`,
+`sparkle:minimumSystemVersion` (from `LSMinimumSystemVersion`, 26.0), the
+"What's new" Markdown from `--notes` (`sparkle:format="markdown"`, shown in
+Sparkle's update window), a link to the GitHub release, and the enclosure
+`releases/download/v<VERSION>/Magnife.zip` with `sign_update`'s
+`edSignature` and `length`. Then `xmllint` and `sign_update --verify`.
 
-mkdir -p ~/MagnifeReleases && cp "Magnife-$V.zip" "Magnife-$V.html" ~/MagnifeReleases/
-"$SPARKLE_BIN/generate_appcast" --download-url-prefix "https://<HOST>/releases/" \
-  --link "https://<HOST>/" ~/MagnifeReleases
-```
+- [ ] Each release: write a short `whats-new.md` and pass `--notes`.
+- [ ] The release machine's clock is right (the stamp must grow).
 
-- [ ] Keep every past archive in `~/MagnifeReleases` (deltas come from them).
-- [ ] The new item's `sparkle:version` is greater than the last release's;
-      `sparkle:minimumSystemVersion` is 26.0; it has an `edSignature`.
+## B7. Hosting **[decided: GitHub Releases]**
 
-## B7. Hosting **[owner]**
+- [x] `<HOST>` for updates is GitHub Releases (decided 2026-11-05): every
+      build's `SUFeedURL` is
+      `https://github.com/NsRF/Magnife/releases/latest/download/appcast.xml`,
+      which GitHub redirects to the newest published, non-prerelease
+      release's `appcast.xml`. No domain, Pages site or commit per release.
+      Drafts and prereleases are not "latest": installed copies see a
+      version once it is published as a full release.
+- [ ] Every release from 0.1.3 on must have `appcast.xml`, or the feed 404s
+      (Sparkle then shows "update error" on a manual check). `--publish`
+      uploads it; a release made by hand needs it too. To fix a feed:
+      `gh release upload v<VERSION> appcast.xml --clobber`.
+- [ ] `--publish` reads the feed back; by hand:
+      `curl -sL https://github.com/NsRF/Magnife/releases/latest/download/appcast.xml`.
+- [ ] Never change the feed URL: it is baked into every installed copy. A
+      domain later can host the website, not the feed.
 
-- [ ] Choose `<HOST>` (MVP open decision: domain, handles, a USPTO search for
-      "Magnife"). HTTPS is required (Sparkle and `UpdateConfiguration`), with
-      stable URLs and a correct `Content-Length`: GitHub Releases + Pages,
-      S3/CloudFront, or Cloudflare R2. The feed URL is baked into every build.
-- [ ] Upload the DMG, the zip and the notes, then `appcast.xml` last.
-- [ ] `curl -sI https://<HOST>/appcast.xml` and each archive URL: 200, HTTPS.
+## B8. Homebrew cask **[later: after more stars]**
 
-## B8. Homebrew cask **[owner: GitHub repo]**
+Deferred (2026-11-05) until the project has enough users for the official
+homebrew-cask list, which needs a notable app; an own tap is the fallback.
+The cask below needs its URLs updated to GitHub Releases
+(`https://github.com/NsRF/Magnife/releases/download/v#{version}/Magnife.dmg`,
+homepage `https://github.com/NsRF/Magnife`, livecheck on the appcast URL of B7).
 
 Start with an own tap; notarization is mandatory either way (Homebrew
 quarantines downloads). `Casks/magnife.rb` in `<GH_USER>/homebrew-tap`:

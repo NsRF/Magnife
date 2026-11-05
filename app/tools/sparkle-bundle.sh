@@ -15,7 +15,8 @@
 #       (docs/RELEASE.md, B2).
 #   sparkle-bundle.sh --sign <identity> <Magnife.app>
 #       signs Sparkle's code inside out (Sparkle's docs for builds outside
-#       Xcode), before the caller signs the app around it.
+#       Xcode), before the caller signs the app around it. Any identity but
+#       "-" (ad hoc) also gets a secure timestamp, for notarization.
 #
 # Never generates keys: the EdDSA key pair is the owner's (docs/RELEASE.md).
 set -euo pipefail
@@ -24,7 +25,11 @@ if [[ "${1:-}" == "--sign" ]]; then
   identity=${2:?identity}; app=${3:?app}
   fw="$app/Contents/Frameworks/Sparkle.framework"
   [[ -d "$fw" ]] || { echo "error: no $fw" >&2; exit 1; }
-  sign() { codesign --force --options runtime --timestamp=none --sign "$identity" "$@" 2>&1 | grep -v "replacing existing signature" || true; }
+  # Ad hoc ("-") takes no timestamp; a Developer ID signature needs a secure
+  # one, or notarization refuses Sparkle's code (docs/RELEASE.md B3).
+  ts=--timestamp=none
+  [[ $identity == - ]] || ts=--timestamp
+  sign() { codesign --force --options runtime $ts --sign "$identity" "$@" 2>&1 | grep -v "replacing existing signature" || true; }
   sign "$fw/Versions/B/XPCServices/Installer.xpc"
   sign --preserve-metadata=entitlements "$fw/Versions/B/XPCServices/Downloader.xpc"
   sign "$fw/Versions/B/Autoupdate"

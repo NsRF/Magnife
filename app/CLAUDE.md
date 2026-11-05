@@ -301,8 +301,9 @@ this app starts the helper and reads its database. No server, no accounts.
   `Contents/Frameworks`, writes `SUFeedURL` / `SUPublicEDKey` (placeholders
   unless `SPARKLE_FEED_URL` / `SPARKLE_PUBLIC_ED_KEY`) and
   `SUEnableAutomaticChecks` (false unless `SPARKLE_AUTOMATIC_CHECKS=1`, or
-  no key with `=ask`; the release value is the owner's, RELEASE.md B2), and
-  signs Sparkle inside out.
+  no key with `=ask`; `scripts/release.sh` builds with `ask` and the feed
+  `https://github.com/NsRF/Magnife/releases/latest/download/appcast.xml`,
+  RELEASE.md B2 and B7), and signs Sparkle inside out.
   `UpdaterController` starts Sparkle only with a real feed and key
   (`UpdateConfiguration`, MagnifeKit) and never in snapshot or self-test runs;
   `#if MAGNIFE_SPARKLE` guards every Sparkle line. Ad hoc Sparkle builds drop
