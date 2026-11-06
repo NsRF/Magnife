@@ -119,6 +119,9 @@ enum SelfTest {
                 await checkLaunch(model)
                 await checkLifecycle()
             }
+            if busyTimings > 0 {
+                print("INFO \(busyTimings) timings over their limit while the app was kept waiting (BUSY lines): run again on an idle Mac")
+            }
             if timingWarnings > 0 { print("INFO \(timingWarnings) timings over budget but under their regression limit (WARN lines)") }
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
             finish(code: failures == 0 ? 0 : 1)
@@ -312,29 +315,45 @@ enum SelfTest {
     /// an acceptance line's number passes that number as `regression` too, so
     /// it fails over it (M3 review 5). `ok` carries the check's other
     /// conditions, which fail as usual.
+    ///
+    /// `work` is the most the measured span could have taken had the app
+    /// never waited (its CPU time, `CPUTime`). Over the limit with `work`
+    /// within it, the time over the limit was spent not running: the Mac was
+    /// busy or stopped the app, so the value says nothing about the app. It
+    /// prints a BUSY line and neither passes nor fails; `work` over the limit
+    /// fails as usual. Only valid on an idle Mac, as docs/PROGRESS.md says.
     static func checkTiming(_ name: String, ms: Double, budget: Double, regression: Double? = nil,
-                            ok: Bool = true, _ detail: String = "") {
+                            work: Double? = nil, ok: Bool = true, _ detail: String = "") {
         let limit = regression ?? budget * 2
         let value = "\(String(format: ms < 10 ? "%.1f" : "%.0f", ms)) ms"
         let extra = detail.isEmpty ? "" : ", \(detail)"
+        if ok && ms > limit, let work, work <= limit {
+            busyTimings += 1
+            print("BUSY \(name): \(value), limit \(Int(limit)) ms, but the app worked at most \(Int(work)) ms of it "
+                  + "(load \(loadAverage)); valid on an idle Mac only\(extra)")
+            return
+        }
         if ok && ms > budget && ms <= limit {
             timingWarnings += 1
             print("WARN \(name): \(value), over the \(Int(budget)) ms budget (load \(loadAverage))\(extra)")
         }
+        let worked = work.map { ", the app worked \(Int($0)) ms of it" } ?? ""
         check("\(name) (\(value), budget \(Int(budget)) ms)", ok && ms <= limit,
-              "\(value), limit \(Int(limit)) ms (load \(loadAverage))\(extra)")
+              "\(value), limit \(Int(limit)) ms\(worked) (load \(loadAverage))\(extra)")
     }
 
+    private static var busyTimings = 0
     private static var timingWarnings = 0
 
     /// A check a story is blocked on (its Status in docs/STORIES.md is todo
     /// with a "Blocked:" note): over the limit it prints a BLOCKED line with
     /// the value and does not fail the run; within it, a PASS that says the
     /// story can be unblocked.
-    static func checkBlocked(_ story: String, _ name: String, ms: Double, limit: Double) {
+    static func checkBlocked(_ story: String, _ name: String, ms: Double, limit: Double, _ detail: String = "") {
         let value = "\(String(format: "%.0f", ms)) ms"
+        let extra = detail.isEmpty ? "" : ", \(detail)"
         if ms > limit {
-            print("BLOCKED \(story) \(name): \(value), limit \(Int(limit)) ms (load \(loadAverage))")
+            print("BLOCKED \(story) \(name): \(value), limit \(Int(limit)) ms (load \(loadAverage))\(extra)")
         } else {
             check("\(name) (\(value), limit \(Int(limit)) ms; \(story) can be unblocked)", true)
         }

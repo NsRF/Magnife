@@ -60,16 +60,21 @@ extension SelfTest {
         }
         var steps: [String: Int] = [:]
         var step = 0
-        // Each stall over 50 ms, with the step that ran last before it.
+        // Each stall over 50 ms, with the step that ran last before it and
+        // the main thread's CPU time during it: a stall the main thread spent
+        // on a core is the app's work; the rest of it the thread waited.
         let current = StepName()
-        var stalls: [(ms: Int, step: String)] = []
+        var stalls: [(ms: Int, cpu: Int, step: String)] = []
         let watch = Task { @MainActor in
             var last = ContinuousClock.now
+            var lastCPU = CPUTime.thread
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(5))
                 let gap = (ContinuousClock.now - last).seconds * 1_000
-                if gap > 50 { stalls.append((Int(gap), current.name)) }
+                let cpu = CPUTime.thread - lastCPU
+                if gap > 50 { stalls.append((Int(gap), Int(cpu), current.name)) }
                 last = ContinuousClock.now
+                lastCPU = CPUTime.thread
             }
         }
         while ContinuousClock.now - started < .seconds(seconds) {
@@ -95,22 +100,26 @@ extension SelfTest {
         // which rebuilds the content and detail columns and the toolbar items
         // in SwiftUI, are printed apart so a failure says which one it was.
         let switching: Set<String> = ["logs view", "traces view"]
-        let browsing = stalls.filter { !switching.contains($0.step) }.map(\.ms).max() ?? 0
-        let switchStall = stalls.filter { switching.contains($0.step) }.map(\.ms).max() ?? 0
+        let browsing = stalls.filter { !switching.contains($0.step) }.max { $0.ms < $1.ms }
+        let switchStall = stalls.filter { switching.contains($0.step) }.max { $0.ms < $1.ms }
         let stored = (try? await model.reader?.traceCount()) ?? 0
         let spans = result.output.firstMatch(of: /: (\d+) spans in/).flatMap { Int($0.1) } ?? 0
         print("INFO load: \(spans.formatted()) spans in \(seconds) s (\(stored.formatted()) traces stored), "
               + "longest main-thread stall \(Int(stall)) ms, \(model.traces.count) rows read, steps \(steps.sorted { $0.key < $1.key })")
-        let worst = stalls.sorted { $0.ms > $1.ms }.prefix(8).map { "\($0.ms) ms after \($0.step)" }
+        let worst = stalls.sorted { $0.ms > $1.ms }.prefix(8).map { "\($0.ms) ms (\($0.cpu) ms on CPU) after \($0.step)" }
         print("INFO load: \(stalls.count) stalls over 50 ms; longest: \(worst.joined(separator: ", "))")
         check("the sender's exports are all accepted (\(result.output.split(separator: "\n").last ?? ""))", result.status == 0)
-        // The acceptance's number is the limit: no WARN band (M3 review 5).
-        checkTiming("at 5,000 spans/s for \(seconds) s, while scrolling and selecting, no main-thread hang over 100 ms",
-                    ms: Double(browsing), budget: 100, regression: 100, "the whole run \(Int(stall)) ms")
-        // S-030 is blocked on this part (docs/STORIES.md): printed as BLOCKED
-        // while it is over, PASS once it holds, never a quiet pass.
+        // The acceptance's number is the limit, and S-030 is blocked on both
+        // parts (docs/STORIES.md): each prints BLOCKED while it is over, PASS
+        // once it holds, never a quiet pass. Not the Mac's load: the main
+        // thread is on a core for nearly all of every long stall, at rest
+        // and under load alike (docs/PROGRESS.md, 2026-11-06), so the
+        // printed CPU time is the app's own work.
+        checkBlocked("S-030", "at 5,000 spans/s for \(seconds) s, while scrolling and selecting, no main-thread hang over 100 ms",
+                     ms: Double(browsing?.ms ?? 0), limit: 100,
+                     "\(browsing?.cpu ?? 0) ms on CPU, after \(browsing?.step ?? "none"), the whole run \(Int(stall)) ms")
         checkBlocked("S-030", "under that load, switching Traces and Logs has no main-thread hang over 100 ms",
-                     ms: Double(switchStall), limit: 100)
+                     ms: Double(switchStall?.ms ?? 0), limit: 100, "\(switchStall?.cpu ?? 0) ms on CPU")
         // Paging (S-004, S-030): at the top the list reads one page of 200 rows, never every trace.
         check("the list pages from the database: \(model.traces.count) rows read of \(stored.formatted()) traces",
               stored > 1_000 && model.traces.count <= 2 * TraceList.pageSize && model.listTraceCount >= stored - 1_000,

@@ -68,8 +68,10 @@ this app starts the helper and reads its database. No server, no accounts.
   main run loop turn over 100 ms with the app's work in it (`StallLog`), and
   each real main-thread hang over 100 ms as `HANG <ms> ms` (a 5 ms
   heartbeat, App Nap off): a long run loop turn alone is not a hang. The
-  load check fails over the acceptance's 100 ms (no WARN band); its switching
-  part is `checkBlocked` (a BLOCKED line) while S-030 is blocked on it.
+  load check's limit is the acceptance's 100 ms (no WARN band); its browsing
+  and switching parts are `checkBlocked` (BLOCKED lines, with the main
+  thread's CPU time in the stall, which is nearly all of it: the app's work)
+  while S-030 is blocked on them.
   The self-test turns App Nap off (FIXLOG); `selftest.sh` fails on the
   reentrant warning.
 - The sidebar (S-009): services come with every list read
@@ -265,7 +267,11 @@ this app starts the helper and reads its database. No server, no accounts.
   `TestRun.scratch("name")`. Timing checks use `checkTiming` (the value
   always printed; over the budget a WARN line, over twice it a FAIL; a check
   that encodes an acceptance line's number passes it as `regression`, so it
-  fails over it: launch 1 s, search 100 ms, load 100 ms).
+  fails over it: launch 1 s, search 100 ms, load 100 ms). `work:` is the
+  most the span could have taken had the app never waited (CPU time,
+  `CPUTime` in `SelfTest+CPUTime.swift`): over the limit with `work` within
+  it, the run prints BUSY (the Mac kept the app waiting; valid on an idle
+  Mac only) and does not fail; Search passes it.
 - Test runs and the user's defaults: AppKit saves window frames and column
   widths in the app's domain by itself; snapshot and self-test runs copy
   those keys aside at launch (`AppDefaults.protectLayout`, in

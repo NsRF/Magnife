@@ -17,12 +17,21 @@ extension SelfTest {
             return check("the bundled helper exists (tools/selftest.sh)", false)
         }
 
-        // Export: the seed set's HTTP 500 trace, as the window shows it.
-        model.sidebar = .allTraces
+        // Export: the seed set's HTTP 500 trace, as the window shows it. In a
+        // full run the live list checks before this one sent the seed helper
+        // hundreds more traces, which push it off the list's first page (200
+        // rows, newest first): the list is filtered to checkout-api's errors.
         model.showContentMode(.traces)
+        model.applyTraceFilter(TraceFilter(service: "checkout-api", statuses: [.error]))
         _ = await waitUntil(3) { model.traces.contains { $0.route == "POST /checkout/pay" } }
         guard let original = model.traces.first(where: { $0.route == "POST /checkout/pay" }), let reader = model.reader else {
-            return check("the seed set's HTTP 500 trace is listed", false)
+            let stored = (try? await model.reader?.latestTraces(limit: 100_000))?
+                .filter { $0.route == "POST /checkout/pay" }.count
+            let total = (try? await model.reader?.traceCount()) ?? -1
+            return check("the seed set's HTTP 500 trace is listed", false,
+                         "\(model.traces.count) rows listed, \(total) traces stored, \(stored.map(String.init) ?? "?") POST /checkout/pay; "
+                         + "filter \(TraceQuery.format(model.traceFilter)), held \(model.isListHeld), paused \(model.isPaused), "
+                         + "store \(model.storeState)")
         }
         model.selectedTraceID = original.traceID
         _ = await waitUntil(3) { model.waterfall.count == original.spanCount }
@@ -35,7 +44,8 @@ extension SelfTest {
         let file = sharingRoot.appending(path: TraceExport.suggestedFileName(for: original))
         do { try export?.data.write(to: file) } catch { check("the export is written", false, "\(error)") }
 
-        // Import: a fresh store and the real helper; the window reads that store.
+        // Import: a fresh store and the real helper; the window reads that store, unfiltered.
+        model.applyTraceFilter(.cleared)
         let store = sharingRoot.appending(path: "magnife.sqlite")
         let helper = AppModel(storeURL: store)
         helper.startReceiver(executable: helperURL, ports: (grpc: freePort(), http: freePort()))

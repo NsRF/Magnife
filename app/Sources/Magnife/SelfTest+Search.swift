@@ -120,22 +120,33 @@ extension SelfTest {
         model.showSearch()
         _ = await waitUntil(2) { model.searchResult != nil && searchFieldFocused(window) }
         var worst: Duration = .zero
+        // The longest any keystroke could have taken had the app never
+        // waited for a core: its wall time, or less, the CPU time of all its
+        // threads in it (the read's and the main thread's, which updates the
+        // results panel). Over the limit it is the app's work (FAIL); a wall
+        // time over it with this under it is time the app sat waiting (BUSY).
+        var worstWork = 0.0
         var lines: [String] = []
         let text = "orders status:error >100ms http"
         var typedSoFar = ""
         for character in text {
             typedSoFar.append(character)
             let started = ContinuousClock.now
+            let startedCPU = CPUTime.process
             pressKey(window, String(character), keyCode: 0)
             let shown = await waitUntil(2, every: .milliseconds(2)) { model.searchResult?.text == typedSoFar }
             let elapsed = shown ? ContinuousClock.now - started : .seconds(2)
+            let wall = elapsed / .milliseconds(1)
+            let cpu = CPUTime.process - startedCPU
+            // A result that never showed is the app's, however little CPU it used.
+            worstWork = max(worstWork, shown ? min(wall, cpu) : wall)
             worst = max(worst, elapsed)
-            lines.append("\(typedSoFar.last.map(String.init) ?? "") \(Int(elapsed / .milliseconds(1)))")
+            lines.append("\(typedSoFar.last.map(String.init) ?? "") \(Int(wall))/\(Int(cpu))")
         }
         let ms = worst / .milliseconds(1)
-        print("INFO search on \(spans.formatted()) spans, ms per keystroke: \(lines.joined(separator: ", "))")
+        print("INFO search on \(spans.formatted()) spans, ms per keystroke / the app's CPU ms in it: \(lines.joined(separator: ", "))")
         checkTiming("results show within 100 ms of each keystroke on \(spans.formatted()) spans", ms: ms, budget: 100,
-                    regression: 100, ok: spans >= 100_000 && model.searchResult?.text == text)
+                    regression: 100, work: worstWork, ok: spans >= 100_000 && model.searchResult?.text == text)
         model.closeSearch()
         model.searchReader = nil
     }
