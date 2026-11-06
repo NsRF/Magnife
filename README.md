@@ -104,6 +104,8 @@ The live checks are scripted in [`scripts/interop`](scripts/interop/README.md): 
 
 Magnife ships an MCP server, `magnife-mcp`, so an agent that changes your code can look at what that code did at run time. It reads the same local database as the window, read-only, and works while Magnife is quit. It makes no network requests.
 
+The quickest way: open **Settings > Agents** (or **Help > Connect a Coding Agent…**), pick your agent and click **Copy Command**. It has your copy's own path. By hand:
+
 ```sh
 # Claude Code, for every project
 claude mcp add --scope user magnife -- /Applications/Magnife.app/Contents/Helpers/magnife-mcp

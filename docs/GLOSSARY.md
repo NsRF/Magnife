@@ -28,6 +28,8 @@ Direct, precise, quiet. Talk to "you", say "click", and name OTel concepts the w
 | Receiver | The part of Magnife that listens for OTLP on ports 4317 and 4318 | server, collector, listener, agent |
 | Port | A local network port: 4317 for gRPC, 4318 for HTTP | socket, endpoint |
 | Environment Variables | The `OTEL_*` settings that point an app at Magnife | env, config, setup snippet |
+| Coding Agent | An AI tool that changes code and can read Magnife through MCP (Claude Code, Codex, Cursor) | AI, assistant, bot, LLM; never "agent" for the receiver |
+| MCP Server | `magnife-mcp`, the program a coding agent starts to read Magnife's traces | plugin, integration, API, connector |
 | Kind | A span's OTel kind: Server, Client, Internal, Producer, Consumer | type, role |
 | Finding | A problem a detector flagged on a span or trace: Slow SQL, N+1 or HTTP Error | issue, insight, warning, alert, problem |
 | Slow SQL | Finding: a database span that took over 100 ms | slow query, DB warning |
@@ -76,6 +78,8 @@ Direct, precise, quiet. Talk to "you", say "click", and name OTel concepts the w
 | Copy Trace ID / Copy Span ID | Put the ID on the pasteboard | Copy Identifier, Copy Link |
 | Copy Body | Put a log's body on the pasteboard | Copy Message, Copy Log |
 | Show Environment Variables | Open the toolbar popover with the language tabs | Setup, Onboarding, Connect App |
+| Connect a Coding Agent… | Open Settings > Agents (Help menu) | Set Up AI, Add Integration, Install MCP |
+| Copy Command / Copy Configuration | Put the agent's setup command, or its MCP configuration, on the pasteboard | Copy Snippet, Copy Setup, Copy JSON |
 | Open Magnife | Bring the main window forward from the menu bar extra | Show Window, Launch |
 | Show in Finder | Reveal the database file | Reveal, Open Folder |
 | Check for Updates… | Ask the update feed for a newer Magnife (Magnife menu; only in builds with Sparkle) | Update Now, Software Update, Check for New Version |

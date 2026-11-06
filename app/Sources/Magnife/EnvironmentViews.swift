@@ -49,16 +49,28 @@ struct EnvironmentSetup: View {
 }
 
 /// The variables as selectable monospaced text. Long lines scroll sideways
-/// instead of truncating (S-003).
+/// instead of truncating (S-003); with `wraps`, they wrap instead, so a long
+/// path stays in view (S-035). The copied text is the same either way.
 struct EnvironmentCode: View {
     let text: String
+    var wraps = false
 
     var body: some View {
-        // The whole text when it fits; a sideways scroll only when it does not.
-        ViewThatFits(in: .horizontal) {
-            code
-            ScrollView(.horizontal) { code }
-                .scrollBounceBehavior(.basedOnSize)
+        Group {
+            if wraps {
+                Text(text)
+                    .font(.callout.monospaced())
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(Space.md)
+            } else {
+                // The whole text when it fits; a sideways scroll only when it does not.
+                ViewThatFits(in: .horizontal) {
+                    code
+                    ScrollView(.horizontal) { code }
+                        .scrollBounceBehavior(.basedOnSize)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))

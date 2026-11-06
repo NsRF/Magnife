@@ -149,6 +149,7 @@ Every action has a menu item. Items that do not apply are disabled, not hidden, 
 **Help**
 - Search field (system)
 - Show Environment Variables (opens the toolbar popover)
+- Connect a Coding Agent… (opens Settings > Agents, S-035)
 
 The default "Magnife Help" item is removed; there is no help book in v0.1.
 
@@ -178,10 +179,11 @@ The default "Magnife Help" item is removed; there is no help book in v0.1.
 
 ### Settings
 
-A `Settings` scene, 480 pt wide, three tabs:
+A `Settings` scene, 480 pt wide, four tabs:
 
 - **General** (`gearshape`): "Keep traces and logs for" pop-up (1 hour, 6 hours, 24 hours, 3 days, 7 days; default 24 hours) with "Older traces and logs are deleted automatically." under it; "Database size" with the size ("182 MB") and a "Show in Finder" button; "Show Magnife in the menu bar" toggle.
 - **Notifications** (`bell`): "Notify me when a trace has an error" toggle (on), plus a status line (S-028).
+- **Agents** (`sparkle.magnifyingglass`): how to connect a coding agent to Magnife's MCP server (S-035): a Claude Code | Codex | Cursor | Other picker, the command or configuration for it with this copy's own path, and Copy Command / Copy Configuration.
 - **Appearance** (`paintpalette`): "Accent color" swatches (System first, the default) with the chosen color's name under them and a small preview window drawn in it (decision 18). Light and dark mode always follow the Mac.
 
 ### Notifications
@@ -425,6 +427,14 @@ UX:
 - Words: single: title "POST /orders", subtitle "checkout-api", body the first exception's type and message ("InvalidOperationException: Cart is empty") or "Error in span charge-card"; burst: title "3 traces with errors", subtitle "checkout-api", body "Newest: POST /orders"; clicking a burst opens its newest trace; Settings "Notify me when a trace has an error"
 - Access: the system reads notifications; the Settings toggle and button have visible labels
 
+### S-035 Connect my coding agent from Settings
+UX:
+- Flow: Help > Connect a Coding Agent…, or Settings > Agents -> pick the agent -> Copy Command -> paste it in Terminal (Claude Code, Codex) or into the client's MCP settings (Cursor, Other) -> ask the agent about the traces
+- Surface: a Settings tab (a place people come back to when they set up a new agent or Mac), one grouped Form like the other tabs; the setup block is the S-003 pattern (segmented picker, monospaced selectable code, a note under it, one prominent copy button that reads "Copied" for 2 s)
+- States: the code wraps instead of scrolling sideways, so the whole path shows (the copy is one line); normal: the command with this copy's path (`<Magnife.app>/Contents/Helpers/magnife-mcp`, single-quoted when it has a space); run from a translocated or disk-image copy (`/AppTranslocation/`, `/Volumes/`): the code still shows, and a warning line says "Move Magnife to Applications first. The path below changes until you do."; no `magnife-mcp` in the bundle: "This copy of Magnife has no MCP server." and no copy button; the picked agent is remembered
+- Words: section "Coding Agents", intro "Let Claude Code, Codex or another coding agent read your traces, spans, logs and findings. It can only read them."; tabs "Claude Code", "Codex", "Cursor", "Other"; notes: Claude Code "Run it once in Terminal. Every Claude Code session can then use Magnife."; Codex "Run it once in Terminal. Every Codex session can then use Magnife."; Cursor "Add it to ~/.cursor/mcp.json, or to .cursor/mcp.json in one project."; Other "Add it to your MCP client's settings, such as Claude Desktop's."; buttons "Copy Command" (Claude Code, Codex), "Copy Configuration" (Cursor, Other); a last line "Then ask your agent: “What failed in my last request?”"
+- Access: the picker and button have visible labels; the code block reads as one element; "Copied" is announced like S-003's
+
 ### S-029 Open in under a second
 UX:
 - Flow: click the Dock icon -> the window appears with the last view, scope, filters and selected trace, rows read from the database -> the receiver status appears when the helper reports its ports
@@ -463,6 +473,6 @@ Things: Finding, Slow SQL, N+1, HTTP Error, Filters, Filter Bar, Condition, Any 
 
 Actions: Pause, Resume, Search…, Show Filter Bar / Hide Filter Bar, Clear Filters, Apply as Filter, Save Filter… / Save Filter As…, Rename Filter…, Delete Filter, Open Trace, Show Newest Traces, Expand All Spans / Collapse All Spans, Show Span Detail / Hide Span Detail, Copy Trace ID, Copy Span ID, Copy Body, Import Traces…, Export Trace…, Show Environment Variables, Open Magnife, Show in Finder, Open Settings, Open System Settings, Delete (retention dialog).
 
-Settings: "Keep traces and logs for", "Database size", "Show Magnife in the menu bar", "Notify me when a trace has an error".
+Settings: "Keep traces and logs for", "Database size", "Show Magnife in the menu bar", "Notify me when a trace has an error", Agents (S-035: "Coding Agents", "Copy Command", "Copy Configuration", "Connect a Coding Agent…").
 
 Status lines: "Starting receiver…", "Paused. 12 new traces. Magnife is still receiving.", "12 new traces" / "12 new logs", "Trace No Longer Stored", "No traces with errors".

@@ -399,6 +399,14 @@ final class AppModel {
     /// The toolbar's Copy Environment Variables popover.
     var showsEnvironmentPopover = false
     @ObservationIgnored var copiedResetTask: Task<Void, Never>?
+    /// The agent tab of Settings > Agents (S-035), in AppDefaults.shared (the
+    /// test suite in snapshot and self-test runs).
+    var agentClient: AgentClient = .stored(in: AppDefaults.shared) {
+        didSet { agentClient.store(in: AppDefaults.shared) }
+    }
+    /// True for 2 seconds after Copy Command / Copy Configuration.
+    var agentSetupCopied = false
+    @ObservationIgnored var agentCopiedResetTask: Task<Void, Never>?
     /// How long the helper keeps data, in seconds (S-015, S-016): 24 hours
     /// on first launch, APP_RETENTION_SECONDS in test runs (which never read
     /// the owner's choice: `Retention.atLaunch`). Sent to the

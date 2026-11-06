@@ -292,6 +292,14 @@ this app starts the helper and reads its database. No server, no accounts.
   `MAGNIFE_MCP_STORE=<seeded db> swift test --filter MCPSeedStoreTests`.
   `build.sh`, `../scripts/install-local.sh` and `../scripts/release.sh` copy
   and sign it (identifier `com.nasserfarhat.magnife.mcp`).
+- Settings > Agents (S-035, `AgentSettings.swift`, `AppModel+Agents.swift`):
+  `AgentClient` (MagnifeKit, unit-tested) has each agent's command or JSON
+  with the path shell-quoted or JSON-escaped; `AgentServerLocation` is this
+  bundle's `magnife-mcp` and whether its path lasts (translocated, disk
+  image, missing). The code block is S-003's `EnvironmentCode` with
+  `wraps: true`. Help > Connect a Coding Agent… (`ConnectAgentMenuItem`)
+  opens Settings on Agents. `APP_SELFTEST_ONLY=agents` runs its checks;
+  snapshot `09-settings-agents`.
 
 ## Layout
 

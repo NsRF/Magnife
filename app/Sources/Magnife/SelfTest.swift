@@ -75,6 +75,8 @@ enum SelfTest {
                 await checkAppearance(model)
             } else if only == "updates" {
                 checkUpdates()
+            } else if only == "agents" {
+                await checkAgents(model)
             } else if only == "span-detail" {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
@@ -106,6 +108,9 @@ enum SelfTest {
                 await checkReceiver()
                 checkApp()
                 checkUpdates()
+                // It opens and closes Settings, which leaves the main window's
+                // first responder reset: after the checks that need the list's focus.
+                await checkAgents(model)
                 await checkWindowClose()
                 // With the window closed: a Recent Errors item brings it back (S-027).
                 await checkMenuBar(model)

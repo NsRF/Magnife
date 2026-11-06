@@ -19,6 +19,26 @@
             "target": "Magnife",
             "configuration": "release",
             "preLaunchTask": "swift: Build Release Magnife (app)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Magnife}/app",
+            "name": "Debug magnife-mcp (app)",
+            "target": "magnife-mcp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug magnife-mcp (app)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Magnife}/app",
+            "name": "Release magnife-mcp (app)",
+            "target": "magnife-mcp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release magnife-mcp (app)"
         }
     ]
 }

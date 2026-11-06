@@ -151,6 +151,7 @@ struct MagnifeApp: App {
             // No help book in v0.1 (docs/ux.md, Help menu).
             CommandGroup(replacing: .help) {
                 Button("Show Environment Variables") { delegate.model.showEnvironmentVariables() }
+                ConnectAgentMenuItem(model: delegate.model)
             }
         }
 

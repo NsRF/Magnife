@@ -2,7 +2,7 @@ import MagnifeKit
 import SwiftUI
 
 /// The Settings window (Command-Comma). One tab per topic, at most about
-/// six. Each tab is a grouped Form that sizes to its content, so the
+/// six: General, Notifications, Agents (S-035), Appearance. Each tab is a grouped Form that sizes to its content, so the
 /// window grows to fit and shows no scroll bar it does not need.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
@@ -25,6 +25,7 @@ struct SettingsView: View {
             switch tab {
             case .general: GeneralSettings()
             case .notifications: NotificationSettings()
+            case .agents: AgentSettings()
             case .appearance: AppearanceSettings()
             }
         }
@@ -36,7 +37,7 @@ struct SettingsView: View {
 
 /// The Settings tabs. Snapshot mode walks through every case.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, notifications, appearance
+    case general, notifications, agents, appearance
 
     var id: String { rawValue }
 
@@ -44,6 +45,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: "General"
         case .notifications: "Notifications"
+        case .agents: "Agents"
         case .appearance: "Appearance"
         }
     }
@@ -52,6 +54,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: "gearshape"
         case .notifications: "bell"
+        case .agents: "sparkle.magnifyingglass"
         case .appearance: "paintpalette"
         }
     }

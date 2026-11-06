@@ -403,7 +403,19 @@ Acceptance:
 - [unit] Output is bounded: at most 100 traces, 500 spans of a trace (the rest counted), 200 logs, and attribute values over 2,000 characters cut with how many were left out.
 - [unit] Against the seeded store (`MAGNIFE_MCP_STORE=<db> swift test --filter MCPSeedStoreTests`), `find_problems` names the slow SQL, the N+1 (8 runs) and the HTTP 500, each with its trace id; `get_trace` on the HTTP 500 trace lists its spans and the exception's type.
 - [manual] `claude mcp add --scope user magnife -- /Applications/Magnife.app/Contents/Helpers/magnife-mcp`, then "what failed in my last request?" in Claude Code calls `find_problems` or `list_traces` and answers with the trace.
-Status: done (manual line pending owner: not yet tried from a real Claude Code or Codex session; a scripted MCP session against the seeded store answered every tool)
+Status: done (manual line checked by the owner on 2026-11-06 with 0.2.0 from /Applications in Claude Code)
+
+### S-035 Connect my coding agent from Settings
+As the user, I open Settings > Agents, pick my agent and copy the one command that connects it to Magnife, with this copy's own path, so I never look up the README.
+Depends: S-034, S-003
+Screens: 09-settings (agents)
+UX: docs/ux.md, S-035
+Acceptance:
+- [unit] Each agent's text: Claude Code `claude mcp add --scope user magnife -- <path>`, Codex `codex mcp add magnife -- <path>`, Cursor and Other a pretty-printed `{"mcpServers": {"magnife": {"command": "<path>"}}}`; a path with a space or quote is single-quoted for the shell and escaped for JSON.
+- [unit] The path is `<the running Magnife.app>/Contents/Helpers/magnife-mcp`; a translocated or disk-image copy gets the "Move Magnife to Applications first" warning; a bundle without `magnife-mcp` says so and offers no copy.
+- [self] Copy Command puts exactly the shown text on the pasteboard and reads "Copied" for 2 s; the picked agent is remembered across launches; Help > Connect a Coding Agent… opens Settings on Agents.
+- [snap] 09-settings-agents in light and dark, Claude Code picked, with the grid checks passing.
+Status: done (2026-11-06: 6 unit tests; `APP_SELFTEST_ONLY=agents` 39 checks; snapshots and grid checks pass. In full self-test runs the agents check runs after the list-focus checks, since opening Settings resets the main window's first responder)
 
 ## Seed data
 Snapshots use a fixture of OTLP payloads replayed into the helper, so every value comes from telemetry the app receives:
@@ -425,6 +437,5 @@ Snapshots use a fixture of OTLP payloads replayed into the helper, so every valu
 - ~~v0.2: export and import traces as files.~~ Done as S-033.
 - v0.3: AI agent view (calls, tools, tokens, cost).
 - ~~v0.3: MCP server for agents to query local traces.~~ S-034.
-- v0.3: Settings > Agents with the setup command per agent and a Copy button (after S-034 has been used by hand).
 - v0.4: forwarding to a remote backend (OTLP proxy).
 - Release work, not stories: Developer ID signing and notarization, Homebrew cask, Sparkle updates.
