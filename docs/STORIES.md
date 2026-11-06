@@ -389,6 +389,22 @@ Acceptance:
 - [unit] A file that is missing, empty, not JSON, not OTLP, nested too deeply or larger than 64 MB stores nothing, and the alert says why in one sentence.
 Status: done
 
+## v0.3 Agents
+
+### S-034 Let my coding agent read my local traces
+As the user, I connect Claude Code, Codex or any MCP client to Magnife, and the agent reads my local traces, spans, logs and findings to debug the code it is changing, without my copying anything out of the window.
+Depends: S-005, S-006, S-013, S-017, S-023, S-024, S-025
+Spec: [mcp.md](mcp.md)
+Acceptance:
+- [unit] `Contents/Helpers/magnife-mcp` speaks MCP over stdio (JSON-RPC 2.0, one message per line): `initialize` answers with the protocol version the client asked for when it is one of the supported ones, else the newest; `ping`; `tools/list`; `tools/call`. A notification gets no answer; an unknown method gets -32601, bad JSON -32700, an unknown tool -32602; missing or wrong arguments are an `isError` result that says why, so the agent can try again.
+- [unit] Six tools, all read-only (`readOnlyHint`): `list_services`, `list_traces`, `get_trace`, `get_span`, `search_logs`, `find_problems`. `list_traces` takes the ⌘K query language (`status:error service:orders >200ms`), the same parser as Search.
+- [unit] What a tool says about a finding is the app's own words (`Finding.detailText(in:)`, placed in the trace), so the agent and the window never disagree.
+- [unit] It opens the database read-only, as the app does, and never writes; it reads stored traces while Magnife is quit (persistent WAL, S-008). With no database yet, a tool call answers `isError` with one sentence: open Magnife and send telemetry.
+- [unit] Output is bounded: at most 100 traces, 500 spans of a trace (the rest counted), 200 logs, and attribute values over 2,000 characters cut with how many were left out.
+- [unit] Against the seeded store (`MAGNIFE_MCP_STORE=<db> swift test --filter MCPSeedStoreTests`), `find_problems` names the slow SQL, the N+1 (8 runs) and the HTTP 500, each with its trace id; `get_trace` on the HTTP 500 trace lists its spans and the exception's type.
+- [manual] `claude mcp add --scope user magnife -- /Applications/Magnife.app/Contents/Helpers/magnife-mcp`, then "what failed in my last request?" in Claude Code calls `find_problems` or `list_traces` and answers with the trace.
+Status: done (manual line pending owner: not yet tried from a real Claude Code or Codex session; a scripted MCP session against the seeded store answered every tool)
+
 ## Seed data
 Snapshots use a fixture of OTLP payloads replayed into the helper, so every value comes from telemetry the app receives:
 - Services: `checkout-api` (.NET), `orders` (Go), `web` (Node).
@@ -400,7 +416,7 @@ Snapshots use a fixture of OTLP payloads replayed into the helper, so every valu
 
 ## Dropped
 - Accounts and sign-in: one user, local data.
-- Free and Pro plan limits, license entry and upgrade prompts: business model, not v0.1 scope; licensing comes back as its own work before public launch.
+- Free and Pro plan limits, license entry and upgrade prompts: Magnife is open source (MIT) with no paid plan (decided 2026-11-05).
 - Team plan and trace sharing: other people.
 - In-app usage telemetry: vendor-only; if added later, opt-in and anonymous as the spec says.
 
@@ -408,6 +424,7 @@ Snapshots use a fixture of OTLP payloads replayed into the helper, so every valu
 - v0.2: metrics with charts; side-by-side comparison of two traces.
 - ~~v0.2: export and import traces as files.~~ Done as S-033.
 - v0.3: AI agent view (calls, tools, tokens, cost).
-- v0.3: MCP server for agents to query local traces.
+- ~~v0.3: MCP server for agents to query local traces.~~ S-034.
+- v0.3: Settings > Agents with the setup command per agent and a Copy button (after S-034 has been used by hand).
 - v0.4: forwarding to a remote backend (OTLP proxy).
 - Release work, not stories: Developer ID signing and notarization, Homebrew cask, Sparkle updates.

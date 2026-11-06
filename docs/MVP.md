@@ -87,6 +87,8 @@ O helper grava os spans em lote e avisa o app por um socket local; o app só con
 
 ## Distribuição, preço e licenciamento
 
+> **Decidido em 2026-11-05:** o Magnife é open source (MIT), o app inteiro, sem plano pago. Os planos Free/Pro e a cobrança abaixo ficam só como registro da hipótese original; a distribuição (Developer ID, notarização, Sparkle, Homebrew) continua valendo.
+
 Vender fora da Mac App Store, com versão gratuita útil e licença Pro paga. Os valores abaixo são hipóteses a validar com os primeiros usuários.
 
 **Distribuição:**
@@ -152,7 +154,7 @@ O maior risco é de negócio, não técnico: dev resiste a pagar quando há alte
 
 **Decisões em aberto:**
 
-- [ ] Ingestão em Swift puro ou processo auxiliar em Go (ver Arquitetura)
-- [ ] Licença única ou assinatura
+- [x] Ingestão em Swift puro ou processo auxiliar em Go (ver Arquitetura): processo auxiliar em Go
+- [x] Licença única ou assinatura: nenhuma das duas; open source sem plano pago (2026-11-05)
 - [ ] Domínio, handles e busca de marca no USPTO para o nome Magnife
-- [ ] Código aberto do receptor, para ganhar confiança, mantendo o app fechado
+- [x] Código aberto do receptor, para ganhar confiança, mantendo o app fechado: o app inteiro é open source, MIT (2026-11-05)

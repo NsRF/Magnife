@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Builds Magnife and installs it to ~/Applications/Magnife.app, with the Go
-# helper (../ingest) in Contents/Helpers/magnife-ingest.
+# helper (../ingest) in Contents/Helpers/magnife-ingest and the MCP server for
+# coding agents in Contents/Helpers/magnife-mcp (S-034, docs/mcp.md).
 # Build products live in ~/Library/Developer/Magnife, outside the repo
 # (and outside Dropbox or iCloud, which would try to sync them).
 #
@@ -42,7 +43,9 @@ swift build -c $config --package-path "$here" --scratch-path "$scratch" "${swift
 bin="$scratch/$config/$name"
 [[ -x "$bin" ]] || { echo "build failed"; exit 1; }
 # swift build can report success while an edited file failed to compile. Catch that.
-stale=$(find "$here/Sources" -name '*.swift' -newer "$bin" | head -1)
+# magnife-mcp (S-034) is not linked into the app, so its sources do not count here;
+# it is checked by running it below (a comment-only edit does not relink it).
+stale=$(find "$here/Sources" -path '*/MagnifeMCP' -prune -o -name '*.swift' -newer "$bin" -print | head -1)
 if [[ -n "$stale" ]]; then
   echo "build failed: binary is older than $stale"
   swift build -c $config --package-path "$here" --scratch-path "$scratch" "${swift_flags[@]}" 2>&1 | grep -E "error" | head -20
@@ -68,6 +71,11 @@ if [[ -f "$ingest/build.sh" ]]; then
 else
   echo "warning: ingest/build.sh not found; the app has no helper and will show Not receiving"
 fi
+# The MCP server for coding agents (S-034, docs/mcp.md), built with the app.
+mcp="$app/Contents/Helpers/magnife-mcp"
+"$scratch/$config/magnife-mcp" --version >/dev/null 2>&1 || { echo "build failed (magnife-mcp is missing or does not run)"; exit 1; }
+mkdir -p "$app/Contents/Helpers"
+cp "$scratch/$config/magnife-mcp" "$mcp"
 sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$here/Info.plist.in" > "$app/Contents/Info.plist"
 if [[ $sparkle == 1 ]]; then
   "$here/tools/sparkle-bundle.sh" "$scratch/$config/Sparkle.framework" "$app"
@@ -86,6 +94,7 @@ xattr -cr "$app"
 if [[ -n "$helper" ]]; then
   codesign --force --options runtime --timestamp=none --sign "$identity" "$helper" 2>&1 | grep -v "replacing existing signature" || true
 fi
+codesign --force --options runtime --timestamp=none --sign "$identity" --identifier com.nasserfarhat.magnife.mcp "$mcp" 2>&1 | grep -v "replacing existing signature" || true
 app_runtime=(--options runtime)
 if [[ $sparkle == 1 ]]; then
   "$here/tools/sparkle-bundle.sh" --sign "$identity" "$app"
@@ -97,7 +106,7 @@ fi
 codesign --force "${app_runtime[@]}" --timestamp=none --sign "$identity" "$app" 2>&1 | grep -v "replacing existing signature" || true
 codesign --verify --strict "$app" || { echo "signature check failed"; exit 1; }
 [[ $sparkle == 1 ]] && { codesign --verify --strict --deep "$app" || { echo "signature check failed (Sparkle.framework)"; exit 1; }; }
-echo "installed $app (signed: ${identity}${helper:+, with helper}${${sparkle:#0}:+, with Sparkle})"
+echo "installed $app (signed: ${identity}${helper:+, with helper}, with magnife-mcp${${sparkle:#0}:+, with Sparkle})"
 
 if [[ " $* " == *" --open "* ]]; then
   osascript -e "quit app \"$name\"" 2>/dev/null || true

@@ -282,6 +282,17 @@ this app starts the helper and reads its database. No server, no accounts.
   `HelperCommand.importFile` and act on `imported` / `import_failed` only for
   paths in `pendingImports`. `APP_SELFTEST_ONLY=sharing` runs it end to end.
 
+- MCP server (S-034, `../docs/mcp.md`): `Sources/MagnifeMCP/main.swift` is
+  `Contents/Helpers/magnife-mcp`, a stdio loop around `MCPServer`
+  (MagnifeKit `MCP/`: JSON-RPC and MCP, no dependency) and `MagnifeTools`
+  (the six read-only tools on `TelemetryReader`, `TraceQuery`, the detectors
+  and `Finding.detailText(in:)`; never re-implement a rule there). Bad
+  arguments throw `MCPInvalidParams`, which the server answers as an
+  `isError` result. Tests: `MCPServerTests`, `MagnifeToolsTests`, and
+  `MAGNIFE_MCP_STORE=<seeded db> swift test --filter MCPSeedStoreTests`.
+  `build.sh`, `../scripts/install-local.sh` and `../scripts/release.sh` copy
+  and sign it (identifier `com.nasserfarhat.magnife.mcp`).
+
 ## Layout
 
 - `Sources/Magnife/` the app. `App.swift` has the scene, menus, launch modes;

@@ -31,7 +31,8 @@ It is for backend and full-stack developers on a Mac who instrument with OpenTel
 - **Detectors that say what and where**: slow SQL, N+1 queries and failed HTTP calls. Each finding names the query or call, the service and the route it ran under.
 - **Menu bar extra and notifications**: a recent-error count, the last failed traces, and a native notification when a trace fails.
 - **Local persistence with retention**: SQLite in WAL mode. Stored traces are on screen in under a second after relaunch.
-- **Share a trace as a file** *(new)*: File > Export Trace… writes standard OTLP JSON Lines, and File > Import Traces… (or a drag and drop) opens it on a teammate's Mac.
+- **Share a trace as a file**: File > Export Trace… writes standard OTLP JSON Lines, and File > Import Traces… (or a drag and drop) opens it on a teammate's Mac.
+- **Your coding agent reads your traces** *(new)*: a built-in MCP server lets Claude Code, Codex or Cursor list traces, open a span tree and find slow SQL, N+1 queries and failed calls, in the same words as the window. [Set it up](#use-it-from-your-coding-agent).
 
 <table>
   <tr>
@@ -99,6 +100,36 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf    # or grpc with http://localh
 
 The live checks are scripted in [`scripts/interop`](scripts/interop/README.md): 13 SDK and protocol combinations pass. Apps in Docker Desktop containers can use `http://host.docker.internal:4318`.
 
+## Use it from your coding agent
+
+Magnife ships an MCP server, `magnife-mcp`, so an agent that changes your code can look at what that code did at run time. It reads the same local database as the window, read-only, and works while Magnife is quit. It makes no network requests.
+
+```sh
+# Claude Code, for every project
+claude mcp add --scope user magnife -- /Applications/Magnife.app/Contents/Helpers/magnife-mcp
+# Codex
+codex mcp add magnife -- /Applications/Magnife.app/Contents/Helpers/magnife-mcp
+```
+
+If the install script put Magnife in `~/Applications`, use that path. For Cursor, Claude Desktop or VS Code, add it to the client's MCP settings:
+
+```json
+{ "mcpServers": { "magnife": { "command": "/Applications/Magnife.app/Contents/Helpers/magnife-mcp" } } }
+```
+
+Then ask things like "what failed in my last request?" or "why is GET /orders slow?". The agent has six read-only tools:
+
+| Tool | What it gives the agent |
+| --- | --- |
+| `find_problems` | Every slow SQL query, N+1 query and failed HTTP call in the newest traces, with trace and span ids |
+| `list_traces` | The newest traces, narrowed with the ⌘K query language (`status:error service:orders >200ms`) |
+| `get_trace` | One trace's span tree, findings, error messages and exceptions |
+| `get_span` | A span's attributes, events, stack traces, resource and logs |
+| `search_logs` | Logs by trace, service, level or text |
+| `list_services` | The services Magnife has seen |
+
+The tools and their limits are in [docs/mcp.md](docs/mcp.md).
+
 ## How it works
 
 ```mermaid
@@ -109,13 +140,16 @@ flowchart LR
         db -- "read-only (GRDB)" --> ui["Magnife<br/>(SwiftUI + AppKit)"]
         helper -- "stdout: ports, batch, pruned, imported" --> ui
         ui -- "stdin: retention, prune, retry, import; EOF = exit" --> helper
+        db -- "read-only (GRDB)" --> mcp["magnife-mcp<br/>(Swift, MCP over stdio)"]
     end
+    agent["Your coding agent<br/>(Claude Code, Codex, Cursor)"] <-- "MCP" --> mcp
 ```
 
-Magnife is two programs that share one SQLite file:
+Magnife is two programs that share one SQLite file, plus a third that only reads it:
 
 - **[`ingest/`](ingest/README.md)**: a Go helper built on the OpenTelemetry Collector's `pdata` decoders. It receives OTLP, converts it to rows and writes them in batches. It is the **only writer**. Each committed batch is one JSON line on stdout, so the app refreshes exactly when there is something new.
 - **[`app/`](app/)**: a SwiftUI app with AppKit where SwiftUI was too slow (the live lists and the waterfall). It starts the helper as a child process and opens the database **read-only**. The helper exits when its stdin closes, so it dies with the app, even after `kill -9`.
+- **`magnife-mcp`**: the MCP server for coding agents, a small Swift program in `Contents/Helpers` built on the app's own reader, query parser and detectors (`app/Sources/MagnifeKit/MCP`).
 - **[`docs/schema.sql`](docs/schema.sql)** is the contract between the two: tables, JSON columns and the line protocol. Tests on both sides read it, and the Go helper embeds a byte-identical copy.
 
 More detail is in [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -174,7 +208,8 @@ scripts/    sample sender, local install, SDK interop apps
 - [x] v0.1: receiver, live list, waterfall, logs, search and filters, detectors, menu bar, retention
 - [x] v0.2: export and import traces as files
 - [ ] v0.2: metrics with charts, and side-by-side comparison of two traces
-- [ ] v0.3: AI agent view (calls, tools, tokens and cost for coding agents), and an MCP server so agents can query local traces
+- [x] v0.3: an MCP server so coding agents can query local traces ([docs/mcp.md](docs/mcp.md))
+- [ ] v0.3: AI agent view (calls, tools, tokens and cost for coding agents), and Settings > Agents to connect one in a click
 - [ ] v0.4: forwarding to a remote backend (OTLP proxy)
 
 ## Contributing

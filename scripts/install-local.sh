@@ -10,6 +10,7 @@
 #   3. Assembles Magnife.app in a staging folder:
 #        Contents/MacOS/Magnife             the SwiftPM executable
 #        Contents/Helpers/magnife-ingest    the helper (HelperConfiguration looks here)
+#        Contents/Helpers/magnife-mcp       the MCP server for coding agents (S-034)
 #        Contents/Info.plist                app/Info.plist.in, __BUILD__ = yyyymmddHHMM
 #        Contents/Resources/Assets.car, AppIcon.icns   copied from app/Resources
 #   4. Signs inside out, ad hoc (`codesign -s -`), never --deep: the helper
@@ -152,7 +153,9 @@ bin_dir=$(swift build -c $config --package-path "$appsrc" --scratch-path "$scrat
 bin="$bin_dir/$name"
 [[ -x "$bin" ]] || { echo "error: build failed (no $bin)" >&2; exit 1; }
 # swift build can report success while an edited file failed to compile (app/build.sh).
-stale=$(find "$appsrc/Sources" -name '*.swift' -newer "$bin" | head -1)
+# magnife-mcp (S-034) is not linked into the app, so its sources do not count here;
+# it is checked by running it below (a comment-only edit does not relink it).
+stale=$(find "$appsrc/Sources" -path '*/MagnifeMCP' -prune -o -name '*.swift' -newer "$bin" -print | head -1)
 if [[ -n "$stale" ]]; then
   echo "error: build failed: binary is older than $stale" >&2
   swift build -c $config --package-path "$appsrc" --scratch-path "$scratch" "${swift_flags[@]}" 2>&1 | grep -E "error" | head -20 >&2
@@ -168,6 +171,9 @@ staged="$stage/$name.app"
 mkdir -p "$staged/Contents/MacOS" "$staged/Contents/Helpers" "$staged/Contents/Resources"
 cp "$bin" "$staged/Contents/MacOS/$name"
 cp "$helper_src" "$staged/Contents/Helpers/magnife-ingest"
+# The MCP server for coding agents (S-034, docs/mcp.md), built with the app.
+"$bin_dir/magnife-mcp" --version >/dev/null 2>&1 || { echo "error: build failed ($bin_dir/magnife-mcp is missing or does not run)" >&2; exit 1; }
+cp "$bin_dir/magnife-mcp" "$staged/Contents/Helpers/magnife-mcp"
 sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$appsrc/Info.plist.in" > "$staged/Contents/Info.plist"
 if [[ $sparkle == 1 ]]; then
   "$appsrc/tools/sparkle-bundle.sh" "$bin_dir/Sparkle.framework" "$staged"
@@ -191,6 +197,7 @@ xattr -cr "$staged"
 step "Signing ad hoc (helper, then app)"
 sign() { codesign --force --options runtime --timestamp=none --sign - "$@" 2>&1 | grep -v "replacing existing signature" || true; }
 sign --identifier "$bundle_id.ingest" "$staged/Contents/Helpers/magnife-ingest"
+sign --identifier "$bundle_id.mcp" "$staged/Contents/Helpers/magnife-mcp"
 if [[ $sparkle == 1 ]]; then
   "$appsrc/tools/sparkle-bundle.sh" --sign - "$staged"
   codesign --force --timestamp=none --sign - "$staged" 2>&1 | grep -v "replacing existing signature" || true
@@ -198,6 +205,7 @@ else
   sign "$staged"
 fi
 codesign --verify --strict "$staged/Contents/Helpers/magnife-ingest" || { echo "error: helper signature check failed" >&2; exit 1; }
+codesign --verify --strict "$staged/Contents/Helpers/magnife-mcp" || { echo "error: magnife-mcp signature check failed" >&2; exit 1; }
 codesign --verify --strict --deep "$staged" || { echo "error: app signature check failed" >&2; exit 1; }
 codesign -dv "$staged/Contents/Helpers/magnife-ingest" 2>&1 | grep -E "^Identifier=|flags=" | sed 's/^/    helper: /'
 codesign -dv "$staged" 2>&1 | grep -E "^Identifier=|flags=" | sed 's/^/    app:    /'

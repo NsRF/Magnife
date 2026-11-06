@@ -1,6 +1,6 @@
 # Magnife architecture
 
-Two programs share one SQLite file. The contract is `docs/schema.sql`.
+Two programs share one SQLite file, and a third only reads it. The contract is `docs/schema.sql`.
 
 ```text
 apps ──OTLP──> ingest/ (Go helper, magnife-ingest) ──writes──> magnife.sqlite
@@ -8,6 +8,8 @@ apps ──OTLP──> ingest/ (Go helper, magnife-ingest) ──writes──> m
                     v
                app/ (SwiftUI, Magnife.app) ──reads (GRDB, read-only)──> magnife.sqlite
                     │ stdin: retention, prune, retry, import <file>; EOF = exit
+
+coding agent <──MCP (stdio)──> magnife-mcp (Swift, MagnifeKit) ──reads (read-only)──> magnife.sqlite
 ```
 
 ## Targets and layers
@@ -22,6 +24,11 @@ apps ──OTLP──> ingest/ (Go helper, magnife-ingest) ──writes──> m
   them (`Waterfall`, `SpanDetail`, `TraceList`, `TraceListState`), the read-only
   `TelemetryReader` with all SQL in `TelemetrySQL`, the helper protocol and
   `HelperSupervisor`, formatting. Unit-tested in `app/Tests/MagnifeKitTests`.
+- `app/Sources/MagnifeMCP` (`Contents/Helpers/magnife-mcp`, S-034, docs/mcp.md):
+  the MCP server for coding agents. A stdio loop around MagnifeKit's `MCP/`
+  (`MCPServer`, JSON-RPC and MCP with no dependency; `MagnifeTools`, six
+  read-only tools on the same reader, query parser, detectors and finding words
+  as the window). Started by the agent, not by the app.
 - `app/Sources/Magnife` (the app, main actor by default): `AppModel` (observable
   state, split by story into extensions), SwiftUI views, the AppKit views where
   SwiftUI was too slow or reentrant (the waterfall's NSOutlineView, the span

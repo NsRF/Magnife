@@ -186,7 +186,7 @@ MAGNIFE_SPARKLE=1 SPARKLE_AUTOMATIC_CHECKS=ask SPARKLE_FEED_URL= SPARKLE_PUBLIC_
   "$repo/scripts/install-local.sh" --no-quit
 [[ -d "$app/Contents/Frameworks/Sparkle.framework" ]] || { echo "error: $app has no Sparkle.framework" >&2; exit 1; }
 [[ -x "$sparkle_bin/sign_update" ]] || { echo "error: no Sparkle tools in $sparkle_bin after the build" >&2; exit 1; }
-for f in "$app/Contents/MacOS/$name" "$app/Contents/Helpers/magnife-ingest"; do
+for f in "$app/Contents/MacOS/$name" "$app/Contents/Helpers/magnife-ingest" "$app/Contents/Helpers/magnife-mcp"; do
   archs=" $(lipo -archs "$f") "
   [[ $archs == *" arm64 "* && $archs == *" x86_64 "* ]] || { echo "error: $f is not universal:$archs" >&2; exit 1; }
   # LSMinimumSystemVersion is 26.0; a binary built for a newer macOS would not launch there.
@@ -229,9 +229,11 @@ fi
 
 if [[ -n "${DEV_ID:-}" ]]; then
   step "Signing with $DEV_ID"
-  # Inside out, never --deep: the helper, Sparkle's code, then the app.
+  # Inside out, never --deep: the helpers, Sparkle's code, then the app.
   codesign --force --options runtime --timestamp --sign "$DEV_ID" \
     --identifier "$bundle_id.ingest" "$app/Contents/Helpers/magnife-ingest"
+  codesign --force --options runtime --timestamp --sign "$DEV_ID" \
+    --identifier "$bundle_id.mcp" "$app/Contents/Helpers/magnife-mcp"
   "$repo/app/tools/sparkle-bundle.sh" --sign "$DEV_ID" "$app"
   codesign --force --options runtime --timestamp --sign "$DEV_ID" "$app"
   signed_with="Developer ID"

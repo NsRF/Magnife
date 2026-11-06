@@ -457,10 +457,10 @@ brew uninstall --cask --zap magnife
       still there, and `codesign --verify --strict --deep` passes on the new bundle.
 - [ ] `brew install --cask <GH_USER>/tap/magnife` on a clean machine opens the app.
 
-## B10. Payment and licensing **[owner]**
+## B10. Payment and licensing **[not planned]**
 
-From docs/MVP.md (hypotheses to validate with the first users; nothing is
-built, and nothing above depends on it):
+Decided 2026-11-05: Magnife is open source (MIT) with no paid plan, so none
+of this is built. Kept as the MVP's original hypothesis (docs/MVP.md):
 
 - [ ] Merchant of record: Paddle or Lemon Squeezy (they handle sales tax and
       issue the licence). Account, products, payout details.

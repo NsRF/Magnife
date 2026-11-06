@@ -4,6 +4,11 @@ import PackageDescription
 let package = Package(
     name: "Magnife",
     platforms: [.macOS(.v26)],
+    products: [
+        .executable(name: "Magnife", targets: ["Magnife"]),
+        // The MCP server for coding agents (S-034, docs/mcp.md): Contents/Helpers/magnife-mcp.
+        .executable(name: "magnife-mcp", targets: ["MagnifeMCP"]),
+    ],
     // Software updates (Sparkle 2) are opt-in: `swift build --traits Sparkle`,
     // which build.sh passes when MAGNIFE_SPARKLE=1. Without the trait Sparkle
     // is not fetched as a binary, not compiled and not linked (a resolve may
@@ -34,6 +39,11 @@ let package = Package(
                 .defaultIsolation(MainActor.self),
                 .define("MAGNIFE_SPARKLE", .when(traits: ["Sparkle"])),
             ]
+        ),
+        // Reads the store with MagnifeKit's reader; no SwiftUI, no AppKit.
+        .executableTarget(
+            name: "MagnifeMCP",
+            dependencies: ["MagnifeKit"]
         ),
         .testTarget(
             name: "MagnifeKitTests",
