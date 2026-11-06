@@ -236,6 +236,18 @@ final class MenuState: ObservableObject {
         if self.hasTraceID != hasTraceID { self.hasTraceID = hasTraceID }
     }
 
+    /// Swap Traces and Show Only Differences apply while a comparison is open (S-036).
+    @Published private(set) var hasComparison = false
+    @Published private(set) var showsOnlyDifferences = true
+
+    func update(hasComparison: Bool) {
+        if self.hasComparison != hasComparison { self.hasComparison = hasComparison }
+    }
+
+    func update(showsOnlyDifferences: Bool) {
+        if self.showsOnlyDifferences != showsOnlyDifferences { self.showsOnlyDifferences = showsOnlyDifferences }
+    }
+
     /// View > Show Span Detail reads "Hide Span Detail" while the pane shows.
     @Published private(set) var showsSpanDetail = true
 

@@ -30,6 +30,8 @@ rm -rf ~/Library/Saved\ Application\ State/com.nasserfarhat.magnife.savedState
 seed_store $store || exit 1
 # 01-empty-state reads the schema-only file next to the store (SnapshotPage.emptyStore).
 seed_store ${store:r}.empty.sqlite --empty || exit 1
+# 10-compare reads the compare set next to the store (SnapshotPage.compareStore, S-036).
+seed_store ${store:r}.compare.sqlite --compare || exit 1
 # The empty window-frame and split-frames defaults make the window open at
 # its default 1280 x 760 with the columns at their ideal widths (docs/ux.md),
 # not at the size the owner or the last run left.

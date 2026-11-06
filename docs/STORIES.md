@@ -13,6 +13,7 @@ Source: [BRIEF.md](BRIEF.md). No reference app, so `Screens:` names the snapshot
 | 07-filter-bar | Filters applied above the trace list |
 | 08-menu-bar | Menu bar extra, open |
 | 09-settings | Settings window |
+| 10-compare | Compare Traces window, two traces of one route |
 
 ## M1 Core loop
 Send telemetry, see the trace, read why it failed. Data survives a restart.
@@ -389,6 +390,21 @@ Acceptance:
 - [unit] A file that is missing, empty, not JSON, not OTLP, nested too deeply or larger than 64 MB stores nothing, and the alert says why in one sentence.
 Status: done
 
+### S-036 Compare two traces side by side
+As the user, I pick two traces of the same route, a fast and a slow one, and see at a glance where they differ: which spans got slower, which are new or missing, and how many times each repeated query ran.
+Depends: S-005, S-017, S-024
+Screens: 10-compare
+UX: docs/ux.md, S-036
+Acceptance:
+- [unit] Spans match by where they sit and what they are, never by span id: the key is the service, the kind and the name with ids taken out (runs of 2 or more digits, UUIDs and 8 or more hex characters read as `?`), plus the normalized statement (`SQLNormalizer`, the N+1 rule's shapes) for database spans. Roots match by key, and one root on each side always match. Under a matched pair, the i-th child with a key in start order pairs with the i-th; a key that runs 2 or more times on either side is one group row; leftovers are New (only in B) or Missing (only in A) with their whole subtree. Orphans, parent cycles and a 30,000-deep chain build without recursion.
+- [unit] A pair is Slower or Faster when it differs by over 1 ms and over 20% of A, else Same (decided by the agent); a span that turns Error is a difference whatever its time. Self time (the duration less its children's union) ranks the Slower and Faster lines, so the query comes first, not the spans above it. Under 20% of the spans matched, the comparison says the traces have little in common.
+- [unit] The Queries table counts each service's normalized statements in A and B with their total times, and the Repeated lines name the statements whose run count changed.
+- [unit] `compare_traces` (MCP, S-034) takes `trace_id` (B) and an optional `baseline_trace_id` (A; left out: the fastest of the newest 50 other traces with B's root service and route, and the answer says so) and answers in the window's words, at most 500 rows of the tree (the rest counted). `MAGNIFE_COMPARE_STORE=<db> swift test --filter MCPCompareStoreTests` checks it on the compare store.
+- [self] Compare with Selected Trace (a trace row's context menu) and Trace > Compare With… (⇧⌘K, Search listing Same Route first, Return compares) open the Compare Traces window with A and B the right way round; Swap Traces flips them. On the compare store, the strip names the Error, then the 300 ms query before the spans above it, "2 → 8 runs", the New call and the Missing span. A 30,000 vs 30,000-span comparison builds in under 1 second without a main-thread stall over 100 ms.
+- [snap] 10-compare, -picker, -different and -all (Show Only Differences off) in light and dark, with the grid checks passing.
+- [manual] In Claude Code, "why was my last GET /account/orders slower than the one before?" calls `compare_traces` and names the slower query.
+Status: todo (built 2026-11-06, not committed: unit, MCP store, `APP_SELFTEST_ONLY=compare` 55/55, snapshots and grid checks pass; the manual line and a full self-test run on an idle, unlocked Mac are left, docs/PROGRESS.md)
+
 ## v0.3 Agents
 
 ### S-034 Let my coding agent read my local traces
@@ -397,7 +413,7 @@ Depends: S-005, S-006, S-013, S-017, S-023, S-024, S-025
 Spec: [mcp.md](mcp.md)
 Acceptance:
 - [unit] `Contents/Helpers/magnife-mcp` speaks MCP over stdio (JSON-RPC 2.0, one message per line): `initialize` answers with the protocol version the client asked for when it is one of the supported ones, else the newest; `ping`; `tools/list`; `tools/call`. A notification gets no answer; an unknown method gets -32601, bad JSON -32700, an unknown tool -32602; missing or wrong arguments are an `isError` result that says why, so the agent can try again.
-- [unit] Six tools, all read-only (`readOnlyHint`): `list_services`, `list_traces`, `get_trace`, `get_span`, `search_logs`, `find_problems`. `list_traces` takes the ⌘K query language (`status:error service:orders >200ms`), the same parser as Search.
+- [unit] Six tools, all read-only (`readOnlyHint`): `list_services`, `list_traces`, `get_trace`, `get_span`, `search_logs`, `find_problems` (and S-036's `compare_traces`, the seventh). `list_traces` takes the ⌘K query language (`status:error service:orders >200ms`), the same parser as Search.
 - [unit] What a tool says about a finding is the app's own words (`Finding.detailText(in:)`, placed in the trace), so the agent and the window never disagree.
 - [unit] It opens the database read-only, as the app does, and never writes; it reads stored traces while Magnife is quit (persistent WAL, S-008). With no database yet, a tool call answers `isError` with one sentence: open Magnife and send telemetry.
 - [unit] Output is bounded: at most 100 traces, 500 spans of a trace (the rest counted), 200 logs, and attribute values over 2,000 characters cut with how many were left out.
@@ -424,6 +440,7 @@ Snapshots use a fixture of OTLP payloads replayed into the helper, so every valu
 - Logs at Debug, Info, Warn and Error, most linked to spans, a few with no trace id; the HTTP 500 trace also has one with no span id, one from a span never sent, and one with a structured (JSON) body.
 - One saved filter, "Checkout errors", created through S-021.
 - Detector edge set, outside the seed set: `scripts/send-sample-traces --edges` sends 6 traces (51 spans, no logs, fixed ids) at the Slow SQL, N+1 and HTTP Error boundaries (99.9 / 100.0 / 100.4 / 101 ms queries, 4 and 5 runs, 304 / 400 / 404 / 502 / 503, no response code, a 200 with status Error). `--scenarios` takes its names (`edge-slow-boundary`, …) too. `tools/selftest.sh` seeds it as its own store (`seed_store <db> --edges`, `APP_EDGE_STORE`) and `swift test` checks it with `MAGNIFE_EDGE_STORE=<db>` (`EdgeStoreGoldenTests`); `MAGNIFE_DUMP_STORE=<db> MAGNIFE_FINDINGS_DUMP=<file> swift test --filter EdgeStoreGoldenTests/dumpStore` writes what every trace of any store says, as JSON.
+- Compare set (S-036), outside the seed set: `scripts/send-sample-traces --compare` sends two `GET /account/orders` traces with fixed ids, a fast one (2 `order_items` runs, a cache hit) and a slow one (8 runs, a 300 ms slower `SELECT orders`, a New inventory call, the cache hit Missing, a recommendations call that turns Error). `seed_store <db> --compare` seeds it (`APP_COMPARE_STORE`).
 - Golden volume: `scripts/send-sample-traces --volume 12000 --seed 1` sends the same 1,611 traces (12,001 spans) every run; `--seed` works for `--rate` and `--live` too. Without it each run is random.
 
 ## Dropped
@@ -433,7 +450,9 @@ Snapshots use a fixture of OTLP payloads replayed into the helper, so every valu
 - In-app usage telemetry: vendor-only; if added later, opt-in and anonymous as the spec says.
 
 ## Later
-- v0.2: metrics with charts; side-by-side comparison of two traces.
+- v0.2: metrics with charts.
+- ~~v0.2: side-by-side comparison of two traces.~~ S-036.
+- Comparison, later: the two spans' attributes side by side, and logs.
 - ~~v0.2: export and import traces as files.~~ Done as S-033.
 - v0.3: AI agent view (calls, tools, tokens, cost).
 - ~~v0.3: MCP server for agents to query local traces.~~ S-034.

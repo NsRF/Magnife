@@ -3,7 +3,7 @@ import GRDB
 import Testing
 @testable import MagnifeKit
 
-/// S-034: the six tools on a store written the way the helper writes it (docs/mcp.md).
+/// S-034 and S-036: the seven tools on a store written the way the helper writes it (docs/mcp.md).
 struct MagnifeToolsTests {
     static let base: Int64 = 1_800_000_000_000_000_000
     static let ms: Int64 = 1_000_000
@@ -60,7 +60,8 @@ struct MagnifeToolsTests {
     @Test func everyToolIsListedReadOnly() throws {
         let (dir, tools) = try makeTools()
         defer { dir.remove() }
-        #expect(tools.tools.map(\.name) == ["list_services", "list_traces", "get_trace", "get_span", "search_logs", "find_problems"])
+        #expect(tools.tools.map(\.name) == ["list_services", "list_traces", "get_trace", "get_span", "search_logs", "find_problems",
+                                            "compare_traces"])
         #expect(tools.tools.allSatisfy { $0.listed["annotations"]?["readOnlyHint"] == true })
         #expect(tools.tools.allSatisfy { $0.inputSchema["type"] == "object" })
     }
@@ -225,5 +226,26 @@ struct MCPSeedStoreTests {
         let trace = try await tools.call("get_trace", arguments: ["trace_id": .string(String(id))])
         #expect(trace.text.contains("DbUpdateException"))
         #expect(trace.text.contains("- POST /checkout/pay · web · Server"))
+    }
+}
+
+/// S-036's compare-store check: `MAGNIFE_COMPARE_STORE=<db> swift test --filter MCPCompareStoreTests` on a store
+/// seeded with `seed_store <db> --compare`: compare_traces on the slow trace picks the fast one and names the query.
+struct MCPCompareStoreTests {
+    static let fast = "a7ee16380c64f5396e5afcb974081dda"
+    static let slow = "99e87d935187cf52601204edd521fffc"
+
+    @Test func compareTracesExplainsTheSlowOne() async throws {
+        guard let path = ProcessInfo.processInfo.environment["MAGNIFE_COMPARE_STORE"], !path.isEmpty else { return }
+        let tools = MagnifeTools(store: StoreConnection(url: URL(fileURLWithPath: path)))
+        let result = try await tools.call("compare_traces", arguments: ["trace_id": .string(String(Self.slow.prefix(8)))])
+        #expect(!result.isError)
+        #expect(result.text.contains("A: \(Self.fast) · web · GET /account/orders · 64 ms · 10 spans"))
+        #expect(result.text.contains("A is the only other stored GET /account/orders trace of web; give baseline_trace_id for another."))
+        #expect(result.text.contains("B took 356 ms longer than A (6.6×). B has 6 more spans."))
+        #expect(result.text.contains("- Slower · +300 ms · SELECT orders · orders: "))
+        #expect(result.text.contains("- Repeated · 2 → 8 runs · +30 ms · SELECT order_items · orders: "))
+        #expect(result.text.contains("- New · GET /v1/inventory · orders: "))
+        #expect(result.text.contains("- Missing · HGET · checkout-api: "))
     }
 }

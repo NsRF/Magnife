@@ -123,6 +123,12 @@ final class TraceTableCoordinator: LiveTableCoordinator {
         let id = rows[row].traceID
         return [ActionMenuItem.make("Copy Trace ID") { [model] in model.copyTraceID(id) },
                 .separator(),
+                // S-036: the selected trace is A, this row B.
+                ActionMenuItem.make("Compare with Selected Trace", enabled: model.canCompareWithSelectedTrace(id)) { [model] in
+                    model.compareWithSelectedTrace(id)
+                },
+                ActionMenuItem.make("Compare With…") { [model] in model.showCompareSearch(for: id) },
+                .separator(),
                 ActionMenuItem.make("Export Trace…") { [model] in model.exportTrace(id) }]
     }
 }

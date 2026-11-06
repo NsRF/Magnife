@@ -209,3 +209,34 @@ func TestEdgeBoundaries(t *testing.T) {
 		t.Errorf("%d of %d database spans found", seen, len(want))
 	}
 }
+
+func TestCompareSetIsDeterministic(t *testing.T) {
+	want := []struct {
+		name  string
+		spans int
+		id    string
+	}{
+		{"compare-orders-fast", 10, "a7ee16380c64f5396e5afcb974081dda"},
+		{"compare-orders-slow", 16, "99e87d935187cf52601204edd521fffc"},
+	}
+	if len(CompareScenarios) != len(want) {
+		t.Fatalf("%d compare scenarios, want %d", len(CompareScenarios), len(want))
+	}
+	for i, sc := range CompareScenarios {
+		b := NewBatch()
+		tr := sc.Add(SeedGen(sc.Name), b, time.Unix(1_700_000_000, 0), 1)
+		again := sc.Add(SeedGen(sc.Name), NewBatch(), time.Unix(1_700_000_000, 0), 1)
+		if sc.Name != want[i].name || tr.Spans != want[i].spans {
+			t.Errorf("compare %d %s: %d spans, want %s with %d", i, sc.Name, tr.Spans, want[i].name, want[i].spans)
+		}
+		if tr.ID.String() != want[i].id || again.ID != tr.ID {
+			t.Errorf("%s: trace ids differ between two runs", sc.Name)
+		}
+		if _, ok := Lookup(sc.Name); ok {
+			t.Errorf("compare scenario %s is in the seed set", sc.Name)
+		}
+		if found, ok := LookupCompare(sc.Name); !ok || found.Name != sc.Name {
+			t.Errorf("LookupCompare(%q) failed", sc.Name)
+		}
+	}
+}

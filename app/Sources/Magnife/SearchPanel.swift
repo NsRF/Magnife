@@ -33,6 +33,11 @@ struct SearchPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let title = model.searchCompareTitle {
+                CompareBaseChip(title: title)
+                    .padding(.horizontal, Space.lg)
+                    .padding(.top, Space.md)
+            }
             field
             let tokens = model.searchQuery.tokens
             if !tokens.isEmpty {
@@ -61,6 +66,7 @@ struct SearchPanel: View {
                 .frame(width: Space.xl)
                 .accessibilityHidden(true)
             SearchField(text: $model.searchText, focusRequest: model.searchFocusRequest,
+                        placeholder: model.searchCompareBase == nil ? TraceSearch.placeholder : TraceSearch.comparePlaceholder,
                         onMove: { model.moveSearchSelection(by: $0) },
                         onSubmit: { model.activateSearchSelection() },
                         onApply: { model.applySearchAsFilter() },
@@ -71,15 +77,18 @@ struct SearchPanel: View {
         .padding(.vertical, Space.md)
     }
 
-    /// "↩ Open   ⌘↩ Apply as Filter   esc Close", the keys in the same words as the menus.
+    /// "↩ Open   ⌘↩ Apply as Filter   esc Close", the keys in the same words
+    /// as the menus; in compare mode "↩ Compare   esc Close" (S-036).
     private var footer: some View {
         HStack(spacing: Space.lg) {
-            Button("↩ Open") { model.activateSearchSelection() }
+            Button(model.searchCompareBase == nil ? "↩ Open" : "↩ Compare") { model.activateSearchSelection() }
                 .disabled(model.searchTraces.isEmpty && model.searchSuggestions.isEmpty)
-            // The field editor never sees ⌘Return; the window's key equivalents do.
-            Button("⌘↩ Apply as Filter") { model.applySearchAsFilter() }
-                .keyboardShortcut(.return, modifiers: .command)
-                .disabled(!model.searchQuery.filter.isActive)
+            if model.searchCompareBase == nil {
+                // The field editor never sees ⌘Return; the window's key equivalents do.
+                Button("⌘↩ Apply as Filter") { model.applySearchAsFilter() }
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(!model.searchQuery.filter.isActive)
+            }
             Button("esc Close") { model.closeSearch() }
             Spacer(minLength: 0)
         }
@@ -88,6 +97,23 @@ struct SearchPanel: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, Space.lg)
         .padding(.vertical, Space.sm)
+    }
+}
+
+/// Compare mode's chip before the field (S-036): "Compare with GET /account/orders · 64 ms".
+struct CompareBaseChip: View {
+    let title: String
+
+    var body: some View {
+        Label(title, systemImage: "arrow.left.arrow.right")
+            .font(.callout)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .padding(.horizontal, Space.sm)
+            .padding(.vertical, 2)
+            .background(.tint.opacity(0.16), in: Capsule())
+            .help(title)
+            .gridProbe("compare-chip", area: "search-panel", edge: nil)
     }
 }
 
@@ -139,11 +165,14 @@ struct SearchResults: View {
                         if traces.isEmpty {
                             noMatches(result)
                         } else {
-                            header(result)
+                            // Compare mode (S-036): "Same Route" first, then the result's own header.
+                            let same = model.searchSameRouteCount
+                            if same > 0 { sectionHeader(TraceSearch.sameRouteHeader, count: "") }
                             ForEach(Array(traces.enumerated()), id: \.element.id) { offset, trace in
                                 let index = suggestions.count + offset
+                                if offset == same, offset < traces.count { header(result) }
                                 SearchResultRow(trace: trace, now: model.now, isSelected: model.searchSelection == index) {
-                                    model.openSearchResult(trace.traceID)
+                                    model.pickSearchResult(trace.traceID)
                                 }
                                 .id(Self.rowID(index))
                             }
@@ -162,13 +191,17 @@ struct SearchResults: View {
     private static func rowID(_ index: Int) -> String { "row-\(index)" }
 
     private func header(_ result: TraceSearchResult) -> some View {
+        sectionHeader(result.header, count: result.countText)
+    }
+
+    private func sectionHeader(_ title: String, count: String) -> some View {
         HStack {
-            Text(result.header)
+            Text(title)
                 .font(.headline)
                 .foregroundStyle(.secondary)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
-            Text(result.countText)
+            Text(count)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()

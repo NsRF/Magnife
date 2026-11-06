@@ -9,6 +9,7 @@ struct SearchField: NSViewRepresentable {
     @Binding var text: String
     /// A new value puts the focus in the field and selects its text.
     let focusRequest: Int
+    var placeholder = TraceSearch.placeholder
     let onMove: (Int) -> Void
     let onSubmit: () -> Void
     let onApply: () -> Void
@@ -20,7 +21,7 @@ struct SearchField: NSViewRepresentable {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .preferredFont(forTextStyle: .title2)
-        field.placeholderString = TraceSearch.placeholder
+        field.placeholderString = placeholder
         field.setAccessibilityLabel(TraceSearch.label)
         field.lineBreakMode = .byTruncatingTail
         field.cell?.usesSingleLineMode = true
@@ -34,6 +35,7 @@ struct SearchField: NSViewRepresentable {
 
     func updateNSView(_ field: NSTextField, context: Context) {
         context.coordinator.parent = self
+        if field.placeholderString != placeholder { field.placeholderString = placeholder }
         if field.stringValue != text {
             field.stringValue = text
             // A completed suggestion: the cursor goes to the end, ready for the next token.

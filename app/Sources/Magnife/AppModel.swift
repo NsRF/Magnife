@@ -148,6 +148,12 @@ final class AppModel {
     /// When the last result was shown, after how long since its key (self-test timing).
     @ObservationIgnored var searchTypedAt: ContinuousClock.Instant?
     @ObservationIgnored var lastSearchLatency: Duration?
+    /// Compare With… (S-036): Search picks B for this trace, A; nil in plain Search.
+    var searchCompareBase: TraceSummary?
+    /// The newest other traces of A's route, listed first under "Same Route".
+    var searchSameRoute: [TraceSummary] = []
+    /// The Compare Traces window (S-036), observed apart from the main window.
+    @ObservationIgnored let compare = CompareModel()
     /// While paused (S-010), the seq the list paused at; nil when live.
     /// Never restored at launch: Pause is always off then (docs/ux.md).
     var pausedSeq: Int64? {
@@ -594,6 +600,8 @@ final class AppModel {
             if !isPaused {
                 try await refreshOpenTrace(reader)
                 try await refreshOpenTraceLogs(reader)
+                // A compared trace still receiving spans (S-036).
+                try await refreshComparison(reader)
             }
         } catch {
             isLoadingScope = false

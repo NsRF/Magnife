@@ -291,7 +291,7 @@ this app starts the helper and reads its database. No server, no accounts.
 - MCP server (S-034, `../docs/mcp.md`): `Sources/MagnifeMCP/main.swift` is
   `Contents/Helpers/magnife-mcp`, a stdio loop around `MCPServer`
   (MagnifeKit `MCP/`: JSON-RPC and MCP, no dependency) and `MagnifeTools`
-  (the six read-only tools on `TelemetryReader`, `TraceQuery`, the detectors
+  (the seven read-only tools, S-036 added `compare_traces`, on `TelemetryReader`, `TraceQuery`, the detectors
   and `Finding.detailText(in:)`; never re-implement a rule there). Bad
   arguments throw `MCPInvalidParams`, which the server answers as an
   `isError` result. Tests: `MCPServerTests`, `MagnifeToolsTests`, and
@@ -306,6 +306,23 @@ this app starts the helper and reads its database. No server, no accounts.
   `wraps: true`. Help > Connect a Coding Agent… (`ConnectAgentMenuItem`)
   opens Settings on Agents. `APP_SELFTEST_ONLY=agents` runs its checks;
   snapshot `09-settings-agents`.
+- Compare Traces (S-036, `../docs/ux.md`): `TraceComparison` (MagnifeKit,
+  pure, iterative, unit-tested) matches two traces' spans by service, kind
+  and title with ids read as `?` plus `SQLNormalizer`'s shape for database
+  spans (never by span id), pairs the i-th run with the i-th, folds repeated
+  siblings into group rows and ranks the strip by self time;
+  `ComparisonWords.swift` has every surface's words, which `compare_traces`
+  (the MCP server's seventh tool) shares. `TelemetryReader.comparison` reads
+  both traces in one read, `sameRoute` the Same Route list. The window is a
+  `Window` scene (`CompareWindow`, id "compare", `CompareWindow.swift`, the
+  tree in `CompareOutline.swift`, an NSOutlineView like the waterfall's);
+  its state is `CompareModel` (`AppModel.compare`, `AppModel+Compare.swift`),
+  observed apart from AppModel so the main window's flood never redraws it.
+  Compare With… (⇧⌘K) is Search in compare mode (`searchCompareBase`,
+  `searchSameRoute`). `APP_SELFTEST_ONLY=compare` runs its checks on
+  `APP_COMPARE_STORE` (`seed_store <db> --compare`); snapshots `10-compare`,
+  `-all`, `-picker`, `-different` (the window is captured on its own).
+  `MAGNIFE_COMPARE_STORE=<db> swift test --filter MCPCompareStoreTests`.
 
 ## Layout
 

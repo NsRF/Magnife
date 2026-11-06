@@ -18,7 +18,7 @@ public actor StoreConnection {
     }
 }
 
-/// Magnife's six read-only tools (docs/mcp.md, "Tools"), on the same reader,
+/// Magnife's seven read-only tools (docs/mcp.md, "Tools"), on the same reader,
 /// query parser, detectors and finding words as the window.
 public struct MagnifeTools: MCPToolbox {
     public static let maxTraces = 100
@@ -28,6 +28,11 @@ public struct MagnifeTools: MCPToolbox {
     public static let maxStack = 8_000
     /// Spans with an error whose exceptions `get_trace` reads.
     public static let maxExceptionSpans = 20
+    /// Rows of a comparison's tree, and its strip lines and queries.
+    public static let maxComparisonRows = 500
+    public static let maxDifferences = 50
+    /// Same-route traces `compare_traces` looks at for a baseline.
+    public static let baselineCandidates = 50
 
     public let store: StoreConnection
     public let timeZone: TimeZone
@@ -95,6 +100,20 @@ public struct MagnifeTools: MCPToolbox {
                                   "description": "How many of the newest traces to look at."],
                         "since_minutes": ["type": "integer", "minimum": 1],
                     ])),
+            MCPTool(name: "compare_traces", title: "Compare two traces",
+                    description: """
+                        Two traces matched span by span, as Magnife's Compare Traces window shows them (B against A, the \
+                        baseline): how much longer B took, the differences (spans that got slower or faster by their own \
+                        time, new and missing spans, statements whose number of runs changed, spans that turned Error), each \
+                        normalized SQL statement's runs and duration in both, and the tree of the spans that differ, with \
+                        span ids from both traces. Leave baseline_trace_id out to compare with the fastest recent trace of \
+                        the same route: "why is this request slower than usual?".
+                        """,
+                    inputSchema: Self.schema([
+                        "trace_id": ["type": "string", "description": "Trace B, the one to explain (full id, or a unique prefix of 8 or more)."],
+                        "baseline_trace_id": ["type": "string", "description": .string("Trace A. Left out: the fastest of the newest \(Self.baselineCandidates) other traces with B's service and route.")],
+                        "max_rows": ["type": "integer", "minimum": 1, "maximum": .number(Double(Self.maxComparisonRows)), "default": 200],
+                    ], required: ["trace_id"])),
         ]
     }
 
@@ -127,6 +146,9 @@ public struct MagnifeTools: MCPToolbox {
             case "find_problems":
                 return try await findProblems(limit: try args.int("limit", default: 50, in: 1...Self.maxTraces),
                                               sinceMinutes: try args.optionalInt("since_minutes", in: 1...525_600))
+            case "compare_traces":
+                return try await compareTraces(id: try args.required("trace_id"), baselineID: try args.string("baseline_trace_id"),
+                                               maxRows: try args.int("max_rows", default: 200, in: 1...Self.maxComparisonRows))
             default:
                 throw MCPInvalidParams("There is no tool named \(name).")
             }
@@ -317,6 +339,89 @@ public struct MagnifeTools: MCPToolbox {
             out += Self.statementText(finding)
         }
         return out
+    }
+
+    // MARK: compare_traces
+
+    func compareTraces(id: String, baselineID: String?, maxRows: Int) async throws -> MCPToolResult {
+        let reader = try await store.open()
+        let traceB = try await resolveTrace(id, reader: reader)
+        let traceA: TraceSummary
+        var picked = ""
+        if let baselineID, !baselineID.trimmingCharacters(in: .whitespaces).isEmpty {
+            traceA = try await resolveTrace(baselineID, reader: reader)
+        } else {
+            let candidates = try await reader.sameRoute(as: traceB, limit: Self.baselineCandidates)
+            guard let fastest = candidates.min(by: { ($0.durationNs, $1.startNs) < ($1.durationNs, $0.startNs) }) else {
+                throw ToolProblem(message: "No other stored trace of \(traceB.rootService) has the route \(traceB.route.isEmpty ? "(none)" : traceB.route), so there is no baseline to pick. Give baseline_trace_id (list_traces shows ids).")
+            }
+            traceA = fastest
+            picked = candidates.count == 1
+                ? "A is the only other stored \(traceB.route) trace of \(traceB.rootService); give baseline_trace_id for another.\n"
+                : "A is the fastest of the \(CountFormat.string(candidates.count)) newest other \(traceB.route) traces of \(traceB.rootService); give baseline_trace_id for another.\n"
+        }
+        guard traceA.traceID != traceB.traceID else {
+            throw ToolProblem(message: "trace_id and baseline_trace_id are the same trace; give two different traces.")
+        }
+        let read = try await reader.comparison(traceA: traceA.traceID, traceB: traceB.traceID)
+        let c = await TraceComparison.build(read)
+
+        var out = "Comparing B with A (the baseline):\n"
+        out += "A: " + traceLine(read.traceA ?? traceA, findings: nil) + "\n"
+        out += "B: " + traceLine(read.traceB ?? traceB, findings: nil) + "\n"
+        out += picked
+        out += c.totalSentence + "\n"
+        if c.hasLittleInCommon { out += c.littleInCommonText + "\n" }
+
+        if c.differences.isEmpty {
+            out += "\nDifferences: none. " + TraceComparison.noDifferencesText + "\n"
+        } else {
+            out += "\nDifferences (\(CountFormat.string(c.differences.count))), Error first, then by the time each explains:\n"
+            for difference in c.differences.prefix(Self.maxDifferences) {
+                out += "- \(c.line(difference)): \(c.detailText(difference))\(spanIDs(c, difference.row))\n"
+            }
+            if c.differences.count > Self.maxDifferences {
+                out += "… \(CountFormat.string(c.differences.count - Self.maxDifferences)) more differences not shown.\n"
+            }
+        }
+
+        if !c.queries.isEmpty {
+            out += "\nQueries (\(CountFormat.string(c.queries.count))), runs and duration in A → B:\n"
+            for query in c.queries.prefix(Self.maxDifferences) {
+                out += "- \(query.service) · \(TraceComparison.runsText(query)) runs · \(TraceComparison.durationText(query)) · "
+                out += Self.cut(Self.oneLine(query.statement), Self.maxValue) + "\n"
+            }
+            if c.queries.count > Self.maxDifferences {
+                out += "… \(CountFormat.string(c.queries.count - Self.maxDifferences)) more statements not shown.\n"
+            }
+        }
+
+        // The rows that differ and the rows above them; a group's runs stay one row.
+        let groups = Set(c.rows.lazy.filter(\.isGroup).map(\.id))
+        let rows = c.visibleRows(collapsed: groups).filter { c.rows[$0].differs || c.rows[$0].differsBelow }
+        if !rows.isEmpty {
+            out += "\nSpans that differ, as a tree (A → B, then the change):\n"
+            for index in rows.prefix(maxRows) {
+                let row = c.rows[index]
+                var line = String(repeating: "  ", count: min(row.depth, 24)) + "- \(row.title) · \(row.service)"
+                line += " · \(c.durationText(of: index, inA: true)) → \(c.durationText(of: index, inA: false))"
+                line += " · \(c.changeText(of: index))"
+                if row.statusChanged { line += " · \((row.aStatus ?? .unset).title) → \((row.bStatus ?? .unset).title)" }
+                out += line + spanIDs(c, index) + "\n"
+            }
+            if rows.count > maxRows {
+                out += "… \(CountFormat.string(rows.count - maxRows)) more rows not shown (max_rows is \(maxRows)).\n"
+            }
+        }
+        return MCPToolResult(out)
+    }
+
+    /// " (span A 1a2b…, span B 3c4d…)": get_span reads either.
+    func spanIDs(_ c: TraceComparison, _ index: Int) -> String {
+        guard !c.rows[index].isGroup else { return "" }
+        let ids = [c.spanID(of: index, inA: true).map { "span A \($0)" }, c.spanID(of: index, inA: false).map { "span B \($0)" }]
+            .compactMap { $0 }
+        return ids.isEmpty ? "" : " (" + ids.joined(separator: ", ") + ")"
     }
 
     // MARK: get_span

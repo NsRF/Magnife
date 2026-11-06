@@ -7,6 +7,7 @@
 #   seed_store <db in /tmp> --empty   helper on <db>, nothing sent (schema only)
 #   seed_store <db in /tmp> --volume N   random traces of the seed scenarios until N spans (S-017 timing)
 #   seed_store <db in /tmp> --edges   the detector edge set (send-sample-traces --edges): 6 traces, 51 spans, no logs
+#   seed_store <db in /tmp> --compare the compare set (S-036, send-sample-traces --compare): 2 traces, 26 spans, no logs
 #   seed_stop_last                    stops the last one (its store stays readable)
 #   seed_stop                         stops every helper seed_store started
 #   $seed_grpc, $seed_http            the last seeded helper's addresses
@@ -61,8 +62,8 @@ seed_store() {
   local summary
   if [[ $mode == --volume ]]; then
     summary=$($root/scripts/send-sample-traces --grpc $grpc --http $http --volume $volume 2>&1 | tail -1)
-  elif [[ $mode == --edges ]]; then
-    summary=$($root/scripts/send-sample-traces --grpc $grpc --http $http --edges 2>&1 | tail -1)
+  elif [[ $mode == --edges || $mode == --compare ]]; then
+    summary=$($root/scripts/send-sample-traces --grpc $grpc --http $http $mode 2>&1 | tail -1)
   else
     summary=$($root/scripts/send-sample-traces --grpc $grpc --http $http 2>&1 | tail -1)
   fi

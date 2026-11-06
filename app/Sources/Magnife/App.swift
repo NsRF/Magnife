@@ -146,6 +146,18 @@ struct MagnifeApp: App {
                 Button("Collapse All Spans") { delegate.model.collapseAllSpans() }
                     .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
                     .disabled(!menu.hasWaterfall || menu.contentMode != .traces)
+                Divider()
+                // Compare Traces (S-036): the selected trace is A.
+                Button("Compare With…") { delegate.model.showCompareSearch() }
+                    .keyboardShortcut("k", modifiers: [.command, .shift])
+                    .disabled(!menu.hasTraceID || menu.contentMode != .traces)
+                Button("Swap Traces") { delegate.model.swapComparedTraces() }
+                    .keyboardShortcut("k", modifiers: [.command, .option])
+                    .disabled(!menu.hasComparison)
+                Toggle("Show Only Differences", isOn: Binding(get: { menu.showsOnlyDifferences },
+                                                              set: { _ in delegate.model.toggleOnlyDifferences() }))
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                    .disabled(!menu.hasComparison)
             }
             MainWindowCommands()
             // No help book in v0.1 (docs/ux.md, Help menu).
@@ -161,6 +173,19 @@ struct MagnifeApp: App {
                 .themed()
         }
         .windowResizability(.contentSize)
+
+        // Compare Traces (S-036): one window of its own, so the merged tree
+        // has its width and the main window's list and selection stay put.
+        Window("Compare Traces", id: CompareWindow.id) {
+            CompareWindowView()
+                .environment(delegate.model)
+                .environment(delegate.model.compare)
+                .themed()
+                .frame(minWidth: 720, minHeight: 420)
+        }
+        .defaultSize(width: 960, height: 680)
+        .windowToolbarStyle(.unified)
+        .restorationBehavior(.disabled)
 
         // Recent Errors and the red icon (S-026); a native menu (platform decision 8).
         // Only Settings changes it. SwiftUI writes back what the status item

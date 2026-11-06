@@ -138,6 +138,10 @@ Every action has a menu item. Items that do not apply are disabled, not hidden, 
 - —
 - Expand All Spans ⌥⌘→
 - Collapse All Spans ⌥⌘←
+- —
+- Compare With… ⇧⌘K (the selected trace is A; S-036)
+- Swap Traces ⌥⌘K (Compare Traces window)
+- Show Only Differences ⇧⌘D (Compare Traces window; a checkmark while on)
 
 **Window**
 - Minimize ⌘M · Zoom · tiling items (system)
@@ -157,8 +161,9 @@ The default "Magnife Help" item is removed; there is no help book in v0.1.
 
 | Where | Items |
 | --- | --- |
-| Trace row | Copy Trace ID, —, Export Trace… |
+| Trace row | Copy Trace ID, —, Compare with Selected Trace, Compare With…, —, Export Trace… |
 | Waterfall row | Copy Span ID, —, Expand All Spans, Collapse All Spans |
+| Compare Traces row | Open Span in A, Open Span in B, —, Copy Span ID (B's, else A's) |
 | Log row (Logs view, Trace Logs) | Open Trace, Copy Body, Copy Trace ID |
 | Saved filter row | Rename Filter…, Delete Filter |
 
@@ -221,6 +226,9 @@ Menu shortcuts work anywhere in the main window unless focus is in a text field 
 | ⌃⌘I | Show or hide the span detail | Traces view |
 | ⌥⌘1 / ⌥⌘2 | Span / Trace Logs in the span detail | Traces view |
 | ⌥⌘→ / ⌥⌘← | Expand All Spans / Collapse All Spans | Trace open |
+| ⇧⌘K | Compare With… (Search in compare mode) | Trace selected |
+| ⌥⌘K / ⇧⌘D | Swap Traces / Show Only Differences | Compare Traces window |
+| Return | Open Span in B (A for a Missing row) in the main window | Compare Traces tree |
 | ⌘O | Open Trace | Log selected |
 | ⌘C | Copy the focused item (text, trace ID, span ID, log body) | Everywhere |
 | ⌘⌫ | Delete Filter | Sidebar, saved filter selected |
@@ -435,6 +443,20 @@ UX:
 - Words: section "Coding Agents", intro "Let Claude Code, Codex or another coding agent read your traces, spans, logs and findings. It can only read them."; tabs "Claude Code", "Codex", "Cursor", "Other"; notes: Claude Code "Run it once in Terminal. Every Claude Code session can then use Magnife."; Codex "Run it once in Terminal. Every Codex session can then use Magnife."; Cursor "Add it to ~/.cursor/mcp.json, or to .cursor/mcp.json in one project."; Other "Add it to your MCP client's settings, such as Claude Desktop's."; buttons "Copy Command" (Claude Code, Codex), "Copy Configuration" (Cursor, Other); a last line "Then ask your agent: “What failed in my last request?”"
 - Access: the picker and button have visible labels; the code block reads as one element; "Copied" is announced like S-003's
 
+### S-036 Compare two traces side by side
+UX:
+- Flow: select the fast trace (it becomes A, the baseline) -> right-click the slow one and choose Compare with Selected Trace; or press ⇧⌘K (Trace > Compare With…, or the waterfall header's compare button) -> Search opens in compare mode, listing Same Route first with each trace's duration -> pick the slow one, Return -> the Compare Traces window opens: both traces in the header, the differences strip, the merged tree and the queries -> click a strip line to select its row -> double-click a row, or Open Span in A / B, to see the span in the main window's waterfall -> Swap Traces (⌥⌘K) flips A and B -> close the window; nothing in the main window changed
+- Surface: a window of its own, "Compare Traces" (one at a time; a new comparison replaces it; 960 × 680 at first, then its own frame), because the merged tree needs about 900 pt and comparing should leave the main window's list, waterfall and selection alone; the picker is S-017's Search panel in a compare mode (a short task that closes once done)
+- Layout, top to bottom: header, two lines "A  GET /account/orders · web · 64 ms · 10 spans · 2 min ago" and "B  … 420 ms · 16 spans · 1 min ago", each with Open Trace; the differences strip; the merged tree (an outline: Span, A, B, Change, Timeline); Queries under it in a split (Statement, Service, Runs, Duration); toolbar Swap Traces and Show Only Differences
+- Matching: spans match by where they sit and what they are, never by span id: service, kind and name with ids read as `?` (runs of 2+ digits, UUIDs, 8+ hex characters), plus the normalized statement for database spans (S-024's shapes); the roots match, children of a matched pair pair up by key in start order (the 2nd SELECT with the 2nd); a key that runs 2 or more times on either side is one group row ("SELECT order_items", Change "2 → 8 runs") with its pairs under it; what is left is New (only in B) or Missing (only in A), with its whole subtree; a client span named only for its method is titled with its route or URL path ("GET /v1/inventory"), like S-025
+- Change words: Slower or Faster when B differs from A by over 1 ms and over 20% (decided by the agent), else Same in secondary text; New, Missing; Error when a span is OK or Unset in A and Error in B (octagon icon and the word); a group's change is its runs when they differ, else its total time
+- Strip: first a sentence, not a button: "B took 356 ms longer than A (6.6×). B has 6 more spans." ("B took 12 ms less than A (1.4× faster).", "B and A took about as long, 66 ms and 64 ms. Both have 10 spans."); then one button per difference, Error lines first, then by the time they explain: "Slower · +300 ms · SELECT orders · orders" (the time is the span's self time, its duration less the time its children cover, so the query comes first and the five spans above it, slower only because of it, get no line, and a span whose whole duration moved the other way never gets one; the line's tooltip "SELECT orders took 320 ms in B and 20 ms in A; 300 ms of it is its own time, not its children's."), "Repeated · 2 → 8 runs · +30 ms · SELECT order_items · orders", "New · GET /v1/inventory · orders" ("New · 3 spans · …" with a subtree), "Missing · HGET · checkout-api", "Error · Unset → Error · GET /v1/recommendations · checkout-api"; 3 lines, then "Show All Differences (7)" / "Show Fewer Differences"; none: "No differences over 1 ms and 20%."
+- Tree: each row is one pair, group or one-sided span; Span shows the name, the service where it differs from the parent's, and the change mark; A and B the durations ("—" on the side that has none; a group's "2 × 5.0 ms" when its runs are alike, else the total); Change "+300 ms", "−3 ms", "Same", "New", "Missing", "2 → 8 runs"; Timeline an A bar over a B bar on one scale, the longer trace's duration, each in the span's service color, New and Missing rows with one bar; Show Only Differences (on at first) collapses every subtree with no difference in it, so a 30,000-span pair opens on what changed; off, the tree opens like a waterfall (above 500 rows, deep subtrees collapsed, S-005); a group of 8,000 identical statements is one row
+- Queries: one row per service and normalized statement in either trace: "SELECT * FROM order_items WHERE order_id = ?", "orders", Runs "2 → 8", Duration "10 ms → 40 ms"; statements whose runs changed first, then by the change in time; the statement truncates at the tail with the full text as its tooltip; none: the pane is hidden
+- States: no comparison (the window opened from the Window menu): "No Comparison" with "Right-click a trace and choose Compare with Selected Trace, or press ⇧⌘K."; picker: a chip "Compare with GET /account/orders · 64 ms" before the field, placeholder "Find a trace to compare: service:, status:, route:, >200ms or any text", empty field lists "Same Route" (the 10 newest traces with A's route, A left out) then "Newest Traces", footer "↩ Compare   esc Close", no Apply as Filter; little in common (under 20% of the spans matched): a banner over the tree "These traces have little in common: 3 of 120 spans match. They may not be the same request." and everything still shows; the same trace on both sides cannot be picked (Compare with Selected Trace is disabled on the selected row); a trace still receiving spans re-reads at most every 500 ms, not while paused (S-010); a side that was pruned reads "Trace No Longer Stored" in the header and the tree shows the other side as New or Missing
+- Words: window "Compare Traces"; "A", "B"; A's tooltip "Baseline: the trace B is compared with"; columns "Span", "A", "B", "Change", "Timeline"; "Queries" with "Statement", "Service", "Runs", "Duration"; "Slower", "Faster", "Same", "New", "Missing", "Error", "Repeated", "2 → 8 runs"; "Compare With…", "Compare with Selected Trace", "Swap Traces", "Show Only Differences", "Open Span in A", "Open Span in B", "Show All Differences (7)", "Show Fewer Differences", "Same Route", "No Comparison", the banner above; compare button tooltip "Compare this trace with another (⇧⌘K)"
+- Access: rows read "SELECT orders, orders, A 20 milliseconds, B 320 milliseconds, Slower by 300 milliseconds", "SELECT order_items, orders, 2 runs in A, 8 runs in B, Repeated", "GET /v1/inventory, orders, only in B, New"; the outline reads "expanded" and "collapsed" like the waterfall; strip lines are buttons with the same words, read with "milliseconds"; change marks pair icon and word, never color alone (Slower `tortoise`, Faster `hare`, New `plus.circle`, Missing `minus.circle`, Repeated `repeat`, Error the octagon); the whole flow works from the keyboard: ⇧⌘K, arrows, Return, ⌥⌘K, Esc closes the picker, ⌘W the window
+
 ### S-029 Open in under a second
 UX:
 - Flow: click the Dock icon -> the window appears with the last view, scope, filters and selected trace, rows read from the database -> the receiver status appears when the helper reports its ports
@@ -474,5 +496,7 @@ Things: Finding, Slow SQL, N+1, HTTP Error, Filters, Filter Bar, Condition, Any 
 Actions: Pause, Resume, Search…, Show Filter Bar / Hide Filter Bar, Clear Filters, Apply as Filter, Save Filter… / Save Filter As…, Rename Filter…, Delete Filter, Open Trace, Show Newest Traces, Expand All Spans / Collapse All Spans, Show Span Detail / Hide Span Detail, Copy Trace ID, Copy Span ID, Copy Body, Import Traces…, Export Trace…, Show Environment Variables, Open Magnife, Show in Finder, Open Settings, Open System Settings, Delete (retention dialog).
 
 Settings: "Keep traces and logs for", "Database size", "Show Magnife in the menu bar", "Notify me when a trace has an error", Agents (S-035: "Coding Agents", "Copy Command", "Copy Configuration", "Connect a Coding Agent…").
+
+Comparison (S-036): Things "Comparison", "Compare Traces" (the window), "A" and "B", "Baseline", "Difference", "Same Route", "Queries", "Runs"; change words "Slower", "Faster", "Same", "New", "Missing", "Repeated"; actions "Compare With…", "Compare with Selected Trace", "Swap Traces", "Show Only Differences", "Open Span in A" / "Open Span in B", "Show All Differences (N)" / "Show Fewer Differences"; states "No Comparison" and the "little in common" banner.
 
 Status lines: "Starting receiver…", "Paused. 12 new traces. Magnife is still receiving.", "12 new traces" / "12 new logs", "Trace No Longer Stored", "No traces with errors".

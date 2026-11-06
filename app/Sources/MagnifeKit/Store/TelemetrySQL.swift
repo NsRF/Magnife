@@ -115,6 +115,14 @@ enum TelemetrySQL {
 
     static let traceCount = "SELECT COUNT(*) FROM traces"
 
+    /// The newest other traces with this root service and route (S-036's
+    /// Same Route), on `traces_by_root_service`.
+    static let sameRouteTraces = """
+        SELECT \(traceColumns) FROM traces
+        WHERE root_service = ? AND route = ? AND trace_id <> ?
+        ORDER BY start_ns DESC LIMIT ?
+        """
+
     /// Pause counts the traces created after the seq it paused at.
     static let tracesCreatedAfter = "SELECT COUNT(*) FROM traces WHERE first_seq > ?"
 
@@ -132,6 +140,14 @@ enum TelemetrySQL {
     static let waterfallSpansOfTrace = """
         SELECT id, span_id, parent_span_id, name, kind, start_ns, duration_ns, status_code, service_name,
                http_method, http_route
+        FROM spans WHERE trace_id = ? ORDER BY start_ns, id
+        """
+
+    /// A comparison's columns of every span of a trace (S-036): the
+    /// waterfall's, plus the URL and statement that title and key a span.
+    static let comparisonSpansOfTrace = """
+        SELECT id, span_id, parent_span_id, name, kind, start_ns, duration_ns, status_code, service_name,
+               http_method, http_route, http_url, db_statement
         FROM spans WHERE trace_id = ? ORDER BY start_ns, id
         """
 

@@ -51,6 +51,19 @@ Direct, precise, quiet. Talk to "you", say "click", and name OTel concepts the w
 | Recent Errors | The menu bar extra's list of the last five traces with errors | recent failures, latest issues |
 | Database size | Size on disk of the stored traces and logs | storage, disk usage, cache |
 | Edited | Marks a saved filter whose filters changed since it was saved | modified, unsaved, dirty |
+| Comparison | Two traces' spans matched up side by side, with what differs (S-036) | diff, delta, delta view |
+| Compare Traces | The window that shows a comparison | Diff, Trace Diff, Compare View |
+| A / B | The two traces of a comparison; changes read B against A | left / right, old / new, before / after |
+| Baseline | Trace A, the one B is compared with | reference, original, control |
+| Difference | One thing that differs between A and B, as a strip line | change set, delta, regression |
+| Same Route | Search's first section in compare mode: traces with A's route | similar traces, siblings |
+| Slower / Faster | A span that took over 1 ms and over 20% longer or less in B | regressed, improved, degraded |
+| Same | A span within 1 ms or 20% in both traces | unchanged, equal, identical |
+| New | A span only in B | added, extra, inserted |
+| Missing | A span only in A | removed, deleted, gone |
+| Repeated | A statement or span whose number of runs differs, "2 → 8 runs" | calls, executions, iterations |
+| Queries | The comparison's table of normalized statements with runs and duration in A and B | statements, SQL, DB calls |
+| Runs | How many times a statement or span ran in one trace | calls, executions, hits |
 
 ## Actions
 
@@ -81,6 +94,12 @@ Direct, precise, quiet. Talk to "you", say "click", and name OTel concepts the w
 | Connect a Coding Agent… | Open Settings > Agents (Help menu) | Set Up AI, Add Integration, Install MCP |
 | Copy Command / Copy Configuration | Put the agent's setup command, or its MCP configuration, on the pasteboard | Copy Snippet, Copy Setup, Copy JSON |
 | Open Magnife | Bring the main window forward from the menu bar extra | Show Window, Launch |
+| Compare With… | Open Search in compare mode to pick trace B for the selected trace (⇧⌘K) | Diff With…, Compare To… |
+| Compare with Selected Trace | Compare the selected trace (A) with the right-clicked one (B) | Diff, Compare Selected |
+| Swap Traces | Make A the B and B the A (⌥⌘K) | Reverse, Flip, Switch |
+| Show Only Differences | Collapse every subtree of the comparison with no difference in it (⇧⌘D) | Hide Unchanged, Diff Only |
+| Open Span in A / Open Span in B | Show a compared span in the main window's waterfall | Go to Span, Reveal |
+| Show All Differences (N) / Show Fewer Differences | Expand or collapse the comparison's strip | More, See All |
 | Show in Finder | Reveal the database file | Reveal, Open Folder |
 | Check for Updates… | Ask the update feed for a newer Magnife (Magnife menu; only in builds with Sparkle) | Update Now, Software Update, Check for New Version |
 | Open Settings / Open System Settings | Go to Magnife's Settings, or to macOS's for notifications | Preferences, Configure |
@@ -99,6 +118,9 @@ Direct, precise, quiet. Talk to "you", say "click", and name OTel concepts the w
 | 12 new traces / 12 new logs | Button at the top of a list scrolled away from the newest rows |
 | Trace No Longer Stored | Detail column when the open trace was deleted by retention |
 | No traces with errors | Recent Errors when there are none |
+| No Comparison | Compare Traces with nothing to compare |
+| These traces have little in common: 3 of 120 spans match. They may not be the same request. | Banner over a comparison where under 20% of the spans matched |
+| No differences over 1 ms and 20%. | The comparison's strip when nothing differs |
 
 ## Settings
 

@@ -16,10 +16,16 @@ enum SnapshotPage: String, CaseIterable {
     case filterBar = "07-filter-bar"
     case menuBar = "08-menu-bar"
     case settings = "09-settings"
+    case compare = "10-compare"
 
     /// The schema-only database next to APP_STORE (tools/snap.sh makes both).
     static func emptyStore(next store: URL) -> URL {
         store.deletingPathExtension().appendingPathExtension("empty.sqlite")
+    }
+
+    /// The compare set's database next to APP_STORE (S-036, tools/snap.sh).
+    static func compareStore(next store: URL) -> URL {
+        store.deletingPathExtension().appendingPathExtension("compare.sqlite")
     }
 
     @MainActor
@@ -40,7 +46,7 @@ enum SnapshotPage: String, CaseIterable {
         await model.openStore()
         if model.traces.isEmpty { await model.reload() }
         switch self {
-        case .emptyState, .traceList, .menuBar, .settings:
+        case .emptyState, .traceList, .menuBar, .settings, .compare:
             break
         case .commandK:
             await Self.search(model, "checkout")
@@ -97,7 +103,8 @@ enum SnapshotPage: String, CaseIterable {
 /// 03-trace-detail-waterfall-focus and -span-focus (S-022), 03-trace-detail-slow-sql and 02-trace-list-findings-wide (S-023),
 /// 08-menu-bar (the menu bar extra's menu), -icon and -empty (S-026), 03-trace-detail-from-menu (S-027),
 /// and 09-settings-<tab>-light.png and -dark.png for every Settings tab,
-/// and 09-settings-general-delete (S-016's dialog), then quits.
+/// and 09-settings-general-delete (S-016's dialog),
+/// 10-compare, -all, -picker and -different (S-036, the Compare Traces window), then quits.
 /// Each PNG gets a <page>-<mode>-layout.json with the grid probes (tools/check-layout.swift).
 /// APP_SNAPSHOT_PAGES=02-trace-list,09-settings limits the pages.
 /// Add APP_ACCENT=<id> to see the pages in another accent.
@@ -134,7 +141,9 @@ enum Snapshot {
                     await page.prepare(model)
                     try? await Task.sleep(for: .seconds(0.8))
                     // 08-menu-bar is the menu bar extra's own menu, not the window.
-                    if page == .menuBar { await captureMenuBar(model, dir: dir, mode: mode) } else {
+                    if page == .compare { await captureCompare(model, dir: dir, mode: mode) } else if page == .menuBar {
+                        await captureMenuBar(model, dir: dir, mode: mode)
+                    } else {
                         capture(to: "\(dir)/\(page.rawValue)-\(mode).png")
                     }
                     if page == .emptyState { await captureCopied(model, dir: dir, mode: mode) }

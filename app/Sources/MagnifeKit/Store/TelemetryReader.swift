@@ -334,6 +334,28 @@ public final class TelemetryReader: Sendable {
         return OpenTraceRead(trace: read.0, spans: read.1, findings: Detectors.findings(in: read.2))
     }
 
+    /// The newest other traces of `trace`'s root service and route, newest
+    /// first (S-036: Search's Same Route, and `compare_traces`' baseline).
+    @concurrent
+    public func sameRoute(as trace: TraceSummary, limit: Int = 10) async throws -> [TraceSummary] {
+        try await pool.read {
+            try TraceSummary.fetchAll($0, sql: TelemetrySQL.sameRouteTraces,
+                                      arguments: [trace.rootService, trace.route, trace.traceID, limit])
+        }
+    }
+
+    /// Two traces to compare (S-036): both rows and both traces' spans in
+    /// one read, so neither side is newer than the other.
+    @concurrent
+    public func comparison(traceA: String, traceB: String) async throws -> ComparisonRead {
+        try await pool.read { db in
+            ComparisonRead(traceA: try TraceSummary.fetchOne(db, sql: TelemetrySQL.traceByID, arguments: [traceA]),
+                           traceB: try TraceSummary.fetchOne(db, sql: TelemetrySQL.traceByID, arguments: [traceB]),
+                           spansA: try ComparisonSpan.fetchAll(db, sql: TelemetrySQL.comparisonSpansOfTrace, arguments: [traceA]),
+                           spansB: try ComparisonSpan.fetchAll(db, sql: TelemetrySQL.comparisonSpansOfTrace, arguments: [traceB]))
+        }
+    }
+
     /// The status messages of these spans of one trace, by span id, in one read.
     @concurrent
     public func statusMessages(traceID: String, spanIDs: [String]) async throws -> [String: String] {

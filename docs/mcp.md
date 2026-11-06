@@ -50,6 +50,7 @@ statuses and findings. Times are local ISO 8601 plus how long ago.
 | `get_span` | `trace_id`, `span_id` | Attributes, events, exceptions with stack traces, resource attributes, links and the span's logs. |
 | `search_logs` | `trace_id`, or `service`, `levels` (`debug`, `info`, `warn`, `error`, `fatal`), `body_contains`; `limit` (1-200, default 50) | Logs newest first (oldest first for a trace): time, level, service, body, trace and span ids. |
 | `find_problems` | `limit` (traces to scan, 1-100, default 50), `since_minutes` | Every finding (Slow SQL, N+1, HTTP Error) in the newest traces, in the app's words with trace and span ids, then failed traces with no finding. |
+| `compare_traces` (S-036) | `trace_id` (B), `baseline_trace_id` (A; left out: the fastest of the newest 50 other traces with B's root service and route), `max_rows` (1-500, default 200) | The Compare Traces window in text: both traces, "B took 356 ms longer than A (6.6×). B has 6 more spans.", the differences in the window's words (Error first, then Slower and Faster by self time, Repeated, New, Missing) with span ids from both traces, the Queries (each service's normalized statements, runs and duration in A → B), and the tree of the spans that differ. |
 
 The query language (`list_traces`, docs/ux.md "Search tokens"):
 `service:orders`, `status:error`, `route:/checkout`, `>200ms`, `key=value`,
@@ -58,7 +59,8 @@ The query language (`list_traces`, docs/ux.md "Search tokens"):
 ## Limits
 
 - At most 100 traces, 500 spans of a trace (the rest counted: "312 more spans
-  not shown"), 200 logs per answer.
+  not shown"), 200 logs per answer; `compare_traces` at most 500 rows of the
+  tree, 50 differences and 50 statements (the rest counted).
 - Attribute values, log bodies and statements over 2,000 characters are cut
   with "… (N more characters)"; stack traces over 8,000.
 - A trace id that matches nothing, or a prefix that matches several, answers
@@ -79,5 +81,5 @@ The query language (`list_traces`, docs/ux.md "Search tokens"):
 
 ## Not in S-034
 
-- Settings > Agents with the commands above and a Copy button (STORIES.md, Later).
+- Settings > Agents with the commands above and a Copy button: S-035.
 - Resources, prompts, subscriptions to new traces, writes of any kind.

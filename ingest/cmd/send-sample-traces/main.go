@@ -3,7 +3,8 @@
 //
 // With no mode flag it sends the deterministic seed set used for app
 // snapshots: one trace per scenario, fixed ids, timestamps relative to now.
-// --edges sends the detector edge set the same way. --seed makes --volume,
+// --edges sends the detector edge set the same way, and --compare the compare
+// set (S-036). --seed makes --volume,
 // --rate and --live send the same traces (ids, scenarios, scales) every run.
 package main
 
@@ -93,6 +94,7 @@ func main() {
 	flag.Var(&duration, "duration", "how long --rate runs, in `seconds` (60) or as a duration (90s, 2m)")
 	live := flag.Bool("live", false, "send a random trace every 1-2 s until interrupted")
 	edges := flag.Bool("edges", false, "send the detector edge set (one trace per edge scenario, fixed ids) instead of the seed set")
+	compare := flag.Bool("compare", false, "send the compare set (a fast and a slow GET /account/orders, fixed ids) instead of the seed set")
 	seed := flag.Uint64("seed", 0, "seed for --volume, --rate and --live, so each run sends the same traces (0: a random seed each run)")
 	workers := flag.Int("workers", 8, "concurrent requests in --volume, --rate and --huge-trace")
 	flag.Parse()
@@ -102,13 +104,13 @@ func main() {
 		os.Exit(2)
 	}
 	modes := 0
-	for _, on := range []bool{*volume > 0, *huge > 0, *rate > 0, *live, *edges} {
+	for _, on := range []bool{*volume > 0, *huge > 0, *rate > 0, *live, *edges, *compare} {
 		if on {
 			modes++
 		}
 	}
 	if modes > 1 {
-		fail("use only one of --volume, --huge-trace, --rate, --live and --edges")
+		fail("use only one of --volume, --huge-trace, --rate, --live, --edges and --compare")
 	}
 	list, err := pick(*scenarios)
 	if err != nil {
@@ -140,6 +142,12 @@ func main() {
 		mode = "edge set"
 		if *scenarios == "" {
 			list = sample.EdgeScenarios
+		}
+		runSeed(ctx, s, list)
+	case *compare:
+		mode = "compare set"
+		if *scenarios == "" {
+			list = sample.CompareScenarios
 		}
 		runSeed(ctx, s, list)
 	case *volume > 0:
@@ -214,7 +222,10 @@ func pick(flagValue string) ([]sample.Scenario, error) {
 			sc, ok = sample.LookupEdge(strings.TrimSpace(name))
 		}
 		if !ok {
-			return nil, fmt.Errorf("unknown scenario %q (known: %s; edge scenarios: %s)", name, names(), edgeNames())
+			sc, ok = sample.LookupCompare(strings.TrimSpace(name))
+		}
+		if !ok {
+			return nil, fmt.Errorf("unknown scenario %q (known: %s; edge scenarios: %s; compare scenarios: %s)", name, names(), edgeNames(), join(sample.CompareScenarios))
 		}
 		out = append(out, sc)
 	}

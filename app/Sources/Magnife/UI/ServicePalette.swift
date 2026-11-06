@@ -37,6 +37,7 @@ enum StatusColors {
     static let findingNS = NSColor(ColorPalette.finding)
     /// The Warn level's triangle.
     static let warning = Color(ColorPalette.warning)
+    static let warningNS = NSColor(ColorPalette.warning)
     /// Increase Contrast's 1 pt border on waterfall bars and ring on service
     /// dots: the label color, clear otherwise, so views always draw it and
     /// it appears and goes with the setting.

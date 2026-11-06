@@ -22,8 +22,18 @@ extension AppModel {
         return unfinished.suggestions(from: candidates, limit: 8)
     }
 
-    /// The traces under the suggestions.
-    var searchTraces: [TraceSummary] { searchResult?.traces ?? [] }
+    /// The traces under the suggestions. In compare mode (S-036) A is left
+    /// out, and an empty field lists Same Route first.
+    var searchTraces: [TraceSummary] {
+        let found = searchResult?.traces ?? []
+        guard let base = searchCompareBase else { return found }
+        let same = searchSameRouteCount > 0 ? searchSameRoute : []
+        let listed = Set(same.map(\.traceID)).union([base.traceID])
+        return same + found.filter { !listed.contains($0.traceID) }
+    }
+
+    /// How many of `searchTraces` are Same Route ones.
+    var searchSameRouteCount: Int { searchCompareBase != nil && searchText.isEmpty ? searchSameRoute.count : 0 }
 
     /// Suggestions and traces are one list for ↑↓ and Return.
     var searchRowCount: Int { searchSuggestions.count + searchTraces.count }
@@ -47,6 +57,9 @@ extension AppModel {
 
     /// Esc, a click outside, or opening a result: nothing else changes.
     func closeSearch() {
+        // Only real changes: an @Observable write redraws its readers even when the value is the same.
+        if searchCompareBase != nil { searchCompareBase = nil }
+        if !searchSameRoute.isEmpty { searchSameRoute = [] }
         guard showsSearch else { return }
         showsSearch = false
         searchTask?.cancel()
@@ -111,8 +124,13 @@ extension AppModel {
         if searchSelection < suggestions.count {
             completeSearch(with: suggestions[searchSelection])
         } else if let trace = searchTraces[safe: searchSelection - suggestions.count] {
-            openSearchResult(trace.traceID)
+            pickSearchResult(trace.traceID)
         }
+    }
+
+    /// A trace clicked or picked: opened, or in compare mode compared with A.
+    func pickSearchResult(_ traceID: String) {
+        if searchCompareBase != nil { compareFromSearch(traceID) } else { openSearchResult(traceID) }
     }
 
     /// A suggestion picked: "status:er" becomes "status:error ".
@@ -129,7 +147,20 @@ extension AppModel {
         if selectedTraceID != traceID { selectedTraceID = traceID }
         Task {
             await revealSelectedTrace()
+            await waitForSearchFieldToLeave()
             focusListIfNothingFocused()
+        }
+    }
+
+    /// SwiftUI removes the closed panel a turn or more later; until then its
+    /// field editor is still the first responder, and the list would not take
+    /// the focus (PROGRESS, Problems: "Search's focus check is intermittent").
+    private func waitForSearchFieldToLeave() async {
+        guard let window = listScroller.tableView?.window else { return }
+        for _ in 0..<25 {
+            guard let editor = window.firstResponder as? NSTextView,
+                  (editor.delegate as AnyObject?) is SearchField.SearchTextField else { return }
+            try? await Task.sleep(for: .milliseconds(20))
         }
     }
 
@@ -137,6 +168,7 @@ extension AppModel {
     /// filters (the sidebar takes its service), the filter bar shows them
     /// and Search closes.
     func applySearchAsFilter() {
+        guard searchCompareBase == nil else { return }
         let filter = searchQuery.filter
         closeSearch()
         showContentMode(.traces)

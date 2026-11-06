@@ -119,7 +119,7 @@ If the install script put Magnife in `~/Applications`, use that path. For Cursor
 { "mcpServers": { "magnife": { "command": "/Applications/Magnife.app/Contents/Helpers/magnife-mcp" } } }
 ```
 
-Then ask things like "what failed in my last request?" or "why is GET /orders slow?". The agent has six read-only tools:
+Then ask things like "what failed in my last request?" or "why is GET /orders slow?". The agent has seven read-only tools:
 
 | Tool | What it gives the agent |
 | --- | --- |
@@ -129,6 +129,7 @@ Then ask things like "what failed in my last request?" or "why is GET /orders sl
 | `get_span` | A span's attributes, events, stack traces, resource and logs |
 | `search_logs` | Logs by trace, service, level or text |
 | `list_services` | The services Magnife has seen |
+| `compare_traces` | Two traces matched span by span: what got slower, what is new or missing, how many times each query ran |
 
 The tools and their limits are in [docs/mcp.md](docs/mcp.md).
 
@@ -209,7 +210,8 @@ scripts/    sample sender, local install, SDK interop apps
 
 - [x] v0.1: receiver, live list, waterfall, logs, search and filters, detectors, menu bar, retention
 - [x] v0.2: export and import traces as files
-- [ ] v0.2: metrics with charts, and side-by-side comparison of two traces
+- [x] v0.2: side-by-side comparison of two traces (Trace > Compare With…, ⇧⌘K)
+- [ ] v0.2: metrics with charts
 - [x] v0.3: an MCP server so coding agents can query local traces ([docs/mcp.md](docs/mcp.md))
 - [ ] v0.3: AI agent view (calls, tools, tokens and cost for coding agents), and Settings > Agents to connect one in a click
 - [ ] v0.4: forwarding to a remote backend (OTLP proxy)

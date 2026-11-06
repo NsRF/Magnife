@@ -242,22 +242,39 @@ struct WaterfallHeader: View {
     let trace: TraceSummary
 
     var body: some View {
-        HStack(spacing: Space.xs) {
-            Text(trace.route)
-                .font(.headline)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(trace.route)
-                .gridProbe("route", area: "trace-header")
-            Text("· \(trace.waterfallSubtitle)")
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .fixedSize()
+        HStack(spacing: Space.sm) {
+            HStack(spacing: Space.xs) {
+                Text(trace.route)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(trace.route)
+                    .gridProbe("route", area: "trace-header")
+                Text("· \(trace.waterfallSubtitle)")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            CompareButton(traceID: trace.traceID)
         }
         .padding(Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .gridArea("trace-header", inset: Space.lg)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// The waterfall header's Compare With… (S-036): Search picks the trace to compare this one with.
+struct CompareButton: View {
+    @Environment(AppModel.self) private var model
+    let traceID: String
+
+    var body: some View {
+        Button("Compare With…", systemImage: "arrow.left.arrow.right") { model.showCompareSearch(for: traceID) }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .help("Compare this trace with another (⇧⌘K)")
     }
 }

@@ -49,6 +49,9 @@ public enum TraceSearch {
 
     public static let label = "Search traces"
     public static let placeholder = "Search traces: service:, status:, route:, >200ms or any text"
+    /// Compare With… (S-036): the same field, picking trace B.
+    public static let comparePlaceholder = "Find a trace to compare: service:, status:, route:, >200ms or any text"
+    public static let sameRouteHeader = "Same Route"
 
     /// "No traces match “paymnt”."
     public static func noMatchTitle(_ text: String) -> String {

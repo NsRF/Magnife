@@ -77,6 +77,8 @@ enum SelfTest {
                 checkUpdates()
             } else if only == "agents" {
                 await checkAgents(model)
+            } else if only == "compare" {
+                await checkCompare(model)
             } else if only == "span-detail" {
                 await checkSpanDetail(model)
                 await checkExceptions(model)
@@ -103,6 +105,7 @@ enum SelfTest {
                 await checkLogFilters(model)
                 await checkRetention(model)
                 await checkSharing(model)
+                await checkCompare(model)
                 await checkLoad(model)
                 await checkSupervisor()
                 await checkReceiver()
